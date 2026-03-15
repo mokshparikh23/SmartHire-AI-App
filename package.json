@@ -9,9 +9,9 @@
     "dev:vite": "vite",
     "dev:electron": "cross-env NODE_ENV=development electron .",
     "build": "vite build",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:win": "npm run build && electron-builder --win",
-    "build:all": "npm run build && electron-builder --mac --win",
+    "build:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
+    "build:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
+    "build:all": "npm run build && electron-builder --config electron-builder.config.cjs --mac --win",
     "preview": "vite preview"
   },
   "devDependencies": {

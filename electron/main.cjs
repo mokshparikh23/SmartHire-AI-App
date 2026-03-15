@@ -1,15 +1,39 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, screen } = require('electron')
-const path  = require('path')
+const path = require('path')
 const Store = require('electron-store')
-const fs    = require('fs')
+const fs = require('fs')
 
 const isDev = process.env.NODE_ENV === 'development'
 const store = new Store()
-const WEB_URL = isDev ? 'http://localhost:3000' : 'https://smart-hire-ai-gamma.vercel.app'
+// const WEB_URL = isDev ? 'http://localhost:3000' : 'https://smart-hire-ai-gamma.vercel.app'
+const WEB_URL = 'https://smart-hire-ai-gamma.vercel.app'
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
 
 let mainWindow = null
 
-function createMainWindow() {
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function loadRenderer(window) {
+  if (!isDev) {
+    await window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'))
+    return
+  }
+
+  let lastError = null
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    try {
+      await window.loadURL(DEV_SERVER_URL)
+      return
+    } catch (error) {
+      lastError = error
+      await delay(500)
+    }
+  }
+
+  throw lastError
+}
+
+async function createMainWindow() {
   const { width } = screen.getPrimaryDisplay().workAreaSize
   mainWindow = new BrowserWindow({
     width: 780, height: 620,
@@ -38,8 +62,11 @@ function createMainWindow() {
     mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
   }
 
-  if (isDev) mainWindow.loadURL('http://localhost:5173')
-  else mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+  try {
+    await loadRenderer(mainWindow)
+  } catch (error) {
+    console.error('Failed to load renderer:', error)
+  }
 
   mainWindow.on('closed', () => { mainWindow = null })
 }
@@ -57,15 +84,17 @@ app.whenReady().then(async () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://*.groq.com https://*.anthropic.com https://*.openai.com https://*"
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: file: https://*"
         ]
       }
     })
   })
 
-  createMainWindow()
+  await createMainWindow()
   registerShortcuts()
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow() })
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+  })
 })
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
@@ -79,7 +108,6 @@ function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
 }
 
-// ── IPC Handlers ──────────────────────────────────────────────────────────
 ipcMain.handle('license:validate', async (_, licenseKey) => {
   try {
     const res = await fetch(`${WEB_URL}/api/license/validate`, {
@@ -100,8 +128,8 @@ ipcMain.handle('license:validate', async (_, licenseKey) => {
 })
 
 ipcMain.handle('license:get', () => ({
-  key:           store.get('licenseKey'),
-  data:          store.get('licenseData'),
+  key: store.get('licenseKey'),
+  data: store.get('licenseData'),
   lastValidated: store.get('lastValidated')
 }))
 
@@ -114,29 +142,22 @@ ipcMain.handle('license:clear', () => {
 
 ipcMain.handle('app:getWebUrl',  () => WEB_URL)
 ipcMain.handle('app:getVersion', () => app.getVersion())
-
-ipcMain.handle('window:hide', () => {
-  if (mainWindow) mainWindow.hide()
-})
-
-ipcMain.handle('window:toggle', () => {
+ipcMain.handle('window:hide',    () => { if (mainWindow) mainWindow.hide() })
+ipcMain.handle('window:toggle',  () => {
   if (!mainWindow) return
   mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
 })
-
 ipcMain.handle('window:setOpacity',  (_, o) => { if (mainWindow) mainWindow.setOpacity(o) })
 ipcMain.handle('overlay:setOpacity', (_, o) => { if (mainWindow) mainWindow.setOpacity(o) })
-
 ipcMain.handle('clipboard:copy', (_, text) => {
   require('electron').clipboard.writeText(text)
 })
 
-// ── PDF Parsing ───────────────────────────────────────────────────────────
 ipcMain.handle('parse-pdf', async (_, filePath) => {
   try {
     const { extractText } = await import('unpdf')
     const buffer = fs.readFileSync(filePath)
-    const uint8  = new Uint8Array(buffer)
+    const uint8 = new Uint8Array(buffer)
     const { text } = await extractText(uint8, { mergePages: true })
     const cleaned = text
       .replace(/\r\n|\r/g, '\n')
@@ -144,14 +165,13 @@ ipcMain.handle('parse-pdf', async (_, filePath) => {
       .replace(/\n{3,}/g, '\n\n')
       .trim()
     if (!cleaned || cleaned.length < 50)
-      return { success: false, error: 'No text found. May be a scanned PDF.' }
+      return { success: false, error: 'No text found.' }
     return { success: true, text: cleaned }
   } catch (e) {
     return { success: false, error: e.message }
   }
 })
 
-// ── Corner cycling ────────────────────────────────────────────────────────
 let cornerIndex = 0
 function moveToNextCorner() {
   if (!mainWindow) return
@@ -160,8 +180,8 @@ function moveToNextCorner() {
   const pad = 20
   const corners = [
     { x: width - w - pad, y: pad },
-    { x: pad,             y: pad },
-    { x: pad,             y: height - h - pad },
+    { x: pad, y: pad },
+    { x: pad, y: height - h - pad },
     { x: width - w - pad, y: height - h - pad }
   ]
   cornerIndex = (cornerIndex + 1) % corners.length

@@ -7,21 +7,21 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@pages': path.resolve(__dirname, './src/pages'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@services': path.resolve(__dirname, './src/services'),
-      '@store': path.resolve(__dirname, './src/store'),
-      '@utils': path.resolve(__dirname, './src/utils')
     }
   },
   server: {
+    host: '127.0.0.1',
     port: 5173,
+    strictPort: true
+  },
+  preview: {
+    host: '127.0.0.1',
+    port: 4173,
     strictPort: true
   }
 })
