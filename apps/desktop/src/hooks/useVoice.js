@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { askAIStream, transcribe, hasApiKey } from '../services/aiRouter'
+import { askAIStream, transcribe } from '../services/aiRouter'
 
 export function useVoice() {
   const mediaRecorderRef  = useRef(null)
@@ -17,8 +17,6 @@ export function useVoice() {
 
   // ── Ask the model ────────────────────────────────────────────────────────
   const askModel = useCallback(async (question) => {
-    if (!hasApiKey()) return console.error('❌ No OpenAI key')
-
     console.log('🤖 Question:', question)
     setQuestion(question)
 
@@ -38,7 +36,7 @@ export function useVoice() {
 
   // ── Transcribe blob ───────────────────────────────────────────────────────
   const transcribeAndAsk = useCallback(async (audioBlob) => {
-    if (!hasApiKey() || audioBlob.size < 2000) return
+    if (audioBlob.size < 2000) return
 
     console.log('🎙 Transcribing blob size:', audioBlob.size)
 

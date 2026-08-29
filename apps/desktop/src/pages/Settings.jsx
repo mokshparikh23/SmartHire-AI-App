@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
-import { CHAT_MODELS, verifyApiKey } from '../services/aiRouter'
+import { CHAT_MODELS } from '../services/aiRouter'
 
 const G = {
   bg:'#f0fdf6', card:'#ffffff', border:'#d1fae5', border2:'#a7f3d0',
@@ -19,31 +19,15 @@ const Label = ({ children }) => (
 )
 
 export default function Settings({ onBack }) {
-  const { openaiKey, model, overlayOpacity, setOpenaiKey, setModel, setOverlayOpacity } = useSettingsStore()
-  const [gKey, setGKey]       = useState(openaiKey || localStorage.getItem('openai_key') || '')
+  const { model, overlayOpacity, setModel, setOverlayOpacity } = useSettingsStore()
   const [saved, setSaved]     = useState(false)
   const [opacity, setOpacity] = useState(overlayOpacity ?? 90)
-  const [showKey, setShowKey] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testOk, setTestOk]   = useState(null)
 
   const handleSave = () => {
-    setOpenaiKey(gKey)
-    localStorage.setItem('openai_key', gKey)
     setOverlayOpacity(opacity)
     window.electronAPI?.setOverlayOpacity?.(opacity / 100)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }
-
-  const testKey = async () => {
-    const key = gKey.trim()
-    if (!key) return
-    setTesting(true); setTestOk(null)
-    try {
-      setTestOk(await verifyApiKey(key))
-    } catch { setTestOk(false) }
-    finally { setTesting(false) }
   }
 
   const S = {
@@ -83,7 +67,7 @@ export default function Settings({ onBack }) {
           <div>
             <div style={{ fontSize:13, fontWeight:800, color:'#fff', lineHeight:1 }}>Settings</div>
             <div style={{ fontSize:10, color:'rgba(255,255,255,.55)', marginTop:2 }}>
-              Configure API key and preferences
+              Choose your model and overlay
             </div>
           </div>
         </div>
@@ -92,93 +76,6 @@ export default function Settings({ onBack }) {
       {/* Body */}
       <div style={{ flex:1, overflowY:'auto', padding:'10px', display:'flex',
         flexDirection:'column', gap:8 }}>
-
-        {/* ── OpenAI API Key ── */}
-        <div style={S.card}>
-          <div style={S.head}>
-            <Label>OpenAI API Key</Label>
-            <span style={{ fontSize:9, fontWeight:800, padding:'2px 8px', borderRadius:99,
-              background:'linear-gradient(135deg,#059669,#047857)', color:'#fff',
-              letterSpacing:'0.04em', textTransform:'uppercase',
-              boxShadow:'0 2px 6px rgba(5,150,105,.3)' }}>Free</span>
-          </div>
-          <div style={{ padding:'12px 13px', display:'flex', flexDirection:'column', gap:10 }}>
-
-            {/* Input row */}
-            <div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-                <span style={{ fontSize:11, fontWeight:600, color:G.dark }}>API Key</span>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  {gKey && (
-                    <span style={{ fontSize:9, fontWeight:700,
-                      color: testOk === true ? G.primary : testOk === false ? G.red : G.primary }}>
-                      {testOk === true ? '✓ Verified' : testOk === false ? '✗ Invalid' : '● Saved'}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div style={{ position:'relative' }}>
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={gKey}
-                  onChange={e => { setGKey(e.target.value); setTestOk(null) }}
-                  placeholder="sk-..."
-                  style={{ width:'100%', padding:'10px 52px 10px 12px', borderRadius:10,
-                    fontSize:12, background:G.accent, border:`1.5px solid ${G.border2}`,
-                    color:'#1f2937', outline:'none', boxSizing:'border-box', fontFamily:'monospace',
-                    transition:'border-color .15s' }}
-                  onFocus={e=>e.target.style.borderColor=G.primary}
-                  onBlur={e=>e.target.style.borderColor=G.border2}
-                />
-                <button onClick={() => setShowKey(!showKey)} style={{
-                  position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
-                  fontSize:10, fontWeight:600, color:G.muted, background:'none',
-                  border:'none', cursor:'pointer', padding:'2px 4px' }}>
-                  {showKey ? 'Hide' : 'Show'}
-                </button>
-              </div>
-            </div>
-
-            {/* Test + how-to */}
-            <div style={{ display:'flex', gap:8 }}>
-              <button onClick={testKey} disabled={!gKey.trim() || testing} style={{
-                flex:1, padding:'8px 0', borderRadius:9, border:`1.5px solid ${G.border2}`,
-                background: testOk === true ? G.accent2 : testOk === false ? '#fef2f2' : G.accent,
-                color: testOk === true ? G.primary : testOk === false ? G.red : G.muted,
-                fontSize:11, fontWeight:700, cursor: gKey.trim() ? 'pointer' : 'not-allowed',
-                opacity: gKey.trim() ? 1 : 0.5, transition:'all .15s',
-              }}>
-                {testing ? '⏳ Testing...' : testOk === true ? '✓ Key works!' : testOk === false ? '✗ Invalid key' : 'Test Key'}
-              </button>
-            </div>
-
-            <div style={{ background:G.accent, border:`1px solid ${G.border2}`,
-              borderRadius:12, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:G.dark, marginBottom:8 }}>
-                Get your OpenAI key:
-              </div>
-              {[
-                ['1', 'Go to platform.openai.com'],
-                ['2', 'Sign in and add billing'],
-                ['3', 'API keys → Create new secret key'],
-                ['4', 'Copy key (starts with sk-)'],
-              ].map(([n, s]) => (
-                <div key={n} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                  <div style={{ width:18, height:18, borderRadius:'50%', flexShrink:0,
-                    background:'linear-gradient(135deg,#059669,#047857)', color:'#fff',
-                    fontSize:9, fontWeight:800, display:'flex', alignItems:'center',
-                    justifyContent:'center', boxShadow:'0 1px 4px rgba(5,150,105,.3)' }}>{n}</div>
-                  <span style={{ fontSize:11, color:G.text2 }}>{s}</span>
-                </div>
-              ))}
-              <div style={{ fontSize:10, fontWeight:700, color:G.primary, marginTop:6,
-                paddingTop:6, borderTop:`1px solid ${G.border2}`,
-                display:'flex', alignItems:'center', gap:5 }}>
-                <span>🆓</span> Free tier: 14,400 requests/day
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* ── AI Model ── */}
         <div style={S.card}>
@@ -261,7 +158,7 @@ export default function Settings({ onBack }) {
               ['✍️', 'OpenAI Whisper transcribes speech to text'],
               ['🤖', 'OpenAI generates personalized answers'],
               ['⚡', 'Answers stream in real time'],
-              ['🔑', 'Uses your own OpenAI API key'],
+              ['🔒', 'No API key needed — your licence covers it'],
             ].map(([icon, text]) => (
               <div key={text} style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:14, flexShrink:0 }}>{icon}</span>

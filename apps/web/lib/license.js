@@ -66,6 +66,8 @@ export async function validateLicense(licenseKey) {
     plan:     data.plan,
     email:    data.profiles?.email,
     name:     data.profiles?.full_name,
-    expiresAt: data.expires_at
+    expiresAt: data.expires_at,
+    // Used by the /api/ai routes to attribute usage rows to the licence holder.
+    userId:   data.user_id
   }
 }

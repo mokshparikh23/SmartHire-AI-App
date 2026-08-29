@@ -1,46 +1,49 @@
 /**
  * Single entry point for every AI call in the app.
  *
- * Pages and hooks import from here rather than from a provider module, so
- * swapping or adding a provider stays a change to this file instead of a hunt
- * through the UI. OpenAI is currently the only provider: the Groq and Anthropic
- * paths were removed.
+ * Requests go to our own web backend, which holds the OpenAI key and checks the
+ * user's licence. The desktop app ships no API credential of any kind: a key
+ * bundled into a renderer is readable by anyone who opens the app folder, so
+ * there is nothing here for a user to enter and nothing for them to leak.
  */
 import {
-  askOpenAI,
-  askOpenAIStream,
-  transcribeAudio,
-  verifyApiKey as verifyOpenAIKey,
-  getApiKey as getOpenAIKey,
-  resolveModel,
-  DEFAULT_CHAT_MODEL,
-  TRANSCRIBE_MODEL,
-} from './openai'
+  askAI as backendAskAI,
+  askAIStream as backendAskAIStream,
+  transcribe as backendTranscribe,
+  hasCredentials,
+  resetCredentials,
+} from './aiBackend'
 
-export const PROVIDER = 'openai'
+export const PROVIDER = 'openai-via-backend'
 
-export { DEFAULT_CHAT_MODEL, TRANSCRIBE_MODEL, resolveModel }
+export const DEFAULT_CHAT_MODEL = 'gpt-4o'
 
-/** Chat models offered in Settings. */
+/**
+ * Chat models offered in Settings. Must stay a subset of ALLOWED_MODELS in the
+ * web app's lib/ai.js, which is what actually enforces the choice.
+ */
 export const CHAT_MODELS = [
-  { id: 'gpt-4o',        label: 'GPT-4o',        desc: 'Best quality', badge: '⭐' },
-  { id: 'gpt-4o-mini',   label: 'GPT-4o mini',   desc: 'Fastest',      badge: '⚡' },
-  { id: 'gpt-4.1',       label: 'GPT-4.1',       desc: 'Balanced',     badge: '⚖️' },
-  { id: 'gpt-4.1-mini',  label: 'GPT-4.1 mini',  desc: 'Lightweight',  badge: '🪶' },
+  { id: 'gpt-4o',        label: 'GPT-4o',        desc: 'Best quality', badge: 'Recommended' },
+  { id: 'gpt-4o-mini',   label: 'GPT-4o mini',   desc: 'Fastest',      badge: 'Fast' },
+  { id: 'gpt-4.1',       label: 'GPT-4.1',       desc: 'Balanced',     badge: '' },
+  { id: 'gpt-4.1-mini',  label: 'GPT-4.1 mini',  desc: 'Lightweight',  badge: '' },
 ]
 
-/** True when a key is available from Settings, localStorage or .env. */
-export function hasApiKey() {
-  return !!getOpenAIKey()
+/**
+ * Settings persists the chosen model, so installs from before this change have
+ * a Groq or Claude model name saved. Anything unrecognised falls back to the
+ * default; the server applies the same rule as a second line of defence.
+ */
+export function resolveModel(model) {
+  return CHAT_MODELS.some((m) => m.id === model) ? model : DEFAULT_CHAT_MODEL
 }
 
-export function getApiKey() {
-  return getOpenAIKey()
+/** Whether AI calls can be made — i.e. the app has an activated licence. */
+export function isReady() {
+  return hasCredentials()
 }
 
-export function verifyApiKey(key) {
-  return verifyOpenAIKey(key)
-}
+export { resetCredentials }
 
 /**
  * @param {Array<{role: string, content: string}>} transcript
@@ -48,7 +51,7 @@ export function verifyApiKey(key) {
  * @returns {Promise<string>}
  */
 export function askAI(transcript, model) {
-  return askOpenAI(transcript, model)
+  return backendAskAI(transcript, resolveModel(model))
 }
 
 /**
@@ -58,7 +61,7 @@ export function askAI(transcript, model) {
  * @param {string} [model]
  */
 export function askAIStream(transcript, onChunk, onDone, model) {
-  return askOpenAIStream(transcript, onChunk, onDone, model)
+  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model))
 }
 
 /**
@@ -66,5 +69,5 @@ export function askAIStream(transcript, onChunk, onDone, model) {
  * @returns {Promise<string>}
  */
 export function transcribe(audioBlob, fileName) {
-  return transcribeAudio(audioBlob, fileName)
+  return backendTranscribe(audioBlob, fileName)
 }

@@ -4,14 +4,10 @@ import { persist } from 'zustand/middleware'
 export const useSettingsStore = create(
   persist(
     (set) => ({
-      // ── API Key ─────────────────────────────────────────────────────────────
-      openaiKey: '',
-      setOpenaiKey: (k) => set({ openaiKey: k }),
-
       // ── Model ───────────────────────────────────────────────────────────────
       // Installs from before the OpenAI switch have a Groq or Claude model name
-      // persisted here; resolveModel() in services/openai.js falls back to the
-      // default for anything that is not an OpenAI chat model.
+      // persisted here; resolveModel() in services/aiRouter.js falls back to the
+      // default, and the server re-checks it against its own allowlist.
       model: 'gpt-4o',
       setModel: (m) => set({ model: m }),
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSessionStore }  from '../store/sessionStore'
-import { askAIStream, transcribe, hasApiKey } from '../services/aiRouter'
+import { askAIStream, transcribe } from '../services/aiRouter'
 
 /* ── tokens ─────────────────────────────────────────────────────────────── */
 const G = {
@@ -130,7 +130,6 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
   const speakRef    = useRef(false)
   const answerRef   = useRef(null)
 
-  const hasKeys = hasApiKey()
   const mm = Math.floor(elapsed / 60).toString().padStart(2, '0')
   const ss = (elapsed % 60).toString().padStart(2, '0')
 
@@ -141,7 +140,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
 
   /* ── transcribe ─────────────────────────────────────────────────────────── */
   const transcribeBlob = useCallback(async blob => {
-    if (!hasApiKey() || blob.size < 2000) return
+    if (blob.size < 2000) return
     try {
       const text = await transcribe(blob, 'audio.webm')
       if (!text || text.length < 4) return
@@ -210,7 +209,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
 
   /* ── generate ───────────────────────────────────────────────────────────── */
   const generate = useCallback(async q => {
-    if (!hasApiKey() || !q || isGenerating) return
+    if (!q || isGenerating) return
     setAnswer(''); setIsGenerating(true); setAnswerFor(q)
     try {
       await askAIStream(
@@ -332,24 +331,10 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
       <div style={{ flexShrink:0, padding:'8px 10px',
         borderBottom:`1px solid ${G.border}`, background:G.card,
         display:'flex', gap:8, alignItems:'center' }}>
-        {!hasKeys && (
-          <div style={{ flex:1, borderRadius:9, padding:'7px 12px',
-            background:'#fffbeb', border:'1px solid #fde68a',
-            display:'flex', alignItems:'center', gap:7 }}>
-            <span>⚠️</span>
-            <span style={{ fontSize:11, color:'#92400e' }}>No OpenAI key.{' '}
-              <button onClick={onGoSettings} style={{ background:'none', border:'none',
-                cursor:'pointer', color:G.primary, fontWeight:700, fontSize:11,
-                textDecoration:'underline', padding:0 }}>Settings →</button>
-            </span>
-          </div>
-        )}
-
         {/* START / STOP */}
-        <button onClick={handleStartStop} disabled={!hasKeys} style={{
+        <button onClick={handleStartStop} style={{
           flex:1, height:38, borderRadius:11, border:'none',
-          cursor: hasKeys ? 'pointer' : 'not-allowed',
-          opacity: hasKeys ? 1 : 0.4, color:'#fff', transition:'all .2s',
+          cursor:'pointer', color:'#fff', transition:'all .2s',
           fontWeight:800, fontSize:12, letterSpacing:'0.03em',
           display:'flex', alignItems:'center', justifyContent:'center', gap:7,
           background: isRunning
