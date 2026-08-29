@@ -50,12 +50,31 @@ fall back.
 
 Endpoints the desktop depends on:
 
-- `POST /api/license/validate` — implemented, used on launch and by the periodic
+- `POST /api/license/validate` — used on launch and by the desktop's 10-second
   re-validation loop.
-- `GET /api/license/stream` — **not implemented.** The SSE listener in
-  [apps/desktop/src/App.jsx](apps/desktop/src/App.jsx) expects it for instant
-  revocation. Its `onerror` is a no-op, so the app silently falls back to
-  polling; revocation just takes until the next poll instead of being instant.
+- `GET /api/license/stream?licenseKey=…` — Server-Sent Events, consumed by the
+  listener in [apps/desktop/src/App.jsx](apps/desktop/src/App.jsx) so a revoked
+  license logs the user out without waiting for the next poll.
+
+### How the stream works
+
+The route re-checks the license every 5 seconds and pushes a single
+`{ type: 'license_revoked', valid: false, reason }` frame the moment it stops
+being valid, then closes. Between checks it sends SSE comment lines, which keep
+the connection warm without waking the client's `onmessage`.
+
+Two deliberate choices worth knowing before you change it:
+
+- **The connection closes itself after 50 seconds.** Serverless platforms cap
+  function duration, so the stream ends early and `EventSource` reconnects on
+  its own. Each new connection re-checks immediately, so nothing is missed.
+- **A database error never emits `valid: false`.** The client logs the user out
+  on that field, so a transient Supabase outage would otherwise kick out every
+  paying customer at once. Failed checks emit a comment and the loop continues.
+
+`Access-Control-Allow-Origin` is `*` because the packaged renderer connects from
+`file://` (origin `null`). `EventSource` sends no credentials, and the caller
+already holds the license key, so this exposes nothing new.
 
 ## Deploying the web app
 
@@ -68,6 +87,11 @@ the hoisted dependencies.
 ## Version note
 
 The two apps intentionally sit on different majors: desktop on React 18 +
-Tailwind 3, web on React 19 + Tailwind 4. npm hoists React 18 and Tailwind 3 to
-the root and nests the web's copies under `apps/web/node_modules`. This is
-correct — do not "fix" it by aligning the versions.
+Tailwind 3, web on React 19 + Tailwind 4. npm hoists one copy of each to the
+root and nests the other under the app that needs it — currently React 19 at the
+root with React 18 nested under `apps/desktop/node_modules`, and Tailwind 3 at
+the root with Tailwind 4 nested under `apps/web/node_modules`.
+
+Which copy wins the root is an npm implementation detail that flips depending on
+what the root `package.json` itself declares; both apps resolve their correct
+major either way. Do not "fix" this by aligning the versions.
