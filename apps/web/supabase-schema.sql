@@ -59,6 +59,29 @@ create policy "update own profile" on public.profiles for update using (auth.uid
 create policy "read own licenses"  on public.licenses for select using (auth.uid() = user_id);
 create policy "read own usage"     on public.usage    for select using (auth.uid() = user_id);
 
+-- ---------------------------------------------------------------- grants
+-- Policies decide WHICH ROWS a user may touch; grants decide whether the role
+-- may touch the table at all. Both are required — with policies but no grants
+-- every dashboard query fails with "permission denied for table", which reads
+-- on the client as a silently empty dashboard.
+--
+-- Supabase adds these grants automatically for tables created in the SQL
+-- editor, but not when this file is applied through the Management API, so
+-- state them explicitly and keep the file safe to run either way.
+grant usage on schema public to anon, authenticated;
+grant select on public.profiles, public.licenses, public.usage to authenticated;
+
+-- Writes are deliberately narrow. Everything else (issuing and revoking
+-- licenses, changing roles, recording usage) goes through the service-role
+-- client in app/api/, which bypasses RLS and these grants.
+--
+-- The update policy above authorises the ROW; this grant authorises the
+-- COLUMN. Without it a signed-in user could promote themselves with a single
+-- update({ role: 'admin' }) from the browser console, because the policy
+-- places no restriction on which columns of their own row they may write.
+revoke update on public.profiles from authenticated, anon;
+grant  update (full_name) on public.profiles to authenticated;
+
 -- ---------------------------------------------------------------- profile trigger
 -- AuthForm calls supabase.auth.signUp({ options: { data: { full_name } } }) and
 -- never writes a profile row, so the profile has to be created database-side.
@@ -68,6 +91,13 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
+  -- This database is shared with another product that signs users in
+  -- anonymously. Those sessions have no email and never use the desktop app,
+  -- so skip them instead of filling the admin user list with blank rows.
+  if coalesce(new.is_anonymous, false) then
+    return new;
+  end if;
+
   insert into public.profiles (id, email, full_name)
   values (
     new.id,
