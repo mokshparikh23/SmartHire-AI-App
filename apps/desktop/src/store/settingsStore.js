@@ -5,11 +5,14 @@ export const useSettingsStore = create(
   persist(
     (set) => ({
       // ── API Key ─────────────────────────────────────────────────────────────
-      groqKey: '',
-      setGroqKey: (k) => set({ groqKey: k }),
+      openaiKey: '',
+      setOpenaiKey: (k) => set({ openaiKey: k }),
 
       // ── Model ───────────────────────────────────────────────────────────────
-      model: 'llama-3.3-70b-versatile',
+      // Installs from before the OpenAI switch have a Groq or Claude model name
+      // persisted here; resolveModel() in services/openai.js falls back to the
+      // default for anything that is not an OpenAI chat model.
+      model: 'gpt-4o',
       setModel: (m) => set({ model: m }),
 
       // ── Overlay opacity ─────────────────────────────────────────────────────

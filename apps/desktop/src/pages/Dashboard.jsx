@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSessionStore }  from '../store/sessionStore'
-import { buildSystemPrompt } from '../services/systemPrompt'
+import { askAIStream, transcribe, hasApiKey } from '../services/aiRouter'
 
 /* ── tokens ─────────────────────────────────────────────────────────────── */
 const G = {
@@ -19,7 +19,6 @@ const G = {
   red:     '#dc2626',
   hdr:     'linear-gradient(135deg,#022c22 0%,#064e3b 55%,#059669 100%)',
 }
-const GROQ = 'https://api.groq.com/openai/v1'
 
 /* ── CopyBtn ─────────────────────────────────────────────────────────────── */
 function CopyBtn({ text, ghost }) {
@@ -109,7 +108,6 @@ function QItem({ q, selected, onClick, onDelete }) {
 /* ── Dashboard ───────────────────────────────────────────────────────────── */
 export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) {
   const interviewContext = useSettingsStore(s => s.interviewContext)
-  const groqKey          = useSettingsStore(s => s.groqKey)
   const model            = useSettingsStore(s => s.model)
   const isRunning        = useSessionStore(s => s.isRunning)
   const elapsed          = useSessionStore(s => s.elapsed)
@@ -132,7 +130,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
   const speakRef    = useRef(false)
   const answerRef   = useRef(null)
 
-  const hasKeys = !!(groqKey || localStorage.getItem('groq_key'))
+  const hasKeys = hasApiKey()
   const mm = Math.floor(elapsed / 60).toString().padStart(2, '0')
   const ss = (elapsed % 60).toString().padStart(2, '0')
 
@@ -142,28 +140,18 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
   }, [answer])
 
   /* ── transcribe ─────────────────────────────────────────────────────────── */
-  const transcribe = useCallback(async blob => {
-    const key = groqKey || localStorage.getItem('groq_key')
-    if (!key || blob.size < 2000) return
+  const transcribeBlob = useCallback(async blob => {
+    if (!hasApiKey() || blob.size < 2000) return
     try {
-      const fd = new FormData()
-      fd.append('file', blob, 'audio.webm')
-      fd.append('model', 'whisper-large-v3-turbo')
-      fd.append('response_format', 'json')
-      fd.append('language', 'en')
-      const res = await fetch(`${GROQ}/audio/transcriptions`, {
-        method:'POST', headers:{ Authorization:`Bearer ${key}` }, body:fd,
-      })
-      if (!res.ok) return
-      const { text } = await res.json()
-      if (!text?.trim() || text.length < 4) return
-      if (/^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i.test(text.trim())) return
+      const text = await transcribe(blob, 'audio.webm')
+      if (!text || text.length < 4) return
+      if (/^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i.test(text)) return
       setQuestions(prev => {
         setSelectedIdx(0)
-        return [{ text:text.trim(), ts:Date.now(), id:Date.now() }, ...prev]
+        return [{ text, ts:Date.now(), id:Date.now() }, ...prev]
       })
-    } catch {}
-  }, [groqKey])
+    } catch (e) { console.error('Transcribe:', e.message) }
+  }, [])
 
   /* ── recording ──────────────────────────────────────────────────────────── */
   const startRec = useCallback(async () => {
@@ -180,7 +168,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
       rec.onstop = () => {
         const blob = new Blob(chunksRef.current, { type:mime })
         chunksRef.current = []
-        if (blob.size > 2000) transcribe(blob)
+        if (blob.size > 2000) transcribeBlob(blob)
       }
       const ctx = new AudioContext()
       const analyser = ctx.createAnalyser(); analyser.fftSize = 512
@@ -205,7 +193,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
       }
       frameRef.current = requestAnimationFrame(tick)
     } catch (e) { console.error('Mic:', e) }
-  }, [transcribe])
+  }, [transcribeBlob])
 
   const stopRec = useCallback(() => {
     if (frameRef.current) cancelAnimationFrame(frameRef.current)
@@ -222,38 +210,18 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
 
   /* ── generate ───────────────────────────────────────────────────────────── */
   const generate = useCallback(async q => {
-    const key = groqKey || localStorage.getItem('groq_key')
-    if (!key || !q || isGenerating) return
-    const m = (model && !['claude','openai'].includes(model)) ? model : 'llama-3.3-70b-versatile'
+    if (!hasApiKey() || !q || isGenerating) return
     setAnswer(''); setIsGenerating(true); setAnswerFor(q)
     try {
-      const res = await fetch(`${GROQ}/chat/completions`, {
-        method:'POST',
-        headers:{ 'Authorization':`Bearer ${key}`, 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          model:m, max_tokens:1024, stream:true,
-          messages:[
-            { role:'system', content:buildSystemPrompt() },
-            { role:'user',   content:q },
-          ],
-        }),
-      })
-      if (!res.ok) return
-      const reader=res.body.getReader(), dec=new TextDecoder()
-      let buf=''
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break
-        buf += dec.decode(value,{stream:true})
-        const lines=buf.split('\n'); buf=lines.pop()
-        for (const l of lines) {
-          if (!l.startsWith('data: ')) continue
-          const j=l.slice(6).trim(); if (j==='[DONE]') continue
-          try { const c=JSON.parse(j).choices?.[0]?.delta?.content; if(c) setAnswer(p=>p+c) } catch {}
-        }
-      }
-    } catch (e) { console.error('Gen:', e) }
+      await askAIStream(
+        [{ role:'user', content:q }],
+        chunk => setAnswer(p => p + chunk),
+        null,
+        model,
+      )
+    } catch (e) { console.error('Gen:', e.message) }
     finally { setIsGenerating(false) }
-  }, [groqKey, model, isGenerating])
+  }, [model, isGenerating])
 
   const addManual = () => {
     const t = manualInput.trim(); if (!t) return
@@ -369,7 +337,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
             background:'#fffbeb', border:'1px solid #fde68a',
             display:'flex', alignItems:'center', gap:7 }}>
             <span>⚠️</span>
-            <span style={{ fontSize:11, color:'#92400e' }}>No Groq key.{' '}
+            <span style={{ fontSize:11, color:'#92400e' }}>No OpenAI key.{' '}
               <button onClick={onGoSettings} style={{ background:'none', border:'none',
                 cursor:'pointer', color:G.primary, fontWeight:700, fontSize:11,
                 textDecoration:'underline', padding:0 }}>Settings →</button>

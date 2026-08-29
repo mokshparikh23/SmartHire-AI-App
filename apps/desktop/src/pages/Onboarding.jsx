@@ -18,7 +18,7 @@ const steps = [
   },
   {
     title: 'Add your API key',
-    desc: 'Go to Settings and paste your OpenAI or Anthropic API key to power the AI answers.',
+    desc: 'Go to Settings and paste your OpenAI API key to power the AI answers.',
     icon: '🔑'
   }
 ]

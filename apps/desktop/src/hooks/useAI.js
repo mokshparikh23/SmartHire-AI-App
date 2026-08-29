@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { askClaude, askClaudeStream } from '../services/claude'
+import { askAI, askAIStream } from '../services/aiRouter'
 
 export function useAI() {
   const [answer, setAnswer] = useState('')
@@ -15,7 +15,7 @@ export function useAI() {
     abortRef.current = false
     try {
       const transcript = [{ role: 'user', content: question }]
-      const result = await askClaude(transcript)
+      const result = await askAI(transcript)
       if (!abortRef.current) setAnswer(result)
     } catch (err) {
       if (!abortRef.current) setError(err.message)
@@ -32,7 +32,7 @@ export function useAI() {
     abortRef.current = false
     try {
       const transcript = [{ role: 'user', content: question }]
-      await askClaudeStream(
+      await askAIStream(
         transcript,
         (chunk) => { if (!abortRef.current) setAnswer((prev) => prev + chunk) },
         () => { if (!abortRef.current) setLoading(false) }
@@ -49,7 +49,7 @@ export function useAI() {
     setAnswer('')
     abortRef.current = false
     try {
-      await askClaudeStream(
+      await askAIStream(
         transcript,
         (chunk) => { if (!abortRef.current) setAnswer((prev) => prev + chunk) },
         () => { if (!abortRef.current) setLoading(false) }

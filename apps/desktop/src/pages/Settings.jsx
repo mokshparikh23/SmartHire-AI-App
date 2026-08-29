@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
+import { CHAT_MODELS, verifyApiKey } from '../services/aiRouter'
 
 const G = {
   bg:'#f0fdf6', card:'#ffffff', border:'#d1fae5', border2:'#a7f3d0',
@@ -8,12 +9,7 @@ const G = {
   red:'#dc2626', hdr:'linear-gradient(135deg,#022c22 0%,#064e3b 55%,#059669 100%)',
 }
 
-const MODELS = [
-  { id:'llama-3.3-70b-versatile', label:'Llama 3.3 70B', desc:'Best quality', badge:'⭐' },
-  { id:'llama-3.1-8b-instant',    label:'Llama 3.1 8B',  desc:'Fastest',      badge:'⚡' },
-  { id:'mixtral-8x7b-32768',      label:'Mixtral 8x7B',  desc:'Balanced',     badge:'⚖️' },
-  { id:'gemma2-9b-it',            label:'Gemma 2 9B',    desc:'Lightweight',  badge:'🪶' },
-]
+const MODELS = CHAT_MODELS
 
 const Label = ({ children }) => (
   <div style={{ fontSize:9, fontWeight:800, color:G.primary,
@@ -23,8 +19,8 @@ const Label = ({ children }) => (
 )
 
 export default function Settings({ onBack }) {
-  const { groqKey, model, overlayOpacity, setGroqKey, setModel, setOverlayOpacity } = useSettingsStore()
-  const [gKey, setGKey]       = useState(groqKey || localStorage.getItem('groq_key') || '')
+  const { openaiKey, model, overlayOpacity, setOpenaiKey, setModel, setOverlayOpacity } = useSettingsStore()
+  const [gKey, setGKey]       = useState(openaiKey || localStorage.getItem('openai_key') || '')
   const [saved, setSaved]     = useState(false)
   const [opacity, setOpacity] = useState(overlayOpacity ?? 90)
   const [showKey, setShowKey] = useState(false)
@@ -32,8 +28,8 @@ export default function Settings({ onBack }) {
   const [testOk, setTestOk]   = useState(null)
 
   const handleSave = () => {
-    setGroqKey(gKey)
-    localStorage.setItem('groq_key', gKey)
+    setOpenaiKey(gKey)
+    localStorage.setItem('openai_key', gKey)
     setOverlayOpacity(opacity)
     window.electronAPI?.setOverlayOpacity?.(opacity / 100)
     setSaved(true)
@@ -45,10 +41,7 @@ export default function Settings({ onBack }) {
     if (!key) return
     setTesting(true); setTestOk(null)
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { Authorization: `Bearer ${key}` }
-      })
-      setTestOk(res.ok)
+      setTestOk(await verifyApiKey(key))
     } catch { setTestOk(false) }
     finally { setTesting(false) }
   }
@@ -100,10 +93,10 @@ export default function Settings({ onBack }) {
       <div style={{ flex:1, overflowY:'auto', padding:'10px', display:'flex',
         flexDirection:'column', gap:8 }}>
 
-        {/* ── Groq API Key ── */}
+        {/* ── OpenAI API Key ── */}
         <div style={S.card}>
           <div style={S.head}>
-            <Label>Groq API Key</Label>
+            <Label>OpenAI API Key</Label>
             <span style={{ fontSize:9, fontWeight:800, padding:'2px 8px', borderRadius:99,
               background:'linear-gradient(135deg,#059669,#047857)', color:'#fff',
               letterSpacing:'0.04em', textTransform:'uppercase',
@@ -129,7 +122,7 @@ export default function Settings({ onBack }) {
                   type={showKey ? 'text' : 'password'}
                   value={gKey}
                   onChange={e => { setGKey(e.target.value); setTestOk(null) }}
-                  placeholder="gsk_..."
+                  placeholder="sk-..."
                   style={{ width:'100%', padding:'10px 52px 10px 12px', borderRadius:10,
                     fontSize:12, background:G.accent, border:`1.5px solid ${G.border2}`,
                     color:'#1f2937', outline:'none', boxSizing:'border-box', fontFamily:'monospace',
@@ -162,13 +155,13 @@ export default function Settings({ onBack }) {
             <div style={{ background:G.accent, border:`1px solid ${G.border2}`,
               borderRadius:12, padding:'10px 12px' }}>
               <div style={{ fontSize:10, fontWeight:700, color:G.dark, marginBottom:8 }}>
-                Get your free Groq key:
+                Get your OpenAI key:
               </div>
               {[
-                ['1', 'Go to console.groq.com'],
-                ['2', 'Sign up for free'],
-                ['3', 'API Keys → Create Key'],
-                ['4', 'Copy key (starts with gsk_)'],
+                ['1', 'Go to platform.openai.com'],
+                ['2', 'Sign in and add billing'],
+                ['3', 'API keys → Create new secret key'],
+                ['4', 'Copy key (starts with sk-)'],
               ].map(([n, s]) => (
                 <div key={n} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
                   <div style={{ width:18, height:18, borderRadius:'50%', flexShrink:0,
@@ -265,10 +258,10 @@ export default function Settings({ onBack }) {
           <div style={{ padding:'10px 13px', display:'flex', flexDirection:'column', gap:7 }}>
             {[
               ['🎙', 'Mic captures interview questions live'],
-              ['✍️', 'Groq Whisper transcribes speech to text'],
-              ['🤖', 'Groq LLM generates personalized answers'],
+              ['✍️', 'OpenAI Whisper transcribes speech to text'],
+              ['🤖', 'OpenAI generates personalized answers'],
               ['⚡', 'Answers stream in real time'],
-              ['🆓', 'Completely free with your Groq API key'],
+              ['🔑', 'Uses your own OpenAI API key'],
             ].map(([icon, text]) => (
               <div key={text} style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:14, flexShrink:0 }}>{icon}</span>

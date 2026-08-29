@@ -1,9 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { buildSystemPrompt } from '../services/systemPrompt'
-
-const GROQ_API = 'https://api.groq.com/openai/v1'
+import { askAIStream, transcribe, hasApiKey } from '../services/aiRouter'
 
 export function useVoice() {
   const mediaRecorderRef  = useRef(null)
@@ -15,97 +13,39 @@ export function useVoice() {
   const animFrameRef      = useRef(null)
 
   const { isRunning, setQuestion, appendAnswer, setAnswerDone } = useSessionStore()
-  const { groqKey, model } = useSettingsStore()
+  const { model } = useSettingsStore()
 
-  // ── Ask Groq LLM ─────────────────────────────────────────────────────────
-  const askGroq = useCallback(async (question) => {
-    const key = groqKey || localStorage.getItem('groq_key')
-    if (!key) return console.error('❌ No Groq key')
-
-    const safeModel = (model && !['claude','openai'].includes(model))
-      ? model : 'llama-3.3-70b-versatile'
+  // ── Ask the model ────────────────────────────────────────────────────────
+  const askModel = useCallback(async (question) => {
+    if (!hasApiKey()) return console.error('❌ No OpenAI key')
 
     console.log('🤖 Question:', question)
     setQuestion(question)
 
     try {
-      const res = await fetch(`${GROQ_API}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: safeModel,
-          max_tokens: 1024,
-          stream: true,
-          messages: [
-            { role: 'system', content: buildSystemPrompt() },
-            { role: 'user',   content: question },
-          ],
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.text()
-        console.error('❌ LLM error:', err)
-        return
-      }
-
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let   buffer  = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const json = line.slice(6).trim()
-          if (json === '[DONE]') continue
-          try {
-            const chunk = JSON.parse(json).choices?.[0]?.delta?.content
-            if (chunk) appendAnswer(chunk)
-          } catch (_) {}
-        }
-      }
+      await askAIStream(
+        [{ role: 'user', content: question }],
+        (chunk) => appendAnswer(chunk),
+        null,
+        model,
+      )
     } catch (e) {
-      console.error('❌ LLM exception:', e.message)
+      console.error('❌ LLM error:', e.message)
     } finally {
       setAnswerDone()
     }
-  }, [groqKey, model, setQuestion, appendAnswer, setAnswerDone])
+  }, [model, setQuestion, appendAnswer, setAnswerDone])
 
   // ── Transcribe blob ───────────────────────────────────────────────────────
   const transcribeAndAsk = useCallback(async (audioBlob) => {
-    const key = groqKey || localStorage.getItem('groq_key')
-    if (!key || audioBlob.size < 2000) return
+    if (!hasApiKey() || audioBlob.size < 2000) return
 
     console.log('🎙 Transcribing blob size:', audioBlob.size)
 
     try {
-      const formData = new FormData()
-      formData.append('file', audioBlob, 'audio.wav')
-      formData.append('model', 'whisper-large-v3-turbo')
-      formData.append('response_format', 'json')
-      formData.append('language', 'en')
-
-      const res = await fetch(`${GROQ_API}/audio/transcriptions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${key}` },
-        body: formData,
-      })
-
-      if (!res.ok) {
-        console.error('❌ Whisper error:', await res.text())
-        return
-      }
-
-      const data = await res.json()
-      const text = data?.text?.trim()
+      // The recorder produces webm; the extension has to match or Whisper
+      // rejects the upload as an unsupported format.
+      const text = await transcribe(audioBlob, 'audio.webm')
       console.log('📝 Transcribed:', text)
 
       // Filter out filler non-questions
@@ -113,11 +53,11 @@ export function useVoice() {
       if (/^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i.test(text)) return
 
       window.electronAPI?.sendTranscript?.({ text })
-      await askGroq(text)
+      await askModel(text)
     } catch (e) {
       console.error('❌ Transcribe exception:', e.message)
     }
-  }, [groqKey, askGroq])
+  }, [askModel])
 
   // ── Silence detection via Web Audio API ──────────────────────────────────
   const startSilenceDetection = useCallback((stream) => {
