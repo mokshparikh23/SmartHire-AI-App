@@ -40,18 +40,50 @@ async function loadRenderer(window) {
   throw lastError
 }
 
+// Size of the floating panel shown while a session runs. The window is set to
+// exactly these bounds so there is no window area outside the panel — clicks
+// beside it land on whatever app is behind, with nothing to intercept them.
+const PANEL = { width: 560, height: 420 }
+
+// Setup screens need room; the panel does not. Minimums must stay below the
+// panel size, because setBounds is silently clamped by them.
+const SETUP_MIN = { width: 680, height: 520 }
+const PANEL_MIN = { width: 420, height: 200 }
+
+let sessionMode = false
+let savedBounds = null
+
 async function createMainWindow() {
   const { width } = screen.getPrimaryDisplay().workAreaSize
+  const isMac = process.platform === 'darwin'
+
   mainWindow = new BrowserWindow({
     width: 780, height: 620,
-    minWidth: 680, minHeight: 520,
+    minWidth: SETUP_MIN.width, minHeight: SETUP_MIN.height,
     x: Math.max(0, width - 800), y: 40,
-    frame: false, transparent: false,
+
+    frame: false,
+    // Construction-time only in Electron — it cannot be toggled later, so the
+    // window is transparent for its whole life. The setup screens still look
+    // solid because each one paints its own full-height background.
+    transparent: true,
+    backgroundColor: '#00000000',
+    // macOS shadows the window RECTANGLE, not the visible panel, so leaving
+    // this on hangs a grey halo around empty space during a session.
+    hasShadow: false,
+
     alwaysOnTop: true, skipTaskbar: false,
-    resizable: true, hasShadow: true,
+    resizable: true,
     roundedCorners: true, visibleOnAllWorkspaces: true,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 10 },
+    // Without this, the first click back onto the app after clicking through to
+    // another window is eaten just to re-activate us.
+    acceptFirstMouse: true,
+
+    ...(isMac ? {
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 12, y: 10 },
+    } : {}),
+
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -60,14 +92,17 @@ async function createMainWindow() {
     }
   })
 
-  if (process.platform === 'darwin') {
-    mainWindow.setContentProtection(true)
-    mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
-    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  } else if (process.platform === 'win32') {
-    mainWindow.setWindowDisplayAffinity('exclude-from-capture')
-    mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
-  }
+  // setContentProtection IS the cross-platform spelling of this: NSWindow
+  // sharingType on macOS, SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) on
+  // Windows. The old win32 branch called a BrowserWindow method that does not
+  // exist, which threw before the renderer ever loaded.
+  mainWindow.setContentProtection(true)
+  mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+  if (isMac) mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+
+  // A renderer reload (Vite HMR, a crash) must never leave the window stuck in
+  // panel geometry with the session gone.
+  mainWindow.webContents.on('did-finish-load', () => { if (sessionMode) exitSessionMode() })
 
   try {
     await loadRenderer(mainWindow)
@@ -76,6 +111,59 @@ async function createMainWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+}
+
+/** Panel home: horizontally centred, high enough to clear the speaker's face. */
+function panelBounds(reference) {
+  const area = screen.getDisplayMatching(reference).workArea
+  return {
+    width:  PANEL.width,
+    height: PANEL.height,
+    x: Math.round(area.x + (area.width - PANEL.width) / 2),
+    y: Math.round(area.y + area.height * 0.12),
+  }
+}
+
+/** Guards against restoring onto a display that has since been unplugged. */
+function clampToVisible(bounds) {
+  const area = screen.getDisplayMatching(bounds).workArea
+  const onScreen =
+    bounds.x < area.x + area.width && bounds.x + bounds.width > area.x &&
+    bounds.y < area.y + area.height && bounds.y + bounds.height > area.y
+  if (onScreen) return bounds
+
+  const primary = screen.getPrimaryDisplay().workArea
+  return {
+    ...bounds,
+    x: Math.round(primary.x + (primary.width - bounds.width) / 2),
+    y: primary.y + 40,
+  }
+}
+
+function enterSessionMode() {
+  if (!mainWindow || sessionMode) return
+  sessionMode = true
+  savedBounds = mainWindow.getBounds()
+
+  // Lower the minimums FIRST — setBounds is clamped by them, so without this
+  // the panel would render at the setup window's 680x520.
+  mainWindow.setMinimumSize(PANEL_MIN.width, PANEL_MIN.height)
+  mainWindow.setBounds(panelBounds(savedBounds), false)
+  mainWindow.setResizable(false)
+  // Native NSWindow buttons are painted on the frame, not by the page, so on a
+  // transparent window they float as three loose dots over the user's call.
+  if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(false)
+  mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+}
+
+function exitSessionMode() {
+  if (!mainWindow) return
+  sessionMode = false
+  if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(true)
+  mainWindow.setResizable(true)
+  mainWindow.setMinimumSize(SETUP_MIN.width, SETUP_MIN.height)
+  if (savedBounds) mainWindow.setBounds(clampToVisible(savedBounds), false)
+  savedBounds = null
 }
 
 app.whenReady().then(async () => {
@@ -149,6 +237,8 @@ ipcMain.handle('license:clear', () => {
 
 ipcMain.handle('app:getWebUrl',  () => WEB_URL)
 ipcMain.handle('app:getVersion', () => app.getVersion())
+ipcMain.handle('overlay:enterSession', () => { enterSessionMode(); return true })
+ipcMain.handle('overlay:exitSession',  () => { exitSessionMode();  return true })
 ipcMain.handle('window:hide',    () => { if (mainWindow) mainWindow.hide() })
 ipcMain.handle('window:toggle',  () => {
   if (!mainWindow) return
@@ -182,15 +272,22 @@ ipcMain.handle('parse-pdf', async (_, filePath) => {
 let cornerIndex = 0
 function moveToNextCorner() {
   if (!mainWindow) return
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  const [w, h] = mainWindow.getSize()
+  const bounds = mainWindow.getBounds()
+  // getDisplayMatching, not getPrimaryDisplay: the old version assumed the
+  // origin was (0,0), so on a second monitor this teleported the window to the
+  // primary one. Work-area offsets also account for the dock and menu bar.
+  const area = screen.getDisplayMatching(bounds).workArea
+  const { width: w, height: h } = bounds
   const pad = 20
-  const corners = [
-    { x: width - w - pad, y: pad },
-    { x: pad, y: pad },
-    { x: pad, y: height - h - pad },
-    { x: width - w - pad, y: height - h - pad }
+
+  const spots = [
+    // Home first, so the cycle can always return the panel to centre.
+    { x: area.x + Math.round((area.width - w) / 2), y: area.y + Math.round(area.height * 0.12) },
+    { x: area.x + area.width - w - pad, y: area.y + pad },
+    { x: area.x + pad,                  y: area.y + pad },
+    { x: area.x + pad,                  y: area.y + area.height - h - pad },
+    { x: area.x + area.width - w - pad, y: area.y + area.height - h - pad },
   ]
-  cornerIndex = (cornerIndex + 1) % corners.length
-  mainWindow.setPosition(corners[cornerIndex].x, corners[cornerIndex].y)
+  cornerIndex = (cornerIndex + 1) % spots.length
+  mainWindow.setPosition(spots[cornerIndex].x, spots[cornerIndex].y)
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { CHAT_MODELS } from '../services/aiRouter'
+import Icon from '../components/ui/Icon'
 
 const G = {
   bg:'#f0fdf6', card:'#ffffff', border:'#d1fae5', border2:'#a7f3d0',
@@ -44,7 +45,7 @@ export default function Settings({ onBack }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden',
-      background:G.bg, fontFamily:'Inter,-apple-system,BlinkMacSystemFont,sans-serif' }}>
+      borderRadius:14, background:G.bg, fontFamily:'Inter,-apple-system,BlinkMacSystemFont,sans-serif' }}>
 
       {/* Traffic light */}
       <div style={{ height:28, flexShrink:0, WebkitAppRegion:'drag',
@@ -62,7 +63,7 @@ export default function Settings({ onBack }) {
           }}
             onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.22)'}
             onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.12)'}>
-            ←
+            <Icon name="arrowLeft" size={15} />
           </button>
           <div>
             <div style={{ fontSize:13, fontWeight:800, color:'#fff', lineHeight:1 }}>Settings</div>
@@ -154,14 +155,14 @@ export default function Settings({ onBack }) {
           </div>
           <div style={{ padding:'10px 13px', display:'flex', flexDirection:'column', gap:7 }}>
             {[
-              ['🎙', 'Mic captures interview questions live'],
-              ['✍️', 'OpenAI Whisper transcribes speech to text'],
-              ['🤖', 'OpenAI generates personalized answers'],
-              ['⚡', 'Answers stream in real time'],
-              ['🔒', 'No API key needed — your licence covers it'],
+              ['mic',   'Mic captures interview questions live'],
+              ['pen',   'OpenAI Whisper transcribes speech to text'],
+              ['robot', 'OpenAI generates personalized answers'],
+              ['bolt',  'Answers stream in real time'],
+              ['lock',  'No API key needed — your licence covers it'],
             ].map(([icon, text]) => (
               <div key={text} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ fontSize:14, flexShrink:0 }}>{icon}</span>
+                <span style={{ flexShrink:0, color:G.primary }}><Icon name={icon} size={14} /></span>
                 <span style={{ fontSize:11, color:G.text2, lineHeight:1.4 }}>{text}</span>
               </div>
             ))}
@@ -185,7 +186,7 @@ export default function Settings({ onBack }) {
             background:'linear-gradient(180deg,rgba(255,255,255,.12),transparent)',
             pointerEvents:'none' }} />
           <span style={{ position:'relative' }}>
-            {saved ? '✓ Saved!' : 'Save Settings'}
+            {saved ? 'Saved' : 'Save Settings'}
           </span>
         </button>
 

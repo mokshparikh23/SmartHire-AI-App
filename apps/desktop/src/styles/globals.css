@@ -9,9 +9,17 @@
     padding: 0;
   }
 
+  html, body, #root {
+    height: 100%;
+    /* The window is transparent for its whole life, so nothing here may paint.
+       Each screen draws its own full-height background instead; the session
+       panel draws only itself and leaves the rest of the screen showing
+       through. A colour here would fill the window with a solid rectangle. */
+    background: transparent;
+  }
+
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background: #0f0f0f;
     color: #ffffff;
     overflow: hidden;
     user-select: none;

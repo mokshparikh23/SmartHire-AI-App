@@ -22,16 +22,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── PDF Parsing ───────────────────────────────────────────────────────────
   parsePdf: (filePath)     => ipcRenderer.invoke('parse-pdf', filePath),
 
-  // ── AI answer bridge ──────────────────────────────────────────────────────
-  sendAnswer:  (data)      => ipcRenderer.send('ai:answer', data),
-  onAnswer:    (cb)        => {
-    ipcRenderer.on('ai:answer', (_, d) => cb(d))
-    return () => ipcRenderer.removeAllListeners('ai:answer')
-  },
+  // ── Session mode ──────────────────────────────────────────────────────────
+  // Shrinks the window to exactly the floating panel and back. Replaces
+  // startListening/stopListening, which were called but never exposed here.
+  enterSessionMode: ()     => ipcRenderer.invoke('overlay:enterSession'),
+  exitSessionMode:  ()     => ipcRenderer.invoke('overlay:exitSession'),
 
-  sendTranscript: (data)   => ipcRenderer.send('voice:transcript', data),
-  onTranscript:   (cb)     => {
-    ipcRenderer.on('voice:transcript', (_, d) => cb(d))
-    return () => ipcRenderer.removeAllListeners('voice:transcript')
-  }
+  // Kept: useVoice reports each transcript so the main process can react later.
+  // The matching ai:answer/onAnswer bridge was removed — it had no ipcMain
+  // relay and its only consumer was an unrouted page.
+  sendTranscript: (data)   => ipcRenderer.send('voice:transcript', data)
 })

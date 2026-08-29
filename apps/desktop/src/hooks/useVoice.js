@@ -1,185 +1,137 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { useSessionStore } from '../store/sessionStore'
-import { useSettingsStore } from '../store/settingsStore'
-import { askAIStream, transcribe } from '../services/aiRouter'
+import { useEffect } from 'react'
+import { transcribe } from '../services/aiRouter'
 
-export function useVoice() {
-  const mediaRecorderRef  = useRef(null)
-  const chunksRef         = useRef([])
-  const streamRef         = useRef(null)
-  const analyserRef       = useRef(null)
-  const silenceTimerRef   = useRef(null)
-  const isSpeakingRef     = useRef(false)
-  const animFrameRef      = useRef(null)
+/**
+ * Microphone capture with voice-activity detection. Pure audio → text: it owns
+ * no AI calls and no store writes, so it can be mounted once high in the tree
+ * and never torn down mid-session.
+ *
+ * @param {boolean}  enabled     start/stop capture
+ * @param {Function} onQuestion  called with each transcribed utterance
+ * @param {object}   levelRef    optional ref that receives the live RMS level.
+ *                               A ref, not state — this updates ~60×/s and
+ *                               would otherwise re-render the whole tree.
+ */
 
-  const { isRunning, setQuestion, appendAnswer, setAnswerDone } = useSessionStore()
-  const { model } = useSettingsStore()
+const RMS_SPEAKING   = 12     // volume above which we consider it speech
+const SILENCE_MS     = 1500   // silence before an utterance is closed
+const MIN_BLOB_BYTES = 2000   // below this there is no usable audio
+const MIN_TEXT_CHARS = 4
+const FILLER = /^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i
 
-  // ── Ask the model ────────────────────────────────────────────────────────
-  const askModel = useCallback(async (question) => {
-    console.log('🤖 Question:', question)
-    setQuestion(question)
+export function useVoice({ enabled, onQuestion, levelRef }) {
+  useEffect(() => {
+    if (!enabled) return
 
-    try {
-      await askAIStream(
-        [{ role: 'user', content: question }],
-        (chunk) => appendAnswer(chunk),
-        null,
-        model,
-      )
-    } catch (e) {
-      console.error('❌ LLM error:', e.message)
-    } finally {
-      setAnswerDone()
-    }
-  }, [model, setQuestion, appendAnswer, setAnswerDone])
+    // Guards every async continuation below. Without it, a session stopped
+    // while getUserMedia is still resolving leaks a live microphone.
+    let cancelled = false
+    const own = { stream: null, rec: null, ctx: null, raf: 0, silence: null }
 
-  // ── Transcribe blob ───────────────────────────────────────────────────────
-  const transcribeAndAsk = useCallback(async (audioBlob) => {
-    if (audioBlob.size < 2000) return
-
-    console.log('🎙 Transcribing blob size:', audioBlob.size)
-
-    try {
-      // The recorder produces webm; the extension has to match or Whisper
-      // rejects the upload as an unsupported format.
-      const text = await transcribe(audioBlob, 'audio.webm')
-      console.log('📝 Transcribed:', text)
-
-      // Filter out filler non-questions
-      if (!text || text.length < 4) return
-      if (/^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i.test(text)) return
-
-      window.electronAPI?.sendTranscript?.({ text })
-      await askModel(text)
-    } catch (e) {
-      console.error('❌ Transcribe exception:', e.message)
-    }
-  }, [askModel])
-
-  // ── Silence detection via Web Audio API ──────────────────────────────────
-  const startSilenceDetection = useCallback((stream) => {
-    const audioCtx  = new AudioContext()
-    const source    = audioCtx.createMediaStreamSource(stream)
-    const analyser  = audioCtx.createAnalyser()
-    analyser.fftSize = 512
-    source.connect(analyser)
-    analyserRef.current = analyser
-
-    const dataArray  = new Uint8Array(analyser.fftSize)
-    const THRESHOLD  = 12   // volume level to consider as speech
-    const SILENCE_MS = 1500 // ms of silence before cutting
-
-    const check = () => {
-      analyser.getByteTimeDomainData(dataArray)
-
-      // RMS volume
-      const rms = Math.sqrt(
-        dataArray.reduce((sum, v) => sum + (v - 128) ** 2, 0) / dataArray.length
-      )
-
-      const recorder = mediaRecorderRef.current
-
-      if (rms > THRESHOLD) {
-        // Speaking detected
-        if (!isSpeakingRef.current) {
-          isSpeakingRef.current = true
-          console.log('🗣 Speech started')
-          if (recorder?.state === 'inactive') {
-            chunksRef.current = []
-            recorder.start()
-          }
-        }
-        // Reset silence timer
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current)
-          silenceTimerRef.current = null
-        }
-      } else {
-        // Silence detected
-        if (isSpeakingRef.current && !silenceTimerRef.current) {
-          silenceTimerRef.current = setTimeout(() => {
-            isSpeakingRef.current = false
-            silenceTimerRef.current = null
-            console.log('🤫 Silence detected — stopping chunk')
-            if (recorder?.state === 'recording') {
-              recorder.stop()
-            }
-          }, SILENCE_MS)
-        }
+    const run = async () => {
+      let stream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
+        })
+      } catch (e) {
+        console.error('[voice] microphone unavailable:', e.message)
+        return
       }
 
-      animFrameRef.current = requestAnimationFrame(check)
-    }
-
-    animFrameRef.current = requestAnimationFrame(check)
-  }, [])
-
-  // ── Start recording ───────────────────────────────────────────────────────
-  const startRecording = useCallback(async () => {
-    console.log('🎤 Starting recording with silence detection...')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        }
-      })
-      streamRef.current  = stream
-      chunksRef.current  = []
-      isSpeakingRef.current = false
+      if (cancelled) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+      own.stream = stream
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : ''
+        : 'audio/webm'
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
-      mediaRecorderRef.current = recorder
+      const recorder = new MediaRecorder(stream, { mimeType })
+      own.rec = recorder
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
+      let chunks = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
 
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' })
-        chunksRef.current = []
-        console.log('🔴 Blob ready:', blob.size)
-        if (blob.size > 2000) transcribeAndAsk(blob)
-
-        // If still running, prepare for next utterance
+        const blob = new Blob(chunks, { type: mimeType })
+        chunks = []
+        // onstop also fires during teardown. Transcribing that tail would cost
+        // an extra API call and surface a phantom question after "Stop".
+        if (cancelled) return
+        if (blob.size > MIN_BLOB_BYTES) handleUtterance(blob)
       }
 
-      // Start silence detection (controls recorder start/stop)
-      startSilenceDetection(stream)
-      console.log('✅ Silence detection active')
+      const handleUtterance = async (blob) => {
+        try {
+          // The recorder produces webm; Whisper infers the container from the
+          // filename, so the extension has to match.
+          const text = await transcribe(blob, 'audio.webm')
+          if (cancelled) return
+          if (!text || text.length < MIN_TEXT_CHARS) return
+          if (FILLER.test(text)) return
 
-    } catch (e) {
-      console.error('❌ Mic error:', e.message)
+          window.electronAPI?.sendTranscript?.({ text })
+          onQuestion(text)
+        } catch (e) {
+          console.error('[voice] transcription failed:', e.message)
+        }
+      }
+
+      // ── Voice-activity detection ──────────────────────────────────────────
+      const ctx = new AudioContext()
+      own.ctx = ctx
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 512
+      ctx.createMediaStreamSource(stream).connect(analyser)
+
+      const data = new Uint8Array(analyser.fftSize)
+      let speaking = false
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(data)
+
+        let sum = 0
+        for (let i = 0; i < data.length; i++) {
+          const d = data[i] - 128
+          sum += d * d
+        }
+        const rms = Math.sqrt(sum / data.length)
+        if (levelRef) levelRef.current = rms
+
+        if (rms > RMS_SPEAKING) {
+          if (!speaking) {
+            speaking = true
+            if (recorder.state === 'inactive') { chunks = []; recorder.start() }
+          }
+          if (own.silence) { clearTimeout(own.silence); own.silence = null }
+        } else if (speaking && !own.silence) {
+          own.silence = setTimeout(() => {
+            speaking = false
+            own.silence = null
+            if (recorder.state === 'recording') recorder.stop()
+          }, SILENCE_MS)
+        }
+
+        own.raf = requestAnimationFrame(tick)
+      }
+      own.raf = requestAnimationFrame(tick)
     }
-  }, [transcribeAndAsk, startSilenceDetection])
 
-  // ── Stop recording ────────────────────────────────────────────────────────
-  const stopRecording = useCallback(() => {
-    console.log('⏹ Stopping...')
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop())
-      streamRef.current = null
+    run()
+
+    return () => {
+      cancelled = true
+      if (own.raf) cancelAnimationFrame(own.raf)
+      if (own.silence) clearTimeout(own.silence)
+      if (own.rec?.state === 'recording') own.rec.stop()
+      // Chromium caps a page at 6 AudioContexts. Without this close() the mic
+      // stops working after a few start/stop cycles.
+      own.ctx?.close().catch(() => {})
+      own.stream?.getTracks().forEach((t) => t.stop())
+      if (levelRef) levelRef.current = 0
     }
-    isSpeakingRef.current = false
-  }, [])
-
-  // ── Auto start/stop with session ──────────────────────────────────────────
-  useEffect(() => {
-    if (isRunning) startRecording()
-    else stopRecording()
-    return () => stopRecording()
-  }, [isRunning])
-
-  return { startRecording, stopRecording }
+  }, [enabled, onQuestion, levelRef])
 }

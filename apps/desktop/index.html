@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
     <title>Interview Assistant</title>
+    <!-- Chromium paints its default white canvas between first paint and the CSS
+         bundle loading. On a transparent window that is a white flash over the
+         user's call, so the background is cleared inline. -->
+    <style>html,body{margin:0;background:transparent}</style>
   </head>
   <body>
     <div id="root"></div>

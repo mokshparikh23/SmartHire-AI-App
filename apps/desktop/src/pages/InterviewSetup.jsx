@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
+import Icon from '../components/ui/Icon'
 
 const G = {
   bg:'#f7fdf9', card:'#ffffff', border:'#d1fae5', border2:'#a7f3d0',
@@ -57,7 +58,7 @@ export default function InterviewSetup({ onComplete }) {
   }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:G.bg, fontFamily:'Inter,-apple-system,sans-serif', overflow:'hidden' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:G.bg, fontFamily:'Inter,-apple-system,sans-serif', overflow:'hidden', borderRadius:14 }}>
 
       {/* Traffic light */}
       <div style={{ height:28, flexShrink:0, WebkitAppRegion:'drag',
@@ -84,7 +85,7 @@ export default function InterviewSetup({ onComplete }) {
                   background: i<step?G.primary:i===step?'#fff':G.accent,
                   border: `2px solid ${i<=step?G.primary:G.border}`,
                   color: i<step?'#fff':i===step?G.primary:G.muted2 }}>
-                  {i<step?'✓':i+1}
+                  {i<step ? <Icon name="check" size={11} strokeWidth={2.4} /> : i+1}
                 </div>
                 <span style={{ fontSize:9, fontWeight:700, marginTop:4, whiteSpace:'nowrap',
                   color: i===step?G.primary:i<step?G.primary:G.muted2 }}>{label}</span>
@@ -125,7 +126,7 @@ export default function InterviewSetup({ onComplete }) {
               </div>
               {form.company&&form.role&&(
                 <div style={{ background:G.accent, border:`1px solid ${G.border2}`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
-                  <span style={{ fontSize:14 }}>✓</span>
+                  <span style={{ display:'flex', color:G.primary }}><Icon name="check" size={13} strokeWidth={2.4} /></span>
                   <span style={{ fontSize:11, color:G.text2 }}>
                     Tailored answers for <strong>{form.role}</strong> at <strong>{form.company}</strong>
                   </span>
@@ -158,13 +159,13 @@ export default function InterviewSetup({ onComplete }) {
                   </div>
                 ):parseSuccess?(
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:G.accent2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, marginBottom:2 }}>✅</div>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:G.accent2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, marginBottom:2 }}><Icon name="check" size={20} strokeWidth={2.2} /></div>
                     <div style={{ fontSize:12, fontWeight:700, color:G.primary }}>{resumeFileName}</div>
                     <div style={{ fontSize:10, color:G.muted }}>{form.resume.length} chars extracted · click to change</div>
                   </div>
                 ):(
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:G.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, marginBottom:2 }}>📄</div>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:G.accent, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, marginBottom:2 }}><Icon name="upload" size={20} /></div>
                     <div style={{ fontSize:12, fontWeight:600, color:G.text }}>Upload PDF or .txt</div>
                     <div style={{ fontSize:10, color:G.muted2 }}>Text extracted automatically</div>
                   </div>
@@ -187,7 +188,7 @@ export default function InterviewSetup({ onComplete }) {
                   <button onClick={()=>{ update('resume',''); setResumeFileName(''); setParseSuccess(false) }}
                     style={{ fontSize:10, fontWeight:600, color:G.muted2, background:'none', border:'none', cursor:'pointer' }}
                     onMouseEnter={e=>e.target.style.color=G.red}
-                    onMouseLeave={e=>e.target.style.color=G.muted2}>Clear ✕</button>
+                    onMouseLeave={e=>e.target.style.color=G.muted2}>Clear</button>
                 )}
               </div>
             </div>
@@ -212,8 +213,8 @@ export default function InterviewSetup({ onComplete }) {
                 {[
                   ['Company', form.company],
                   ['Role',    form.role],
-                  ['Resume',  form.resume ? `✓ ${form.resume.length} chars` : null],
-                  ['JD',      form.jobDescription ? `✓ ${form.jobDescription.length} chars` : null],
+                  ['Resume',  form.resume ? `${form.resume.length} chars` : null],
+                  ['JD',      form.jobDescription ? `${form.jobDescription.length} chars` : null],
                 ].map(([label,value])=>(
                   <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ fontSize:11, color:G.muted }}>{label}</span>
@@ -227,7 +228,7 @@ export default function InterviewSetup({ onComplete }) {
           {/* Error */}
           {error&&(
             <div style={{ marginTop:12, background:G.redBg, border:`1px solid #fecaca`, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:8 }}>
-              <span>⚠️</span>
+              <span><Icon name="warning" size={13} /></span>
               <span style={{ fontSize:11, color:G.red }}>{error}</span>
             </div>
           )}
@@ -247,7 +248,7 @@ export default function InterviewSetup({ onComplete }) {
                 background:'linear-gradient(135deg,#059669,#047857)',
                 boxShadow:'0 4px 14px rgba(5,150,105,0.35), inset 0 1px 0 rgba(255,255,255,0.15)',
                 opacity:parsing?0.6:1 }}>
-              {step===STEPS.length-1?'🚀 Start Interview':'Continue →'}
+              {step===STEPS.length-1?'Start Interview':'Continue →'}
             </button>
           </div>
         </div>

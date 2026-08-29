@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSessionStore }  from '../store/sessionStore'
-import { askAIStream, transcribe } from '../services/aiRouter'
+import Icon from '../components/ui/Icon'
 
 /* ── tokens ─────────────────────────────────────────────────────────────── */
 const G = {
@@ -50,7 +50,7 @@ function CopyBtn({ text, ghost }) {
         : ok ? G.primary : G.muted,
       backdropFilter: ghost ? 'blur(4px)' : 'none',
     }}>
-      <span>{ok ? '✓' : '⎘'}</span>{ok ? 'Copied!' : 'Copy'}
+      <Icon name={ok ? 'check' : 'copy'} size={11} />{ok ? 'Copied!' : 'Copy'}
     </button>
   )
 }
@@ -71,8 +71,8 @@ function QItem({ q, selected, onClick, onDelete }) {
         position:'relative',
       }}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:7 }}>
-        <span style={{ fontSize:12, flexShrink:0, marginTop:1 }}>
-          {q.manual ? '⌨️' : '🎙'}
+        <span style={{ flexShrink:0, marginTop:3, color:G.muted2 }}>
+          <Icon name={q.manual ? 'keyboard' : 'mic'} size={12} />
         </span>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:11, lineHeight:1.55, wordBreak:'break-word',
@@ -93,7 +93,7 @@ function QItem({ q, selected, onClick, onDelete }) {
               flexShrink:0, fontWeight:700, transition:'all .12s' }}
             onMouseEnter={e => e.currentTarget.style.background='rgba(220,38,38,.2)'}
             onMouseLeave={e => e.currentTarget.style.background='rgba(220,38,38,.1)'}>
-            ✕
+            <Icon name="close" size={10} strokeWidth={2.2} />
           </button>
         )}
         {selected && (
@@ -106,29 +106,28 @@ function QItem({ q, selected, onClick, onDelete }) {
 }
 
 /* ── Dashboard ───────────────────────────────────────────────────────────── */
-export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) {
+export default function Dashboard({ session, onLogout, onResetInterview, onGoSettings }) {
   const interviewContext = useSettingsStore(s => s.interviewContext)
-  const model            = useSettingsStore(s => s.model)
   const isRunning        = useSessionStore(s => s.isRunning)
   const elapsed          = useSessionStore(s => s.elapsed)
-  const startSession     = useSessionStore(s => s.startSession)
-  const stopSession      = useSessionStore(s => s.stopSession)
 
-  const [questions, setQuestions]       = useState([])
-  const [selectedIdx, setSelectedIdx]   = useState(null)
-  const [manualInput, setManualInput]   = useState('')
-  const [answer, setAnswer]             = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [answerFor, setAnswerFor]       = useState('')
+  // Turns committed during the last session. Capture and generation live in
+  // useInterviewSession (mounted in MainApp) so they survive the switch into
+  // the floating panel; this page just reviews the result between sessions.
+  const turns = useSessionStore(s => s.turns)
+
+  const [selectedIdx, setSelectedIdx] = useState(null)
+  const [manualInput, setManualInput] = useState('')
   const hideWindow = () => window.electronAPI?.toggleOverlay?.()
 
-  const recRef      = useRef(null)
-  const chunksRef   = useRef([])
-  const streamRef   = useRef(null)
-  const frameRef    = useRef(null)
-  const silRef      = useRef(null)
-  const speakRef    = useRef(false)
-  const answerRef   = useRef(null)
+  const answerRef = useRef(null)
+
+  const questions = turns.map((t, i) => ({
+    text: t.q, id: t.id, ts: t.ts, manual: t.source === 'manual', idx: i,
+  }))
+  const answer      = selectedIdx !== null ? (turns[selectedIdx]?.a ?? '') : ''
+  const answerFor   = selectedIdx !== null ? (turns[selectedIdx]?.q ?? '') : ''
+  const isGenerating = false
 
   const mm = Math.floor(elapsed / 60).toString().padStart(2, '0')
   const ss = (elapsed % 60).toString().padStart(2, '0')
@@ -138,119 +137,22 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
       answerRef.current.scrollTop = answerRef.current.scrollHeight
   }, [answer])
 
-  /* ── transcribe ─────────────────────────────────────────────────────────── */
-  const transcribeBlob = useCallback(async blob => {
-    if (blob.size < 2000) return
-    try {
-      const text = await transcribe(blob, 'audio.webm')
-      if (!text || text.length < 4) return
-      if (/^(thank you|thanks|okay|ok|yes|no|hmm+|uh+|um+|\.+)$/i.test(text)) return
-      setQuestions(prev => {
-        setSelectedIdx(0)
-        return [{ text, ts:Date.now(), id:Date.now() }, ...prev]
-      })
-    } catch (e) { console.error('Transcribe:', e.message) }
-  }, [])
-
-  /* ── recording ──────────────────────────────────────────────────────────── */
-  const startRec = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio:{ echoCancellation:true, noiseSuppression:true, sampleRate:16000 }
-      })
-      streamRef.current = stream; chunksRef.current = []; speakRef.current = false
-      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus' : 'audio/webm'
-      const rec = new MediaRecorder(stream, { mimeType:mime })
-      recRef.current = rec
-      rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      rec.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type:mime })
-        chunksRef.current = []
-        if (blob.size > 2000) transcribeBlob(blob)
-      }
-      const ctx = new AudioContext()
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 512
-      ctx.createMediaStreamSource(stream).connect(analyser)
-      const buf = new Uint8Array(analyser.fftSize)
-      const tick = () => {
-        analyser.getByteTimeDomainData(buf)
-        const rms = Math.sqrt(buf.reduce((s,v) => s+(v-128)**2, 0)/buf.length)
-        if (rms > 12) {
-          if (!speakRef.current) {
-            speakRef.current = true
-            if (rec.state==='inactive') { chunksRef.current=[]; rec.start() }
-          }
-          if (silRef.current) { clearTimeout(silRef.current); silRef.current=null }
-        } else if (speakRef.current && !silRef.current) {
-          silRef.current = setTimeout(() => {
-            speakRef.current=false; silRef.current=null
-            if (rec.state==='recording') rec.stop()
-          }, 1500)
-        }
-        frameRef.current = requestAnimationFrame(tick)
-      }
-      frameRef.current = requestAnimationFrame(tick)
-    } catch (e) { console.error('Mic:', e) }
-  }, [transcribeBlob])
-
-  const stopRec = useCallback(() => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current)
-    if (silRef.current) clearTimeout(silRef.current)
-    if (recRef.current?.state==='recording') recRef.current.stop()
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t=>t.stop()); streamRef.current=null }
-    speakRef.current = false
-  }, [])
-
-  useEffect(() => {
-    if (isRunning) startRec(); else stopRec()
-    return () => stopRec()
-  }, [isRunning])
-
-  /* ── generate ───────────────────────────────────────────────────────────── */
-  const generate = useCallback(async q => {
-    if (!q || isGenerating) return
-    setAnswer(''); setIsGenerating(true); setAnswerFor(q)
-    try {
-      await askAIStream(
-        [{ role:'user', content:q }],
-        chunk => setAnswer(p => p + chunk),
-        null,
-        model,
-      )
-    } catch (e) { console.error('Gen:', e.message) }
-    finally { setIsGenerating(false) }
-  }, [model, isGenerating])
-
   const addManual = () => {
     const t = manualInput.trim(); if (!t) return
-    setQuestions(p => [{ text:t, ts:Date.now(), id:Date.now(), manual:true }, ...p])
-    setSelectedIdx(0); setManualInput('')
+    setManualInput('')
+    session.askManual(t)      // starting a question moves us into the panel
   }
 
-  const deleteQ = idx => {
-    setQuestions(p => {
-      const n = p.filter((_,i)=>i!==idx)
-      if (selectedIdx===idx) { setSelectedIdx(null); setAnswer(''); setAnswerFor('') }
-      else if (selectedIdx>idx) setSelectedIdx(s=>s-1)
-      return n
-    })
-  }
+  const deleteQ = () => {}    // the turn log is immutable once a session ends
+  const clearAll = () => setSelectedIdx(null)
 
-  const clearAll = () => {
-    setQuestions([]); setSelectedIdx(null); setAnswer(''); setAnswerFor('')
-  }
-
-  const handleStartStop = () => {
-    if (isRunning) { stopSession(); window.electronAPI?.stopListening?.() }
-    else           { startSession(); window.electronAPI?.startListening?.() }
-  }
+  const handleStartStop = () => (isRunning ? session.stop() : session.start())
 
   const selQ = selectedIdx !== null ? questions[selectedIdx] : null
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden',
-      background:G.bg, fontFamily:'Inter,-apple-system,BlinkMacSystemFont,sans-serif' }}>
+      borderRadius:14, background:G.bg, fontFamily:'Inter,-apple-system,BlinkMacSystemFont,sans-serif' }}>
 
       {/* traffic light */}
       <div style={{ height:28, flexShrink:0, WebkitAppRegion:'drag',
@@ -309,10 +211,10 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                 justifyContent:'center', transition:'all .15s', backdropFilter:'blur(8px)' }}
               onMouseEnter={e=>{ e.currentTarget.style.background='rgba(255,255,255,.2)' }}
               onMouseLeave={e=>{ e.currentTarget.style.background='rgba(255,255,255,.1)' }}>
-              🙈
+              <Icon name="eyeOff" size={14} />
             </button>
-            {[{ icon:'⚙', fn:onGoSettings, tip:'Settings' },
-              { icon:'↺', fn:onResetInterview, tip:'Change interview' }].map(({ icon,fn,tip }) => (
+            {[{ icon:'<Icon name="gear" size={14} />', fn:onGoSettings, tip:'Settings' },
+              { icon:'<Icon name="reset" size={14} />', fn:onResetInterview, tip:'Change interview' }].map(({ icon,fn,tip }) => (
               <button key={icon} onClick={fn} title={tip} style={{
                 width:32, height:32, borderRadius:9, fontSize:14, cursor:'pointer',
                 background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)',
@@ -442,7 +344,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
           <div style={{ flex:1, overflowY:'auto' }}>
             {questions.length === 0 ? (
               <div style={{ padding:'28px 16px', textAlign:'center' }}>
-                <div style={{ fontSize:34, marginBottom:10, opacity:.45 }}>🎙</div>
+                <div style={{ marginBottom:10, opacity:.4, color:G.primary }}><Icon name="mic" size={30} strokeWidth={1.4} /></div>
                 <div style={{ fontSize:11, fontWeight:600, color:G.muted, marginBottom:5 }}>
                   {isRunning ? 'Listening for questions...' : 'No questions yet'}
                 </div>
@@ -456,7 +358,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
               questions.map((q, i) => (
                 <QItem key={q.id} q={q}
                   selected={selectedIdx===i}
-                  onClick={() => { setSelectedIdx(i); setAnswer(''); setAnswerFor('') }}
+                  onClick={() => setSelectedIdx(i)}
                   onDelete={() => deleteQ(i)}
                 />
               ))
@@ -511,7 +413,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                     {selQ.text}
                   </div>
                 </div>
-                <button onClick={() => generate(selQ.text)} disabled={isGenerating}
+                <button onClick={() => session.askManual(selQ.text)} disabled={isGenerating}
                   style={{ padding:'9px 16px', borderRadius:10, border:'none',
                     fontWeight:800, fontSize:12, letterSpacing:'0.02em',
                     cursor: isGenerating ? 'not-allowed' : 'pointer',
@@ -529,14 +431,15 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                       pointerEvents:'none' }} />
                   )}
                   <span style={{ position:'relative' }}>
-                    {isGenerating ? '⏳ Generating...' : '✨ Generate'}
+                    <Icon name={isGenerating ? 'clock' : 'sparkle'} size={13} />
+                    {isGenerating ? 'Generating...' : 'Generate'}
                   </span>
                 </button>
               </div>
             ) : (
               <div style={{ display:'flex', alignItems:'center', gap:7,
                 fontSize:11, color:G.muted2 }}>
-                <span style={{ fontSize:16 }}>👈</span>
+                <span style={{ color:G.muted2 }}><Icon name="arrowLeft" size={15} /></span>
                 Select a question from the left to generate an answer
               </div>
             )}
@@ -550,7 +453,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                 <div style={{ fontSize:9, fontWeight:800, color:G.primary, textTransform:'uppercase',
                   letterSpacing:'0.07em', marginBottom:10,
                   display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontSize:14 }}>💡</span> Answer
+                  <Icon name="bulb" size={13} /> Answer
                 </div>
                 <div style={{ fontSize:12, color:'#1f2937', lineHeight:1.9,
                   whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
@@ -571,7 +474,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                   <>
                     <div style={{ width:52, height:52, borderRadius:16, marginBottom:12,
                       background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>✨</div>
+                      display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name="sparkle" size={22} /></div>
                     <div style={{ fontSize:13, fontWeight:700, color:G.dark, marginBottom:5 }}>
                       Ready to generate
                     </div>
@@ -583,7 +486,7 @@ export default function Dashboard({ onLogout, onResetInterview, onGoSettings }) 
                   <>
                     <div style={{ width:52, height:52, borderRadius:16, marginBottom:12,
                       background:'linear-gradient(135deg,#d1fae5,#a7f3d0)',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:24 }}>🎙</div>
+                      display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name="mic" size={22} strokeWidth={1.5} /></div>
                     <div style={{ fontSize:13, fontWeight:700, color:G.dark, marginBottom:5 }}>
                       Start your interview
                     </div>

@@ -1,135 +1,87 @@
-import { useEffect, useRef } from 'react'
-import { useAI } from '../../hooks/useAI'
-import { useSettingsStore } from '../../store/settingsStore'
+import React, { useEffect, useLayoutEffect, useRef } from 'react'
+import { useSessionStore } from '../../store/sessionStore'
+import Icon from '../ui/Icon'
 
-export default function AnswerPanel({ question, isListening }) {
-  const { answer, loading, error, askStream, clear } = useAI()
-  const interviewContext = useSettingsStore((s) => s.interviewContext)
-  const prevQuestionRef = useRef('')
-  const answerRef = useRef(null)
+/**
+ * The streaming answer body.
+ *
+ * This is the ONLY component that re-renders while an answer streams — it is
+ * the sole subscriber to currentAnswer. Everything above it in the tree
+ * subscribes to booleans, so a token costs one leaf render.
+ */
+export default function AnswerPanel({ onRegenerate, onCopy }) {
+  const answer     = useSessionStore((s) => s.currentAnswer)
+  const question   = useSessionStore((s) => s.currentQuestion)
+  const isThinking = useSessionStore((s) => s.isThinking)
+  const error      = useSessionStore((s) => s.error)
 
-  // Auto-ask when a new question comes in
-  useEffect(() => {
-    if (
-      question &&
-      question.trim().length > 5 &&
-      question !== prevQuestionRef.current
-    ) {
-      prevQuestionRef.current = question
-      askStream(question)
-    }
-  }, [question])
+  const bodyRef   = useRef(null)
+  const pinnedRef = useRef(true)
 
-  // Auto-scroll as answer streams in
-  useEffect(() => {
-    if (answerRef.current) {
-      answerRef.current.scrollTop = answerRef.current.scrollHeight
+  // Follow the stream only while the user is already at the bottom. Scrolling
+  // up to re-read must not be yanked back down on the next token.
+  const handleScroll = () => {
+    const el = bodyRef.current
+    if (!el) return
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }
+
+  useLayoutEffect(() => {
+    if (pinnedRef.current && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
   }, [answer])
 
+  // A new question always starts at the top.
+  useEffect(() => {
+    pinnedRef.current = true
+    if (bodyRef.current) bodyRef.current.scrollTop = 0
+  }, [question])
+
+  const words = answer.trim() ? answer.trim().split(/\s+/).length : 0
+
   return (
-    <div className="flex flex-col h-full bg-gray-950/95 rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900/80">
-        <div className="flex items-center gap-2">
-          {/* Live indicator */}
-          <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
-          <span className="text-xs text-gray-400 font-medium">
-            {isListening ? 'Listening...' : 'Waiting'}
-          </span>
-        </div>
-
-        {/* Interview context badge */}
-        {interviewContext.isSetup && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded-full border border-blue-800/50">
-              {interviewContext.role}
-            </span>
-            <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">
-              {interviewContext.company}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Question detected */}
-      {question && (
-        <div className="px-4 py-2.5 bg-gray-900/60 border-b border-gray-800/50">
-          <p className="text-xs text-gray-500 mb-0.5 uppercase tracking-wide">Question</p>
-          <p className="text-sm text-gray-200 leading-snug">{question}</p>
-        </div>
-      )}
-
-      {/* Answer area */}
-      <div
-        ref={answerRef}
-        className="flex-1 overflow-y-auto px-4 py-3 space-y-2"
-      >
-        {/* Loading state */}
-        {loading && !answer && (
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-            <span className="text-xs text-gray-500">Generating answer...</span>
-          </div>
-        )}
-
-        {/* Error state */}
-        {error && (
-          <div className="bg-red-950/40 border border-red-800/40 rounded-xl px-4 py-3">
-            <p className="text-xs text-red-400 font-medium mb-1">Error</p>
-            <p className="text-sm text-red-300">{error}</p>
-          </div>
-        )}
-
-        {/* Answer streaming */}
-        {answer && (
-          <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Answer</p>
-            <p className="text-sm text-white leading-relaxed whitespace-pre-wrap">
-              {answer}
-              {/* Blinking cursor while streaming */}
-              {loading && (
-                <span className="inline-block w-0.5 h-4 bg-blue-400 ml-0.5 animate-pulse align-middle" />
-              )}
-            </p>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && !answer && !error && (
-          <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <div className="text-3xl mb-3">🎙️</div>
-            <p className="text-sm text-gray-500">
-              Start speaking — AI will answer in real time
-            </p>
-            {interviewContext.isSetup && (
-              <p className="text-xs text-gray-600 mt-1">
-                Answers tailored for {interviewContext.role} at {interviewContext.company}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer actions */}
-      {answer && !loading && (
-        <div className="px-4 py-2.5 border-t border-gray-800 bg-gray-900/60 flex items-center justify-between">
-          <p className="text-xs text-gray-600">
-            {answer.split(' ').length} words
+    <>
+      <div className="ia-body" ref={bodyRef} onScroll={handleScroll}>
+        {error ? (
+          <p className="ia-error">{error}</p>
+        ) : answer ? (
+          <p className="ia-answer">
+            {answer}
+            {isThinking && <span className="ia-caret" />}
           </p>
-          <button
-            onClick={clear}
-            className="text-xs text-gray-500 hover:text-gray-300 transition px-3 py-1 rounded-lg hover:bg-gray-800"
-          >
-            Clear ✕
-          </button>
-        </div>
-      )}
-    </div>
+        ) : isThinking ? (
+          <span className="ia-dots"><i /><i /><i /></span>
+        ) : (
+          <div className="ia-empty">
+            <Icon name="mic" size={20} strokeWidth={1.4} />
+            <span>Answers appear here as questions are asked</span>
+          </div>
+        )}
+      </div>
+
+      <div className="ia-footer">
+        <span className="ia-meta">{words ? `${words} words` : ''}</span>
+        <span className="ia-spacer" />
+        <button
+          className="ia-action"
+          onClick={onRegenerate}
+          disabled={isThinking || !question}
+          title="Answer again"
+        >
+          <Icon name="reset" size={12} />
+          Retry
+        </button>
+        <button
+          className="ia-action"
+          onClick={() => onCopy(answer)}
+          disabled={!answer}
+          title="Copy answer"
+        >
+          <Icon name="copy" size={12} />
+          Copy
+        </button>
+      </div>
+    </>
   )
 }
