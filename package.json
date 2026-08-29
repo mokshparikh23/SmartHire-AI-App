@@ -1,42 +1,23 @@
 {
-  "name": "interview-assistant",
+  "name": "smarthire-ai",
   "version": "1.0.0",
-  "description": "AI-powered interview assistant with invisible overlay",
-  "main": "electron/main.cjs",
-  "type": "module",
+  "private": true,
+  "description": "Interview Assistant — Electron desktop app and its Next.js licensing backend",
+  "workspaces": [
+    "apps/desktop",
+    "apps/web"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
-    "dev:vite": "vite",
-    "dev:electron": "cross-env NODE_ENV=development electron .",
-    "build": "vite build",
-    "build:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
-    "build:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
-    "build:all": "npm run build && electron-builder --config electron-builder.config.cjs --mac --win",
-    "preview": "vite preview"
+    "dev": "concurrently -n web,desktop -c cyan,magenta \"npm run dev:web\" \"npm run dev:desktop\"",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:desktop": "npm run dev --workspace apps/desktop",
+    "build": "npm run build --workspace apps/desktop",
+    "build:web": "npm run build --workspace apps/web",
+    "build:mac": "npm run build:mac --workspace apps/desktop",
+    "build:win": "npm run build:win --workspace apps/desktop",
+    "build:all": "npm run build:all --workspace apps/desktop"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
-    "autoprefixer": "^10.4.27",
-    "concurrently": "^8.0.0",
-    "cross-env": "^7.0.3",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.0.0",
-    "postcss": "^8.5.8",
-    "vite": "^5.0.0"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.0",
-    "@fontsource/inter": "^5.2.8",
-    "dotenv": "^16.0.0",
-    "electron-store": "^8.2.0",
-    "groq-sdk": "^1.1.1",
-    "openai": "^4.0.0",
-    "pdfjs-dist": "^5.5.207",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-router-dom": "^6.0.0",
-    "tailwindcss": "^3.4.0",
-    "unpdf": "^1.4.0",
-    "zustand": "^4.5.7"
+    "concurrently": "^8.0.0"
   }
 }

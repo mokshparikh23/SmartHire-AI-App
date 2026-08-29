@@ -3,11 +3,18 @@ const path = require('path')
 const Store = require('electron-store')
 const fs = require('fs')
 
+// Resolved from the app directory rather than cwd, so it works whether the app
+// is launched from here or from the monorepo root.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+
 const isDev = process.env.NODE_ENV === 'development'
 const store = new Store()
-// const WEB_URL = isDev ? 'http://localhost:3000' : 'https://smart-hire-ai-gamma.vercel.app'
-const WEB_URL = 'https://smart-hire-ai-gamma.vercel.app'
+// Backend that issues and validates license keys.
+// Set WEB_URL in .env to point at a locally running build of the web app.
+const WEB_URL = process.env.WEB_URL || 'https://smart-hire-ai-gamma.vercel.app'
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
+
+if (isDev) console.log(`[main] license backend: ${WEB_URL}`)
 
 let mainWindow = null
 

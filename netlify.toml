@@ -1,0 +1,9 @@
+# Build runs from the repo root so npm workspaces hoist correctly.
+# Do not set `base = "apps/web"` — that installs inside the workspace and
+# breaks the shared root node_modules.
+[build]
+  command = "npm run build:web"
+  publish = "apps/web/.next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
