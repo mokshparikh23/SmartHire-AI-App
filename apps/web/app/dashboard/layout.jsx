@@ -15,10 +15,10 @@ export default async function DashboardLayout({ children }) {
     .single()
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="flex min-h-screen bg-paper">
       <Sidebar profile={profile} />
-      <main className="flex-1 p-8 overflow-auto">
-        {children}
+      <main className="flex-1 overflow-auto">
+        <div className="mx-auto max-w-4xl px-8 py-10">{children}</div>
       </main>
     </div>
   )

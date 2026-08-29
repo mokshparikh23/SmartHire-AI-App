@@ -2,23 +2,24 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui'
+
+const PLANS = ['monthly', 'yearly', 'lifetime']
 
 export default function UserActions({ user, activeLicense }) {
-  const router              = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
+  const router = useRouter()
+  const [loading, setLoading]     = useState(false)
   const [showIssue, setShowIssue] = useState(false)
-  const [plan, setPlan]       = useState('monthly')
+  const [plan, setPlan]           = useState('monthly')
 
   const doAction = async (url, body, confirmMsg) => {
     if (confirmMsg && !confirm(confirmMsg)) return
     setLoading(true)
-    setShowMenu(false)
     try {
       const res  = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -30,144 +31,86 @@ export default function UserActions({ user, activeLicense }) {
     }
   }
 
-  const issueLicense = async () => {
-    await doAction('/api/admin/licenses/issue', { userId: user.id, plan })
-    setShowIssue(false)
-  }
-
   return (
     <>
-      {/* Issue License Modal */}
       {showIssue && (
         <div
           onClick={() => setShowIssue(false)}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-            zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{
-              background: '#fff', borderRadius: 20, padding: 28,
-              width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
-            }}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-2xl border border-line bg-paper p-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.25)]"
           >
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
-              Issue License
-            </h3>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>{user.email}</p>
+            <h3 className="display text-[1.5rem] text-ink">Issue a licence</h3>
+            <p className="mt-1 truncate text-[13px] text-muted">{user.email}</p>
 
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-              Select Plan
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 24 }}>
-              {['monthly', 'yearly', 'lifetime'].map(p => (
+            <p className="eyebrow mb-2.5 mt-6">Plan</p>
+            <div className="grid grid-cols-3 gap-2">
+              {PLANS.map(p => (
                 <button
                   key={p}
                   onClick={() => setPlan(p)}
-                  style={{
-                    padding: '10px 6px', borderRadius: 10, border: 'none',
-                    cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                    textTransform: 'capitalize', transition: 'all 0.15s',
-                    background: plan === p ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : '#f8fafc',
-                    color: plan === p ? '#fff' : '#64748b',
-                    boxShadow: plan === p ? '0 4px 12px rgba(99,102,241,0.3)' : 'none'
-                  }}
+                  className={`rounded-lg px-2 py-2.5 text-[13px] font-medium capitalize transition-colors ${
+                    plan === p
+                      ? 'bg-ink text-paper'
+                      : 'border border-line bg-paper text-muted hover:border-ink/30 hover:text-ink'
+                  }`}
                 >
                   {p}
                 </button>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={() => setShowIssue(false)}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid #e2e8f0',
-                  background: '#fff', color: '#64748b', fontSize: 13, fontWeight: 600, cursor: 'pointer'
-                }}
-              >
+            <div className="mt-7 flex gap-2.5">
+              <Button variant="secondary" className="flex-1" onClick={() => setShowIssue(false)}>
                 Cancel
-              </button>
-              <button
-                onClick={issueLicense}
+              </Button>
+              <Button
+                className="flex-1"
                 disabled={loading}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: 10, border: 'none',
-                  background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
-                  color: '#fff', fontSize: 13, fontWeight: 600,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1,
-                  boxShadow: '0 4px 12px rgba(99,102,241,0.3)'
+                onClick={async () => {
+                  await doAction('/api/admin/licenses/issue', { userId: user.id, plan })
+                  setShowIssue(false)
                 }}
               >
-                {loading ? 'Issuing...' : 'Issue'}
-              </button>
+                {loading ? 'Issuing…' : 'Issue'}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Action buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {/* Issue license button */}
-        <button
-          onClick={() => setShowIssue(true)}
-          style={{
-            padding: '6px 14px', borderRadius: 8, border: 'none',
-            background: 'rgba(99,102,241,0.1)', color: '#6366f1',
-            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.15s', whiteSpace: 'nowrap'
-          }}
-          onMouseOver={e => e.currentTarget.style.background = 'rgba(99,102,241,0.2)'}
-          onMouseOut={e => e.currentTarget.style.background = 'rgba(99,102,241,0.1)'}
-        >
-          + License
-        </button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button size="sm" variant="secondary" icon="plus" onClick={() => setShowIssue(true)}>
+          Licence
+        </Button>
 
-        {/* Revoke button — only if active license */}
         {activeLicense && (
-          <button
+          <Button
+            size="sm" variant="danger" disabled={loading}
             onClick={() => doAction(
               '/api/admin/licenses/revoke',
               { licenseId: activeLicense.id },
-              `Revoke license for ${user.email}?`
+              `Revoke the licence for ${user.email}? They lose access immediately.`,
             )}
-            disabled={loading}
-            style={{
-              padding: '6px 14px', borderRadius: 8, border: '1px solid #fecaca',
-              background: '#fef2f2', color: '#ef4444',
-              fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.15s', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1
-            }}
-            onMouseOver={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5' }}
-            onMouseOut={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca' }}
           >
-            {loading ? '...' : 'Revoke'}
-          </button>
+            Revoke
+          </Button>
         )}
 
-        {/* Make admin / remove admin */}
-        <button
+        <Button
+          size="sm" variant="ghost" disabled={loading}
           onClick={() => doAction(
             '/api/admin/users/role',
             { userId: user.id, role: user.role === 'admin' ? 'user' : 'admin' },
-            `${user.role === 'admin' ? 'Remove admin from' : 'Make admin'}: ${user.email}?`
+            `${user.role === 'admin' ? 'Remove admin from' : 'Make admin'}: ${user.email}?`,
           )}
-          disabled={loading}
-          style={{
-            padding: '6px 14px', borderRadius: 8,
-            border: '1px solid #e2e8f0',
-            background: '#f8fafc', color: '#64748b',
-            fontSize: 12, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'all 0.15s', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1
-          }}
-          onMouseOver={e => { e.currentTarget.style.background = '#f1f5f9' }}
-          onMouseOut={e => { e.currentTarget.style.background = '#f8fafc' }}
         >
           {user.role === 'admin' ? 'Remove admin' : 'Make admin'}
-        </button>
+        </Button>
       </div>
     </>
   )

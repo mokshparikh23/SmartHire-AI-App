@@ -1,12 +1,101 @@
 @import "tailwindcss";
 
+/*
+  Light editorial palette.
+
+  Deliberately narrow: one ink, one warm paper, one hairline, one accent. The
+  previous design leaned on indigo-to-purple gradients, which is what made it
+  read as a template. Here the accent appears only on links and small marks —
+  primary actions are ink black, which is what makes the page feel considered
+  rather than decorated.
+*/
+@theme {
+  --color-paper:     #ffffff;
+  --color-canvas:    #faf9f7;
+  --color-canvas-2:  #f4f2ee;
+  --color-ink:       #16161a;
+  --color-ink-soft:  #3f3f46;
+  --color-muted:     #71717a;
+  --color-faint:     #a1a1aa;
+  --color-line:      #e7e5e4;
+  --color-line-soft: #f0eeeb;
+  --color-accent:    #4338ca;
+  --color-accent-soft: #eef2ff;
+  --color-positive:  #15803d;
+  --color-positive-soft: #f0fdf4;
+  --color-critical:  #b91c1c;
+  --color-critical-soft: #fef2f2;
+  --color-warning:   #a16207;
+  --color-warning-soft: #fefce8;
+
+  --font-sans:    var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
+}
+
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  * { box-sizing: border-box; }
+
+  html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Serif numerals default to old-style in this face, which looks wrong in
+     tables and metrics. Lining, tabular figures everywhere instead. */
+  table, [data-numeric] {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* Headline treatment: large, tight, and optically aligned to the left edge
+     by pulling in the serif's natural side bearing. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 1.04;
+  }
+
+  .display-italic {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* Small caps label used above section headings. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+  }
+
+  .hairline { border-color: var(--color-line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

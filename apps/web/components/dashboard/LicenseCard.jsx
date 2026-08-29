@@ -1,9 +1,10 @@
 import CopyButton from '@/components/dashboard/CopyButton'
+import { Card, Badge } from '@/components/ui'
 
-const STATUS_STYLES = {
-  active:  { chip: 'bg-green-100 text-green-700',   label: 'Active'  },
-  revoked: { chip: 'bg-red-100 text-red-700',       label: 'Revoked' },
-  expired: { chip: 'bg-gray-100 text-gray-600',     label: 'Expired' }
+const STATUS = {
+  active:  { tone: 'positive', label: 'Active' },
+  revoked: { tone: 'critical', label: 'Revoked' },
+  expired: { tone: 'neutral',  label: 'Expired' },
 }
 
 function expiryLabel({ plan, status, expires_at }) {
@@ -15,39 +16,38 @@ function expiryLabel({ plan, status, expires_at }) {
   const days = Math.ceil((date - new Date()) / 86400000)
   const when = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 
-  if (days < 0)  return `Expired on ${when}`
-  if (days === 0) return `Expires today (${when})`
+  if (days < 0)   return `Expired on ${when}`
+  if (days === 0) return `Expires today, ${when}`
   return `Expires in ${days} day${days === 1 ? '' : 's'} — ${when}`
 }
 
 export default function LicenseCard({ license }) {
-  const status = STATUS_STYLES[license.status] || STATUS_STYLES.expired
+  const status = STATUS[license.status] || STATUS.expired
   const isActive = license.status === 'active'
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
+    <Card>
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-bold text-gray-900">
-            {license.plan.charAt(0).toUpperCase() + license.plan.slice(1)} plan
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h2 className="text-[15px] font-semibold capitalize text-ink">{license.plan} plan</h2>
+          <p className="mt-0.5 text-[12px] text-faint">
             Issued {new Date(license.created_at).toLocaleDateString()}
           </p>
         </div>
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${status.chip}`}>
-          {status.label}
-        </span>
+        <Badge tone={status.tone}>{status.label}</Badge>
       </div>
 
-      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between">
-        <code className={`text-sm font-mono tracking-widest ${isActive ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+      <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-line bg-canvas px-4 py-3">
+        <code
+          className={`font-mono text-[13px] tracking-wider ${isActive ? 'text-ink' : 'text-faint line-through'}`}
+          data-numeric
+        >
           {license.license_key}
         </code>
         {isActive && <CopyButton text={license.license_key} />}
       </div>
 
-      <p className="text-xs text-gray-400 mt-3">{expiryLabel(license)}</p>
-    </div>
+      <p className="mt-3 text-[13px] text-muted">{expiryLabel(license)}</p>
+    </Card>
   )
 }

@@ -1,9 +1,29 @@
-import { createAdminClient } from '@/lib/supabase-server'
 import Link from 'next/link'
-import StatCard from '@/components/admin/StatCard'
-import ActionCard from '@/components/admin/ActionCard'
+import { createAdminClient } from '@/lib/supabase-server'
+import Icon from '@/components/ui/Icon'
+import { Card, Badge, Stat, PageHeader, EmptyState } from '@/components/ui'
 
 export const metadata = { title: 'Admin — Interview Assistant' }
+
+const PLAN_TONE = { lifetime: 'warning', yearly: 'accent', monthly: 'positive' }
+
+function PanelHeader({ title, sub, href }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-line px-6 py-4">
+      <div>
+        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+        <p className="mt-0.5 text-[12px] text-faint">{sub}</p>
+      </div>
+      <Link
+        href={href}
+        className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-muted transition-colors hover:text-ink"
+      >
+        View all
+        <Icon name="arrowRight" size={14} />
+      </Link>
+    </div>
+  )
+}
 
 export default async function AdminPage() {
   const supabase = createAdminClient()
@@ -12,166 +32,102 @@ export default async function AdminPage() {
     { count: totalUsers },
     { count: totalLicenses },
     { count: activeLicenses },
+    { count: totalUsage },
     { data: recentUsers },
-    { data: recentLicenses }
+    { data: recentLicenses },
   ] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('licenses').select('*', { count: 'exact', head: true }),
     supabase.from('licenses').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('usage').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(5),
-    supabase.from('licenses').select('*, profiles(email, full_name)').order('created_at', { ascending: false }).limit(5)
+    supabase.from('licenses').select('*, profiles(email, full_name)').order('created_at', { ascending: false }).limit(5),
   ])
 
-  const stats = [
-    { label: 'Total users',      value: totalUsers     || 0, change: '+12%', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    ), color: '#6366f1', bg: 'rgba(99,102,241,0.1)', href: '/admin/users' },
-    { label: 'Active licenses',  value: activeLicenses || 0, change: '+8%', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-      </svg>
-    ), color: '#22c55e', bg: 'rgba(34,197,94,0.1)', href: '/admin/licenses' },
-    { label: 'Total licenses',   value: totalLicenses  || 0, change: '+5%', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-      </svg>
-    ), color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', href: '/admin/licenses' },
-    { label: 'Expired licenses', value: (totalLicenses || 0) - (activeLicenses || 0), change: '', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-    ), color: '#ef4444', bg: 'rgba(239,68,68,0.1)', href: '/admin/licenses' },
-  ]
-
   return (
-    <div style={{ fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-          Dashboard Overview
-        </h1>
-        <p style={{ fontSize: 14, color: '#64748b' }}>
-          Welcome back! Here's what's happening with your app.
-        </p>
+    <div>
+      <PageHeader title="Overview" lede="Everything happening across the app." />
+
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Users"            value={totalUsers || 0}     sub="Registered accounts" icon="users" />
+        <Stat label="Active licences"  value={activeLicenses || 0} sub="Currently valid"     icon="key"   tone="positive" />
+        <Stat
+          label="Inactive licences"
+          value={(totalLicenses || 0) - (activeLicenses || 0)}
+          sub="Revoked or expired" icon="ban" tone="critical"
+        />
+        <Stat label="AI requests"      value={totalUsage || 0}     sub="All time"            icon="chart" tone="accent" />
       </div>
 
-      {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
-        {stats.map(s => (
-          <StatCard key={s.label} {...s} />
-        ))}
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Card padded={false}>
+          <PanelHeader title="Recent signups" sub="Newest accounts" href="/admin/users" />
+          {!recentUsers?.length ? (
+            <EmptyState icon="users" title="No users yet" />
+          ) : (
+            <ul className="divide-y divide-line-soft">
+              {recentUsers.map(u => (
+                <li key={u.id} className="flex items-center gap-3 px-6 py-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas-2 text-[12px] font-medium text-ink-soft">
+                    {(u.full_name || u.email || '?')[0]?.toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-ink">{u.full_name || u.email || '—'}</p>
+                    <p className="truncate text-[11px] text-faint">
+                      {u.full_name ? u.email : new Date(u.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {u.role === 'admin' && <Badge tone="accent">admin</Badge>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card padded={false}>
+          <PanelHeader title="Recent licences" sub="Newest issued" href="/admin/licenses" />
+          {!recentLicenses?.length ? (
+            <EmptyState icon="key" title="No licences yet" />
+          ) : (
+            <ul className="divide-y divide-line-soft">
+              {recentLicenses.map(l => (
+                <li key={l.id} className="flex items-center gap-3 px-6 py-3">
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      l.status === 'active' ? 'bg-positive-soft text-positive' : 'bg-critical-soft text-critical'
+                    }`}
+                  >
+                    <Icon name={l.status === 'active' ? 'check' : 'ban'} size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-ink">{l.profiles?.email || '—'}</p>
+                    <p className="truncate font-mono text-[11px] text-faint" data-numeric>{l.license_key}</p>
+                  </div>
+                  <Badge tone={PLAN_TONE[l.plan] || 'neutral'}>{l.plan}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
-      {/* Tables row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-        {/* Recent users */}
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
-          <div style={{ padding: '18px 22px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Recent signups</h2>
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Latest registered users</p>
-            </div>
-            <Link href="/admin/users" style={{ fontSize: 12, color: '#6366f1', textDecoration: 'none', fontWeight: 600, background: 'rgba(99,102,241,0.08)', padding: '5px 12px', borderRadius: 8 }}>
-              View all
-            </Link>
-          </div>
-          <div style={{ padding: '8px 0' }}>
-            {recentUsers?.map((user, i) => (
-              <div key={user.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 22px', borderBottom: i < recentUsers.length - 1 ? '1px solid #f8fafc' : 'none'
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                  background: `linear-gradient(135deg, hsl(${(i * 60) + 220}, 70%, 60%), hsl(${(i * 60) + 260}, 70%, 60%))`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 13, fontWeight: 700
-                }}>
-                  {user.email?.[0]?.toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user.full_name || user.email}
-                  </p>
-                  <p style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user.full_name ? user.email : new Date(user.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <span style={{
-                  fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
-                  background: user.role === 'admin' ? 'rgba(139,92,246,0.1)' : 'rgba(148,163,184,0.1)',
-                  color: user.role === 'admin' ? '#8b5cf6' : '#94a3b8'
-                }}>
-                  {user.role}
-                </span>
-              </div>
-            ))}
-            {!recentUsers?.length && (
-              <p style={{ textAlign: 'center', padding: '24px', fontSize: 13, color: '#cbd5e1' }}>No users yet</p>
-            )}
-          </div>
-        </div>
-
-        {/* Recent licenses */}
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
-          <div style={{ padding: '18px 22px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Recent licenses</h2>
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Latest issued licenses</p>
-            </div>
-            <Link href="/admin/licenses" style={{ fontSize: 12, color: '#6366f1', textDecoration: 'none', fontWeight: 600, background: 'rgba(99,102,241,0.08)', padding: '5px 12px', borderRadius: 8 }}>
-              View all
-            </Link>
-          </div>
-          <div style={{ padding: '8px 0' }}>
-            {recentLicenses?.map((license, i) => (
-              <div key={license.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 22px', borderBottom: i < recentLicenses.length - 1 ? '1px solid #f8fafc' : 'none'
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                  background: license.status === 'active' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: license.status === 'active' ? '#22c55e' : '#ef4444', fontSize: 16
-                }}>
-                  {license.status === 'active' ? '✓' : '✕'}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {license.profiles?.email || '—'}
-                  </p>
-                  <p style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>
-                    {license.license_key?.slice(0, 16)}...
-                  </p>
-                </div>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, textTransform: 'capitalize',
-                  background: license.plan === 'lifetime' ? 'rgba(245,158,11,0.1)' : license.plan === 'yearly' ? 'rgba(99,102,241,0.1)' : 'rgba(34,197,94,0.1)',
-                  color: license.plan === 'lifetime' ? '#f59e0b' : license.plan === 'yearly' ? '#6366f1' : '#22c55e'
-                }}>
-                  {license.plan}
-                </span>
-              </div>
-            ))}
-            {!recentLicenses?.length && (
-              <p style={{ textAlign: 'center', padding: '24px', fontSize: 13, color: '#cbd5e1' }}>No licenses yet</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20, marginTop: 20 }}>
+      <div className="mt-5 grid gap-5 sm:grid-cols-2">
         {[
-          { href: '/admin/licenses', title: 'Issue a license', desc: 'Manually assign a license to a user', icon: '🔑', color: '#6366f1', bg: 'rgba(99,102,241,0.06)' },
-          { href: '/admin/users',    title: 'Manage users',    desc: 'View, promote or manage all users',  icon: '👥', color: '#8b5cf6', bg: 'rgba(139,92,246,0.06)' },
+          { href: '/admin/licenses', title: 'Issue a licence', desc: 'Assign a licence to any user', icon: 'plus' },
+          { href: '/admin/users',    title: 'Manage users',    desc: 'Review accounts and roles',    icon: 'users' },
         ].map(a => (
-          <ActionCard key={a.href} {...a} />
+          <Link key={a.href} href={a.href} className="group">
+            <Card className="flex items-center gap-4 transition-colors group-hover:border-ink/25">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-canvas-2 text-ink">
+                <Icon name={a.icon} size={18} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[14px] font-medium text-ink">{a.title}</p>
+                <p className="text-[13px] text-muted">{a.desc}</p>
+              </div>
+              <Icon name="arrowRight" size={16} className="ml-auto shrink-0 text-faint transition-colors group-hover:text-ink" />
+            </Card>
+          </Link>
         ))}
       </div>
     </div>

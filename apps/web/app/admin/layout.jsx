@@ -3,15 +3,14 @@ import { redirect } from 'next/navigation'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 
 export default async function AdminLayout({ children }) {
-  // Use regular client to check auth session
+  // Session check goes through the cookie client…
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/login')
 
-  // Use admin client to fetch profile (bypasses RLS)
-  const adminSupabase = createAdminClient()
-  const { data: profile } = await adminSupabase
+  // …but the role lookup uses the service-role client so RLS cannot hide it.
+  const { data: profile } = await createAdminClient()
     .from('profiles')
     .select('*')
     .eq('id', user.id)
@@ -20,10 +19,10 @@ export default async function AdminLayout({ children }) {
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
+    <div className="flex min-h-screen bg-paper">
       <AdminSidebar profile={profile} />
-      <main style={{ flex: 1, padding: '36px 40px', overflow: 'auto' }}>
-        {children}
+      <main className="flex-1 overflow-auto">
+        <div className="mx-auto max-w-5xl px-8 py-10">{children}</div>
       </main>
     </div>
   )

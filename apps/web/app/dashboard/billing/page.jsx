@@ -1,16 +1,16 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
+import Icon from '@/components/ui/Icon'
+import { Card, Badge, Button, PageHeader } from '@/components/ui'
 
 export const metadata = { title: 'Billing — Interview Assistant' }
 
-// Prices are intentionally blank: there is no payment provider wired up yet
-// (lib/stripe.js is unused and the `stripe` package is not installed), so a
-// number here would be a promise the app cannot keep. Fill these in at the
-// same time you connect a real checkout flow.
+// Prices stay blank until a payment provider is wired up: lib/stripe.js is
+// unused and the stripe package is not installed, so a number here would be a
+// promise the app cannot keep.
 const PLANS = [
-  { id: 'monthly',  name: 'Monthly',  price: null, period: 'per month', blurb: 'Billed every month. Cancel any time.', features: ['Full desktop app access', 'All AI models', 'Email support'] },
-  { id: 'yearly',   name: 'Yearly',   price: null, period: 'per year',  blurb: 'Billed once a year.', features: ['Everything in Monthly', 'Priority support'], highlight: true },
-  { id: 'lifetime', name: 'Lifetime', price: null, period: 'one time',  blurb: 'Pay once, keep it forever.', features: ['Everything in Yearly', 'All future updates', 'Never expires'] }
+  { id: 'monthly',  name: 'Monthly',  price: null, cadence: 'Billed monthly',  features: ['Unlimited sessions', 'All models', 'Email support'] },
+  { id: 'yearly',   name: 'Yearly',   price: null, cadence: 'Billed annually', features: ['Everything in Monthly', 'Priority support'], featured: true },
+  { id: 'lifetime', name: 'Lifetime', price: null, cadence: 'One payment',     features: ['Everything in Yearly', 'All future updates', 'Never expires'] },
 ]
 
 export default async function BillingPage() {
@@ -18,27 +18,21 @@ export default async function BillingPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { data: licenses } = await supabase
-    .from('licenses')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
+    .from('licenses').select('*').eq('user_id', user.id).eq('status', 'active')
 
   const current = licenses?.[0]
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
-        <p className="text-gray-500 text-sm mt-1">Your plan and available options</p>
-      </div>
+      <PageHeader title="Billing" lede="Your plan and what else is available." />
 
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mb-8">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Current plan</p>
+      <Card>
+        <p className="eyebrow">Current plan</p>
         {current ? (
-          <div className="flex items-center justify-between">
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xl font-bold text-gray-900 capitalize">{current.plan}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="display text-[2rem] capitalize text-ink">{current.plan}</p>
+              <p className="mt-1 text-[13px] text-muted">
                 {current.plan === 'lifetime'
                   ? 'Lifetime access'
                   : current.expires_at
@@ -46,68 +40,63 @@ export default async function BillingPage() {
                     : 'Active'}
               </p>
             </div>
-            <Link href="/dashboard/license" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-              View key →
-            </Link>
+            <Button href="/dashboard/license" variant="secondary" size="sm" iconRight="arrowRight">
+              View key
+            </Button>
           </div>
         ) : (
-          <p className="text-xl font-bold text-gray-400">No active plan</p>
+          <p className="display mt-3 text-[2rem] text-faint">No active plan</p>
         )}
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+      <div className="mt-5 grid gap-5 sm:grid-cols-3">
         {PLANS.map(plan => {
           const isCurrent = current?.plan === plan.id
           return (
-            <div key={plan.id}
-              className={`bg-white rounded-2xl p-6 border shadow-sm flex flex-col ${
-                plan.highlight ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-gray-100'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="font-bold text-gray-900">{plan.name}</h2>
-                {plan.highlight && (
-                  <span className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">
-                    Popular
-                  </span>
-                )}
+            <Card key={plan.id} className={`flex flex-col ${plan.featured ? 'ring-1 ring-ink' : ''}`}>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-[15px] font-semibold text-ink">{plan.name}</h2>
+                {plan.featured && <Badge tone="accent">Most chosen</Badge>}
               </div>
 
-              <p className="text-2xl font-bold text-gray-900 mt-2">
-                {plan.price ?? <span className="text-base font-semibold text-gray-400">Contact us</span>}
+              <p className="display mt-3 text-[1.75rem] text-ink">
+                {plan.price ?? <span className="text-[15px] font-sans text-muted">Contact us</span>}
               </p>
-              <p className="text-xs text-gray-400 mb-4">{plan.price ? plan.period : plan.blurb}</p>
+              <p className="mt-0.5 text-[12px] text-faint">{plan.cadence}</p>
 
-              <ul className="space-y-2 mb-6 flex-1">
+              <ul className="mt-5 flex-1 space-y-2.5 border-t border-line-soft pt-5">
                 {plan.features.map(f => (
-                  <li key={f} className="flex gap-2 text-sm text-gray-600">
-                    <span className="text-green-500">✓</span> {f}
+                  <li key={f} className="flex items-start gap-2.5 text-[13px] text-ink-soft">
+                    <Icon name="check" size={14} className="mt-0.5 shrink-0 text-positive" />
+                    {f}
                   </li>
                 ))}
               </ul>
 
-              <button
-                disabled
-                className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  isCurrent
-                    ? 'bg-green-50 text-green-700 cursor-default'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {isCurrent ? '✓ Your plan' : 'Not available online'}
-              </button>
-            </div>
+              <div className="mt-6">
+                {isCurrent ? (
+                  <Badge tone="positive" className="w-full justify-center py-2">
+                    <Icon name="check" size={13} />
+                    Your plan
+                  </Badge>
+                ) : (
+                  <Button variant="secondary" className="w-full" disabled>
+                    Not available online
+                  </Button>
+                )}
+              </div>
+            </Card>
           )
         })}
       </div>
 
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6">
-        <h2 className="font-bold text-gray-900 mb-1">How to get a license</h2>
-        <p className="text-sm text-gray-600">
-          Online checkout is not set up yet. Licenses are issued manually — get in touch and
-          we will add one to your account. It appears on this dashboard straight away.
+      <Card className="mt-5 bg-canvas">
+        <h2 className="text-[15px] font-semibold text-ink">How to get a licence</h2>
+        <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
+          Online checkout is not set up yet. Licences are issued manually — get in touch and we
+          will add one to your account. It appears on this dashboard straight away.
         </p>
-      </div>
+      </Card>
     </div>
   )
 }

@@ -3,31 +3,13 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import Icon, { Logo } from '@/components/ui/Icon'
 
-const navItems = [
-  { href: '/admin',          label: 'Overview',  icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-    </svg>
-  )},
-  { href: '/admin/users',    label: 'Users',     icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  )},
-  { href: '/admin/licenses', label: 'Licenses',  icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-    </svg>
-  )},
-  { href: '/admin/usage',    label: 'Usage',     icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-      <line x1="6" y1="20" x2="6" y2="14"/>
-    </svg>
-  )},
+const NAV = [
+  { href: '/admin',          label: 'Overview', icon: 'grid' },
+  { href: '/admin/users',    label: 'Users',    icon: 'users' },
+  { href: '/admin/licenses', label: 'Licenses', icon: 'key' },
+  { href: '/admin/usage',    label: 'Usage',    icon: 'chart' },
 ]
 
 export default function AdminSidebar({ profile }) {
@@ -41,96 +23,66 @@ export default function AdminSidebar({ profile }) {
   }
 
   return (
-    <aside style={{
-      width: 240, minHeight: '100vh', display: 'flex', flexDirection: 'column',
-      background: 'linear-gradient(180deg, #0f0c29 0%, #1a1a3e 50%, #24243e 100%)',
-      borderRight: '1px solid rgba(255,255,255,0.06)', flexShrink: 0
-    }}>
-      {/* Logo */}
-      <div style={{ padding: '28px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 15px rgba(99,102,241,0.4)'
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" fill="white"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="12" y1="19" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Interview AI</p>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', lineHeight: 1.2, marginTop: 2 }}>Admin Console</p>
-          </div>
-        </div>
+    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-canvas">
+      <div className="px-5 py-5">
+        <Link href="/admin" className="flex items-center gap-2.5">
+          <Logo size={28} />
+          <span>
+            <span className="block text-[14px] font-semibold leading-tight tracking-tight text-ink">Interview&nbsp;AI</span>
+            <span className="block text-[11px] leading-tight text-faint">Admin</span>
+          </span>
+        </Link>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '8px 8px 4px' }}>
-          Main Menu
-        </p>
-        {navItems.map(item => {
-          const active = pathname === item.href
-          return (
-            <Link key={item.href} href={item.href} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '9px 12px', borderRadius: 10,
-              fontSize: 13, fontWeight: 500, textDecoration: 'none',
-              transition: 'all 0.15s',
-              background: active ? 'rgba(99,102,241,0.2)' : 'transparent',
-              color: active ? '#a5b4fc' : 'rgba(255,255,255,0.5)',
-              borderLeft: active ? '2px solid #6366f1' : '2px solid transparent',
-            }}
-            onMouseOver={e => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff' }}
-            onMouseOut={e => { if (!active) e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = active ? '#a5b4fc' : 'rgba(255,255,255,0.5)' }}
-            >
-              <span style={{ color: active ? '#6366f1' : 'rgba(255,255,255,0.35)', display: 'flex' }}>{item.icon}</span>
-              {item.label}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 px-3">
+        <ul className="space-y-0.5">
+          {NAV.map(item => {
+            const active = pathname === item.href
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] transition-colors ${
+                    active
+                      ? 'bg-paper font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+                      : 'text-muted hover:bg-paper/60 hover:text-ink'
+                  }`}
+                >
+                  <Icon name={item.icon} size={17} className={active ? 'text-ink' : 'text-faint'} />
+                  {item.label}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+
+        <div className="mt-6 border-t border-line pt-4">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted transition-colors hover:bg-paper/60 hover:text-ink"
+          >
+            <Icon name="arrowRight" size={16} className="text-faint" />
+            Back to my dashboard
+          </Link>
+        </div>
       </nav>
 
-      {/* User */}
-      <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 12px', borderRadius: 10,
-          background: 'rgba(255,255,255,0.05)', marginBottom: 8
-        }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 12, fontWeight: 700
-          }}>
-            {profile?.email?.[0]?.toUpperCase()}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.full_name || 'Admin'}
-            </p>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.email}
-            </p>
+      <div className="border-t border-line p-3">
+        <div className="flex items-center gap-2.5 px-2 py-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-medium text-paper">
+            {profile?.full_name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || 'A'}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">{profile?.full_name || 'Admin'}</p>
+            <p className="truncate text-[11px] text-faint">{profile?.email}</p>
           </div>
         </div>
-        <button onClick={handleLogout} style={{
-          width: '100%', padding: '8px 12px', borderRadius: 8, border: 'none',
-          background: 'transparent', color: 'rgba(255,255,255,0.3)',
-          fontSize: 12, fontWeight: 500, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s'
-        }}
-        onMouseOver={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
-        onMouseOut={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; e.currentTarget.style.background = 'transparent' }}
+        <button
+          onClick={handleLogout}
+          className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted transition-colors hover:bg-critical-soft hover:text-critical"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
+          <Icon name="logout" size={16} />
           Sign out
         </button>
       </div>
