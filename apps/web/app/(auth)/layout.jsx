@@ -8,7 +8,7 @@ export default function AuthLayout({ children }) {
       <div className="flex flex-col px-6 py-8 sm:px-12">
         <Link href="/" className="inline-flex items-center gap-2.5 self-start">
           <Logo size={30} />
-          <span className="text-[15px] font-semibold tracking-tight text-ink">Interview Assistant</span>
+          <span className="text-[15px] font-semibold tracking-tight text-ink">Smart Hire AI</span>
         </Link>
 
         <div className="flex flex-1 items-center justify-center py-12">
@@ -16,13 +16,13 @@ export default function AuthLayout({ children }) {
         </div>
 
         <p className="text-[12px] text-faint">
-          © {new Date().getFullYear()} Interview Assistant
+          © {new Date().getFullYear()} Smart Hire AI
         </p>
       </div>
 
       {/* Editorial side. Hidden on small screens rather than squashed. */}
       <div className="relative hidden flex-col justify-between bg-ink px-12 py-12 lg:flex">
-        <p className="eyebrow text-paper/40">Interview Assistant</p>
+        <p className="eyebrow text-paper/40">Smart Hire AI</p>
 
         <div className="max-w-md">
           <blockquote className="display text-[2.25rem] leading-[1.15] text-paper">

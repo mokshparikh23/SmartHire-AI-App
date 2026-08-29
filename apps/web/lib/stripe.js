@@ -1,30 +1,42 @@
 import Stripe from 'stripe'
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-12-18'
-})
+/**
+ * Stripe client.
+ *
+ * Lazily constructed rather than created at module scope, so importing anything
+ * from this file does not throw during a build on a machine with no Stripe key
+ * set. Checkout is the only thing that needs one, and it fails loudly at request
+ * time instead.
+ *
+ * Prices are NOT stored in Stripe. lib/pricing.js is the single source of truth
+ * and every Checkout Session is created with inline price_data, so changing a
+ * number there does not mean editing a Stripe dashboard or keeping a set of
+ * price IDs in sync. The cost is that Stripe's own reporting groups by product
+ * name rather than by price object, which is a fair trade for one config file.
+ */
+let client = null
 
-// Pricing plans — update with your real Stripe price IDs later
-export const PLANS = {
-  monthly: {
-    name: 'Monthly',
-    price: 29,
-    interval: 'month',
-    priceId: process.env.STRIPE_MONTHLY_PRICE_ID || 'price_monthly',
-    features: ['Unlimited interviews', 'AI answers', 'Voice recognition', 'Priority support']
-  },
-  yearly: {
-    name: 'Yearly',
-    price: 199,
-    interval: 'year',
-    priceId: process.env.STRIPE_YEARLY_PRICE_ID || 'price_yearly',
-    features: ['Everything in Monthly', 'Save 40%', 'Early access features']
-  },
-  lifetime: {
-    name: 'Lifetime',
-    price: 499,
-    interval: null,
-    priceId: process.env.STRIPE_LIFETIME_PRICE_ID || 'price_lifetime',
-    features: ['Everything forever', 'One-time payment', 'All future updates']
+export function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not set on the server')
+  if (!client) client = new Stripe(key)
+  return client
+}
+
+export function getWebhookSecret() {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not set on the server')
+  return secret
+}
+
+/** Where Stripe sends the customer back. Falls back to the request's own origin
+ *  so local development works without configuring anything. */
+export function siteUrl(request) {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL
+  if (configured) return configured.replace(/\/$/, '')
+  try {
+    return new URL(request.url).origin
+  } catch {
+    return 'http://localhost:3000'
   }
 }

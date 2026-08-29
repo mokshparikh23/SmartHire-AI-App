@@ -75,11 +75,11 @@ export default function LicenseGate({ onActivated, notice }) {
         </div>
 
         <h1 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 6, textAlign: 'center' }}>
-          Activate Interview Assistant
+          Activate Smart Hire AI
         </h1>
         <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 24, textAlign: 'center', lineHeight: 1.6 }}>
           Enter your license key to unlock the app.{'\n'}
-          Get a key at <span style={{ color: '#6366f1' }}>interview-assistant.com</span>
+          Get a key at <span style={{ color: '#6366f1' }}>smarthire.ai</span>
         </p>
 
         {/* Input */}

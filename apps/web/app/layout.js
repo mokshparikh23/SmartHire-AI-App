@@ -19,7 +19,7 @@ const display = Instrument_Serif({
 })
 
 export const metadata = {
-  title: 'Interview Assistant — AI Interview Copilot',
+  title: 'Smart Hire AI — AI Interview Copilot',
   description: 'Real-time answers during live interviews. Invisible to your interviewer.',
 }
 

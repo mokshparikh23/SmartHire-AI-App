@@ -1,5 +1,5 @@
 {
-  "name": "interview-assistant",
+  "name": "smarthire-desktop",
   "version": "1.0.0",
   "description": "AI-powered interview assistant with invisible overlay",
   "main": "electron/main.cjs",

@@ -1,6 +1,6 @@
 import {
   OPENAI_BASE, CORS, MAX_TOKENS,
-  resolveModel, getOpenAIKey, requireLicense, recordUsage, jsonError, upstreamError,
+  resolveModel, getOpenAIKey, requireSession, recordUsage, jsonError, upstreamError,
 } from '@/lib/ai'
 
 export const runtime     = 'nodejs'
@@ -25,10 +25,12 @@ export async function POST(request) {
     return jsonError('Body must be JSON', 400)
   }
 
-  const { licenseKey, messages, model } = body || {}
+  const { licenseKey, sessionId, messages, model } = body || {}
 
-  const gate = await requireLicense(licenseKey)
-  if (!gate.ok) return jsonError(gate.reason, gate.status)
+  // Advances the meter as well as checking it, and does so BEFORE the upstream
+  // call, so a user at zero cannot extract one last free answer.
+  const gate = await requireSession(licenseKey, sessionId)
+  if (!gate.ok) return jsonError(gate.reason, gate.status, { code: gate.code })
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return jsonError('messages must be a non-empty array', 400)
@@ -65,7 +67,8 @@ export async function POST(request) {
   }
 
   // Not awaited: a usage-tracking failure must not delay or break the answer.
-  recordUsage(gate.license.userId, 'answer')
+  // Telemetry only — the minute was already billed by requireSession.
+  recordUsage(gate.session.userId, 'answer', sessionId)
 
   // Straight passthrough of OpenAI's SSE stream — the desktop already parses
   // this format, so there is nothing to translate.

@@ -1,35 +1,21 @@
 import CopyButton from '@/components/dashboard/CopyButton'
+import Icon from '@/components/ui/Icon'
 import { Card, Badge } from '@/components/ui'
 
 const STATUS = {
   active:  { tone: 'positive', label: 'Active' },
   revoked: { tone: 'critical', label: 'Revoked' },
-  expired: { tone: 'neutral',  label: 'Expired' },
-}
-
-function expiryLabel({ plan, status, expires_at }) {
-  if (status === 'revoked') return 'Revoked by an administrator'
-  if (plan === 'lifetime')  return 'Lifetime access — never expires'
-  if (!expires_at)          return 'No expiry date set'
-
-  const date = new Date(expires_at)
-  const days = Math.ceil((date - new Date()) / 86400000)
-  const when = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-
-  if (days < 0)   return `Expired on ${when}`
-  if (days === 0) return `Expires today, ${when}`
-  return `Expires in ${days} day${days === 1 ? '' : 's'} — ${when}`
 }
 
 export default function LicenseCard({ license }) {
-  const status = STATUS[license.status] || STATUS.expired
+  const status = STATUS[license.status] || STATUS.revoked
   const isActive = license.status === 'active'
 
   return (
     <Card>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[15px] font-semibold capitalize text-ink">{license.plan} plan</h2>
+          <h2 className="text-[15px] font-semibold text-ink">Licence key</h2>
           <p className="mt-0.5 text-[12px] text-faint">
             Issued {new Date(license.created_at).toLocaleDateString()}
           </p>
@@ -47,7 +33,17 @@ export default function LicenseCard({ license }) {
         {isActive && <CopyButton text={license.license_key} />}
       </div>
 
-      <p className="mt-3 text-[13px] text-muted">{expiryLabel(license)}</p>
+      {/*
+        A key no longer carries a plan or an expiry date, and this line is where
+        people used to look for one. It is the whole mental model in a sentence:
+        the key unlocks the app, the balance pays for the time.
+      */}
+      <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-muted">
+        <Icon name="coin" size={14} className="mt-0.5 shrink-0 text-faint" />
+        {isActive
+          ? 'This key unlocks the app and does not expire. Interview time is billed to your account balance, not to the key.'
+          : 'Revoked by an administrator. Your credit balance is untouched — a new key restores access to it.'}
+      </p>
     </Card>
   )
 }

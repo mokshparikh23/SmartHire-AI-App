@@ -1,6 +1,6 @@
 module.exports = {
-  appId: 'com.interviewassistant.app',
-  productName: 'Interview Assistant',
+  appId: 'com.smarthireai.app',
+  productName: 'Smart Hire AI',
   asar: false,
   copyright: 'Copyright © 2025',
 
@@ -21,7 +21,7 @@ module.exports = {
     hardenedRuntime: false,
     gatekeeperAssess: false,
     extendInfo: {
-      NSMicrophoneUsageDescription: 'Interview Assistant needs microphone access.'
+      NSMicrophoneUsageDescription: 'Smart Hire AI needs microphone access.'
     }
   },
 
@@ -33,6 +33,6 @@ module.exports = {
     oneClick: false,
     allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
-    shortcutName: 'Interview Assistant'
+    shortcutName: 'Smart Hire AI'
   }
 }

@@ -29,6 +29,14 @@ const PATHS = {
   ban: <><circle cx="12" cy="12" r="9" /><path d="m6 6 12 12" /></>,
   logout: <><path d="M14 4.5h4.5A1.5 1.5 0 0 1 20 6v12a1.5 1.5 0 0 1-1.5 1.5H14" /><path d="M10 16l-4-4 4-4" /><path d="M6 12h10" /></>,
   plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
+  minus: <path d="M5 12h14" />,
+  close: <><path d="m6 6 12 12" /><path d="m18 6-12 12" /></>,
+  // A credit is an hour, so the marks for it are a coin and a glass — not a
+  // currency symbol, which would imply a price rather than a balance.
+  coin: <><circle cx="12" cy="12" r="9" /><path d="M12 7v10" /><path d="M14.6 9.6A2.7 2.7 0 0 0 12 7.9c-1.6 0-2.7.85-2.7 2s1 1.75 2.7 2.05 2.7.9 2.7 2.05-1.1 2-2.7 2a2.7 2.7 0 0 1-2.6-1.7" /></>,
+  hourglass: <><path d="M6.5 3h11" /><path d="M6.5 21h11" /><path d="M17 3v4.2L12 12l5 4.8V21" /><path d="M7 3v4.2L12 12l-5 4.8V21" /></>,
+  gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" /><path d="M12 8v13" /><path d="M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5" /><path d="M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5" /></>,
+  infinity: <path d="M6.5 15.5a3.5 3.5 0 1 1 0-7c3.5 0 4 7 7.5 7a3.5 3.5 0 1 0 0-7c-3.5 0-4 7-7.5 7z" />,
   inbox: <><path d="M3 13h5l1.5 3h5L16 13h5" /><path d="M5.5 4.5h13l2.5 8.5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" /></>,
 }
 

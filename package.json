@@ -2,7 +2,7 @@
   "name": "smarthire-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Interview Assistant — Electron desktop app and its Next.js licensing backend",
+  "description": "Smart Hire AI — Electron desktop app and its Next.js licensing backend",
   "workspaces": [
     "apps/desktop",
     "apps/web"

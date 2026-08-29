@@ -1,9 +1,19 @@
-'use client'
-
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
-import Icon, { Logo } from '@/components/ui/Icon'
+import { getProfile } from '@/lib/auth'
+import { Logo } from '@/components/ui/Icon'
+import NavItem from './NavItem'
+import SignOutButton from './SignOutButton'
+
+/*
+  PIVOT 2026-08-29: was a single 'use client' component taking `profile` as a
+  prop from an async layout. Now it is a Server Component that fetches its own
+  profile inside the layout's <Suspense>, so the dashboard shell paints before
+  this resolves instead of after. The two genuinely interactive pieces moved to
+  NavItem.jsx and SignOutButton.jsx.
+
+  getProfile() is React cache()d, so the page rendering alongside this pays
+  nothing for asking the same question.
+*/
 
 const NAV = [
   { href: '/dashboard',          label: 'Overview', icon: 'grid' },
@@ -13,15 +23,21 @@ const NAV = [
   { href: '/dashboard/settings', label: 'Settings', icon: 'gear' },
 ]
 
-export default function Sidebar({ profile }) {
-  const pathname = usePathname()
-  const router   = useRouter()
+const SHELL = 'flex w-60 shrink-0 flex-col border-r border-line bg-canvas'
 
-  const handleLogout = async () => {
-    await createClient().auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
+function Brand() {
+  return (
+    <div className="px-5 py-5">
+      <Link href="/" className="flex items-center gap-2.5">
+        <Logo size={28} />
+        <span className="text-[14px] font-semibold tracking-tight text-ink">Interview&nbsp;AI</span>
+      </Link>
+    </div>
+  )
+}
+
+export default async function Sidebar() {
+  const profile = await getProfile()
 
   const initial =
     profile?.full_name?.[0]?.toUpperCase() ||
@@ -29,35 +45,12 @@ export default function Sidebar({ profile }) {
     'U'
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-canvas">
-      <div className="px-5 py-5">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Logo size={28} />
-          <span className="text-[14px] font-semibold tracking-tight text-ink">Interview&nbsp;AI</span>
-        </Link>
-      </div>
+    <aside className={SHELL}>
+      <Brand />
 
       <nav className="flex-1 px-3">
         <ul className="space-y-0.5">
-          {NAV.map(item => {
-            const active = pathname === item.href
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] transition-colors ${
-                    active
-                      ? 'bg-paper font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                      : 'text-muted hover:bg-paper/60 hover:text-ink'
-                  }`}
-                >
-                  <Icon name={item.icon} size={17} className={active ? 'text-ink' : 'text-faint'} />
-                  {item.label}
-                </Link>
-              </li>
-            )
-          })}
+          {NAV.map(item => <NavItem key={item.href} {...item} />)}
         </ul>
       </nav>
 
@@ -71,13 +64,39 @@ export default function Sidebar({ profile }) {
             <p className="truncate text-[11px] text-faint">{profile?.email}</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted transition-colors hover:bg-critical-soft hover:text-critical"
-        >
-          <Icon name="logout" size={16} />
-          Sign out
-        </button>
+        <SignOutButton />
+      </div>
+    </aside>
+  )
+}
+
+/**
+ * Fallback for the layout's Suspense boundary.
+ *
+ * Renders the nav links as real, immediately-clickable <NavItem>s — they need no
+ * data — and greys only the account block, which does. That means the sidebar
+ * never appears to pop in, and navigation works before the profile has loaded.
+ */
+export function SidebarSkeleton() {
+  return (
+    <aside className={SHELL}>
+      <Brand />
+
+      <nav className="flex-1 px-3">
+        <ul className="space-y-0.5">
+          {NAV.map(item => <NavItem key={item.href} {...item} />)}
+        </ul>
+      </nav>
+
+      <div className="border-t border-line p-3">
+        <div className="flex items-center gap-2.5 px-2 py-2">
+          <span className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-canvas-2" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <span className="block h-[13px] w-24 animate-pulse rounded bg-canvas-2" />
+            <span className="block h-[11px] w-32 animate-pulse rounded bg-canvas-2" />
+          </div>
+        </div>
+        <SignOutButton />
       </div>
     </aside>
   )

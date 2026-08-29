@@ -1,16 +1,26 @@
-import { createClient } from '@/lib/supabase-server'
+import { requireUser, getProfile } from '@/lib/auth'
 import ProfileForm from '@/components/dashboard/ProfileForm'
 import Icon from '@/components/ui/Icon'
 import { Card, Badge, PageHeader } from '@/components/ui'
 
-export const metadata = { title: 'Settings — Interview Assistant' }
+export const metadata = { title: 'Settings — Smart Hire AI' }
 
 export default async function SettingsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // PIVOT 2026-08-29: the un-guarded getUser() below dereferenced user.id on the
+  // next line, which threw a TypeError on a lapsed session. requireUser()
+  // redirects instead, and both calls are cache()d across the render pass.
+  //
+  // const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  const user = await requireUser()
 
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
+  // PIVOT 2026-08-29: this repeated the sidebar's profiles query verbatim, so
+  // every visit to Settings fetched the same row twice. getProfile() is the same
+  // query behind React cache().
+  //
+  // const { data: profile } = await supabase
+  //   .from('profiles').select('*').eq('id', user.id).single()
+  const profile = await getProfile()
 
   return (
     <div className="max-w-2xl">

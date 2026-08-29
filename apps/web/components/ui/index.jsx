@@ -118,6 +118,19 @@ export function EmptyState({ icon = 'inbox', title, description, action }) {
   )
 }
 
+/**
+ * Form control. Was inlined in IssueLicenseForm; several forms need it now, and
+ * a credit amount typed into a box that looks different from every other box is
+ * how a wrong number gets entered.
+ */
+export const CONTROL =
+  'h-11 w-full rounded-xl border border-line bg-paper px-3.5 text-[14px] text-ink ' +
+  'outline-none transition-colors focus:border-ink/40'
+
+/** Table header cell. Was copied verbatim into four files, now six. */
+export const TH =
+  'px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint'
+
 /** Page title block for dashboard and admin screens. */
 export function PageHeader({ title, lede, action }) {
   return (

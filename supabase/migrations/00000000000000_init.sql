@@ -1,4 +1,4 @@
--- Schema for the Interview Assistant backend.
+-- Schema for the Smart Hire AI backend.
 -- Reconstructed from the queries in app/ and lib/ — the original project had no
 -- migrations checked in. Run this once in the Supabase SQL editor on a new project.
 

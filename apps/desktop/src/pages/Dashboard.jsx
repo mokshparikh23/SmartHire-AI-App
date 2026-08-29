@@ -173,7 +173,7 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
               boxShadow:'inset 0 1px 0 rgba(255,255,255,.2), 0 2px 8px rgba(0,0,0,.2)' }}>IA</div>
             <div>
               <div style={{ fontSize:13, fontWeight:800, color:'#fff',
-                lineHeight:1, letterSpacing:'-0.2px' }}>Interview Assistant</div>
+                lineHeight:1, letterSpacing:'-0.2px' }}>Smart Hire AI</div>
               <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:3 }}>
                 <span style={{ fontSize:9, fontWeight:700, padding:'1px 7px', borderRadius:99,
                   background:'rgba(110,231,183,.18)', color:'#6ee7b7',

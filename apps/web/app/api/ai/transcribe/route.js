@@ -1,6 +1,6 @@
 import {
   OPENAI_BASE, CORS, TRANSCRIBE_MODEL,
-  getOpenAIKey, requireLicense, recordUsage, jsonError, upstreamError,
+  getOpenAIKey, requireSession, recordUsage, jsonError, upstreamError,
 } from '@/lib/ai'
 
 export const runtime     = 'nodejs'
@@ -27,8 +27,12 @@ export async function POST(request) {
     return jsonError('Body must be multipart/form-data', 400)
   }
 
-  const gate = await requireLicense(form.get('licenseKey'))
-  if (!gate.ok) return jsonError(gate.reason, gate.status)
+  // Gated exactly like /chat. Leaving transcription open while chat is closed
+  // would be the expensive half: useVoice fires this on every utterance, and
+  // Whisper is billed to us on every call.
+  const sessionId = form.get('sessionId')
+  const gate = await requireSession(form.get('licenseKey'), sessionId)
+  if (!gate.ok) return jsonError(gate.reason, gate.status, { code: gate.code })
 
   const file = form.get('file')
   if (!file || typeof file === 'string') {
@@ -70,7 +74,7 @@ export async function POST(request) {
 
   const data = await upstream.json()
 
-  recordUsage(gate.license.userId, 'transcribe')
+  recordUsage(gate.session.userId, 'transcribe', sessionId)
 
   return Response.json({ text: data?.text?.trim() || '' }, { headers: CORS })
 }

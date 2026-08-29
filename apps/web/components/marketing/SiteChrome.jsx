@@ -1,36 +1,10 @@
 import Link from 'next/link'
 import Icon, { Logo } from '@/components/ui/Icon'
-import { Container, Button } from '@/components/ui'
+import { Container } from '@/components/ui'
 
-export function SiteNav() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-line-soft bg-paper/85 backdrop-blur-md">
-      <Container wide className="flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Logo size={30} />
-          <span className="text-[15px] font-semibold tracking-tight text-ink">Interview Assistant</span>
-        </Link>
-
-        <nav className="hidden items-center gap-8 md:flex">
-          {[
-            ['How it works', '#how'],
-            ['Features', '#features'],
-            ['Pricing', '#pricing'],
-          ].map(([label, href]) => (
-            <a key={href} href={href} className="text-[14px] text-muted transition-colors hover:text-ink">
-              {label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          <Button href="/login" variant="ghost" size="sm">Log in</Button>
-          <Button href="/signup" size="sm">Get started</Button>
-        </div>
-      </Container>
-    </header>
-  )
-}
+// The header reacts to scroll, so it lives in its own client component. Kept
+// re-exported here so pages still pull both halves of the chrome from one place.
+export { SiteNav } from './SiteNav'
 
 export function SiteFooter() {
   return (
@@ -40,7 +14,7 @@ export function SiteFooter() {
           <div className="max-w-xs">
             <div className="flex items-center gap-2.5">
               <Logo size={28} />
-              <span className="text-[14px] font-semibold tracking-tight text-ink">Interview Assistant</span>
+              <span className="text-[14px] font-semibold tracking-tight text-ink">Smart Hire AI</span>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-muted">
               Real-time answers during live interviews, drawn from your own résumé.
@@ -71,7 +45,7 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-faint">
-            © {new Date().getFullYear()} Interview Assistant. All rights reserved.
+            © {new Date().getFullYear()} Smart Hire AI. All rights reserved.
           </p>
           <p className="flex items-center gap-1.5 text-[12px] text-faint">
             <Icon name="lock" size={13} />

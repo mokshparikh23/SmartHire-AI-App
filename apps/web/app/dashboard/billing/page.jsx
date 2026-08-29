@@ -1,102 +1,245 @@
-import { createClient } from '@/lib/supabase-server'
+import { headers } from 'next/headers'
+import { requireUser, getSupabase } from '@/lib/auth'
+import { getEntitlement } from '@/lib/entitlement'
+import {
+  formatBalance, formatCredits, balanceTone, LOW_BALANCE_MINUTES, LEDGER_LABEL,
+} from '@/lib/credits'
+import {
+  resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency, formatMoney,
+} from '@/lib/pricing'
+import PricingPlans from '@/components/marketing/PricingPlans'
 import Icon from '@/components/ui/Icon'
-import { Card, Badge, Button, PageHeader } from '@/components/ui'
+import { Card, Badge, Button, PageHeader, EmptyState, TH } from '@/components/ui'
 
-export const metadata = { title: 'Billing — Interview Assistant' }
+export const metadata = { title: 'Billing — Smart Hire AI' }
 
-// Prices stay blank until a payment provider is wired up: lib/stripe.js is
-// unused and the stripe package is not installed, so a number here would be a
-// promise the app cannot keep.
-const PLANS = [
-  { id: 'monthly',  name: 'Monthly',  price: null, cadence: 'Billed monthly',  features: ['Unlimited sessions', 'All models', 'Email support'] },
-  { id: 'yearly',   name: 'Yearly',   price: null, cadence: 'Billed annually', features: ['Everything in Monthly', 'Priority support'], featured: true },
-  { id: 'lifetime', name: 'Lifetime', price: null, cadence: 'One payment',     features: ['Everything in Yearly', 'All future updates', 'Never expires'] },
-]
+const LEDGER_TONE = {
+  purchase: 'positive', purchase_bonus: 'positive', refund: 'positive',
+  admin_grant: 'positive', signup_bonus: 'accent',
+  admin_adjustment: 'warning', reconcile: 'warning',
+  session_debit: 'neutral', research_debit: 'neutral',
+}
 
-export default async function BillingPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default async function BillingPage({ searchParams }) {
+  // PIVOT 2026-08-29: the un-guarded getUser() below dereferenced user.id on the
+  // next line, which threw a TypeError on a lapsed session. requireUser()
+  // redirects instead, and both calls are cache()d across the render pass.
+  //
+  // const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  const user = await requireUser()
+  const supabase = await getSupabase()
 
-  const { data: licenses } = await supabase
-    .from('licenses').select('*').eq('user_id', user.id).eq('status', 'active')
+  const params = await searchParams
+  const checkout = params?.checkout
 
-  const current = licenses?.[0]
+  const currency = resolveCurrency(await headers())
+
+  const [entitlement, { data: ledger }, { data: orders }] = await Promise.all([
+    getEntitlement(user.id),
+    supabase.from('credit_ledger')
+      .select('id, minutes, balance_after, kind, note, created_at')
+      .eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+    supabase.from('credit_orders')
+      .select('id, kind, pack_id, credits, bonus_credits, subscription_kind, amount_minor, currency, status, created_at')
+      .eq('user_id', user.id).order('created_at', { ascending: false }).limit(20),
+  ])
+
+  const { minutes, unlimited, subscriptionKind, subscriptionStatus, periodEnd, spentTotal } = entitlement
 
   return (
     <div>
-      <PageHeader title="Billing" lede="Your plan and what else is available." />
+      <PageHeader
+        title="Billing"
+        lede="One credit is one hour of interview time, spent a minute at a time."
+      />
 
+      {checkout === 'success' && (
+        <Card className="mb-5 border-positive/25 bg-positive-soft">
+          <p className="flex items-center gap-2.5 text-[14px] text-ink-soft">
+            <Icon name="check" size={16} className="shrink-0 text-positive" />
+            Payment received. If the balance below has not caught up yet, refresh in a moment —
+            it is confirmed by Stripe rather than by this page.
+          </p>
+        </Card>
+      )}
+      {checkout === 'cancelled' && (
+        <Card className="mb-5 border-line bg-canvas">
+          <p className="flex items-center gap-2.5 text-[14px] text-muted">
+            <Icon name="ban" size={16} className="shrink-0 text-faint" />
+            Checkout cancelled — nothing was charged.
+          </p>
+        </Card>
+      )}
+
+      {/* Balance hero. The number is the page. */}
       <Card>
-        <p className="eyebrow">Current plan</p>
-        {current ? (
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="display text-[2rem] capitalize text-ink">{current.plan}</p>
-              <p className="mt-1 text-[13px] text-muted">
-                {current.plan === 'lifetime'
-                  ? 'Lifetime access'
-                  : current.expires_at
-                    ? `Renews or expires ${new Date(current.expires_at).toLocaleDateString()}`
-                    : 'Active'}
-              </p>
-            </div>
-            <Button href="/dashboard/license" variant="secondary" size="sm" iconRight="arrowRight">
-              View key
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="eyebrow">{unlimited ? 'Your plan' : 'Balance'}</p>
+            <p className="display mt-3 text-[3rem] leading-none text-ink" data-numeric>
+              {unlimited ? 'Unlimited' : formatBalance(minutes)}
+            </p>
+            <p className="mt-2 text-[13px] text-muted" data-numeric>
+              {unlimited
+                ? `${subscriptionKind} subscription · renews ${periodEnd?.toLocaleDateString()}`
+                : `${minutes} minutes · ${formatCredits(minutes)}`}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-3">
+            {unlimited
+              ? <Badge tone={subscriptionStatus === 'past_due' ? 'warning' : 'accent'}>
+                  {subscriptionStatus === 'past_due' ? 'Payment retrying' : 'Unlimited'}
+                </Badge>
+              : minutes <= 0 ? <Badge tone="critical">Out of credits</Badge>
+              : minutes < LOW_BALANCE_MINUTES ? <Badge tone="warning">Low balance</Badge>
+              : <Badge tone={balanceTone(minutes)}>Ready to run</Badge>}
+            <Button href="/dashboard/usage" variant="secondary" size="sm" iconRight="arrowRight">
+              Where it went
             </Button>
           </div>
-        ) : (
-          <p className="display mt-3 text-[2rem] text-faint">No active plan</p>
+        </div>
+
+        <p className="mt-6 flex items-start gap-2.5 border-t border-line-soft pt-5 text-[13px] leading-relaxed text-muted">
+          <Icon name="hourglass" size={15} className="mt-0.5 shrink-0 text-faint" />
+          {unlimited
+            ? 'Sessions are not metered while your subscription is active. Any credits you have bought are untouched underneath and will still be there if you cancel.'
+            : 'Time is deducted per minute while a session is live. A 30-minute interview costs 30 minutes and the rest stays here. At zero the desktop app ends the session rather than running on.'}
+        </p>
+
+        {spentTotal > 0 && (
+          <p className="mt-3 text-[13px] text-faint" data-numeric>
+            {formatBalance(spentTotal)} used all time.
+          </p>
         )}
       </Card>
 
-      <div className="mt-5 grid gap-5 sm:grid-cols-3">
-        {PLANS.map(plan => {
-          const isCurrent = current?.plan === plan.id
-          return (
-            <Card key={plan.id} className={`flex flex-col ${plan.featured ? 'ring-1 ring-ink' : ''}`}>
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-[15px] font-semibold text-ink">{plan.name}</h2>
-                {plan.featured && <Badge tone="accent">Most chosen</Badge>}
-              </div>
-
-              <p className="display mt-3 text-[1.75rem] text-ink">
-                {plan.price ?? <span className="text-[15px] font-sans text-muted">Contact us</span>}
-              </p>
-              <p className="mt-0.5 text-[12px] text-faint">{plan.cadence}</p>
-
-              <ul className="mt-5 flex-1 space-y-2.5 border-t border-line-soft pt-5">
-                {plan.features.map(f => (
-                  <li key={f} className="flex items-start gap-2.5 text-[13px] text-ink-soft">
-                    <Icon name="check" size={14} className="mt-0.5 shrink-0 text-positive" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-6">
-                {isCurrent ? (
-                  <Badge tone="positive" className="w-full justify-center py-2">
-                    <Icon name="check" size={13} />
-                    Your plan
-                  </Badge>
-                ) : (
-                  <Button variant="secondary" className="w-full" disabled>
-                    Not available online
-                  </Button>
-                )}
-              </div>
-            </Card>
-          )
-        })}
+      {/* Buy more */}
+      <div className="mt-8">
+        <h2 className="display text-[1.5rem] text-ink">
+          {unlimited ? 'Change your plan' : 'Top up'}
+        </h2>
+        <p className="mt-1.5 text-[14px] text-muted">
+          Subscribe for unlimited interview time, or buy credits and keep whatever you do not use.
+        </p>
+        <div className="mt-6">
+          <PricingPlans
+            tiers={tiersForCurrency(currency)}
+            packs={packsForCurrency(currency)}
+            singlePack={singlePackForCurrency(currency)}
+            signedIn
+          />
+        </div>
       </div>
 
-      <Card className="mt-5 bg-canvas">
-        <h2 className="text-[15px] font-semibold text-ink">How to get a licence</h2>
-        <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
-          Online checkout is not set up yet. Licences are issued manually — get in touch and we
-          will add one to your account. It appears on this dashboard straight away.
-        </p>
+      {/* Credit history — every change to the balance, newest first. */}
+      <Card className="mt-8" padded={false}>
+        <div className="border-b border-line px-6 py-4">
+          <h2 className="text-[15px] font-semibold text-ink">Credit history</h2>
+          <p className="mt-0.5 text-[12px] text-faint">Every change to your balance</p>
+        </div>
+
+        {!ledger?.length ? (
+          <EmptyState
+            icon="coin"
+            title="Nothing here yet"
+            description="Credits you are given and minutes you spend both appear here."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[14px]">
+              <thead>
+                <tr className="border-b border-line-soft">
+                  <th className={TH}>Change</th>
+                  <th className={TH}>Reason</th>
+                  <th className={TH}>Note</th>
+                  <th className={TH}>Balance after</th>
+                  <th className={TH}>When</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-soft">
+                {ledger.map(row => {
+                  const added = row.minutes >= 0
+                  return (
+                    <tr key={row.id} className="transition-colors hover:bg-canvas">
+                      <td className="px-6 py-3.5">
+                        {/* U+2212, not a hyphen — it aligns with + in tabular figures,
+                            which is the whole point of a ledger column. */}
+                        <span
+                          className={`font-medium ${added ? 'text-positive' : 'text-ink'}`}
+                          data-numeric
+                        >
+                          {added ? '+' : '−'}{formatBalance(Math.abs(row.minutes))}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <Badge tone={LEDGER_TONE[row.kind] || 'neutral'}>
+                          {LEDGER_LABEL[row.kind] || row.kind}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-3.5 text-[13px] text-muted">{row.note || '—'}</td>
+                      <td className="px-6 py-3.5 text-[13px] text-muted" data-numeric>
+                        {formatBalance(row.balance_after)}
+                      </td>
+                      <td className="px-6 py-3.5 text-[13px] text-faint" data-numeric>
+                        {new Date(row.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
+
+      {/* Receipts */}
+      {orders?.length > 0 && (
+        <Card className="mt-5" padded={false}>
+          <div className="border-b border-line px-6 py-4">
+            <h2 className="text-[15px] font-semibold text-ink">Payments</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[14px]">
+              <thead>
+                <tr className="border-b border-line-soft">
+                  <th className={TH}>What</th>
+                  <th className={TH}>Amount</th>
+                  <th className={TH}>Status</th>
+                  <th className={TH}>When</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-soft">
+                {orders.map(o => (
+                  <tr key={o.id} className="transition-colors hover:bg-canvas">
+                    <td className="px-6 py-3.5 text-ink">
+                      {o.kind === 'subscription'
+                        ? `${o.subscription_kind} subscription`
+                        : `${o.credits + o.bonus_credits} credits` +
+                          (o.bonus_credits ? ` (${o.credits} + ${o.bonus_credits} free)` : '')}
+                    </td>
+                    <td className="px-6 py-3.5 text-ink" data-numeric>
+                      {formatMoney(o.amount_minor, o.currency)}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <Badge tone={
+                        o.status === 'paid' ? 'positive'
+                        : o.status === 'pending' ? 'neutral'
+                        : o.status === 'refunded' ? 'warning' : 'critical'
+                      }>
+                        {o.status}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-3.5 text-[13px] text-faint" data-numeric>
+                      {new Date(o.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

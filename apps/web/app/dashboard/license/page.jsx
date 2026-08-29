@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase-server'
+import { requireUser, getSupabase } from '@/lib/auth'
 import LicenseCard from '@/components/dashboard/LicenseCard'
 import { Card, Button, PageHeader, EmptyState } from '@/components/ui'
 
-export const metadata = { title: 'License — Interview Assistant' }
+export const metadata = { title: 'License — Smart Hire AI' }
 
 const STEPS = [
   'Download and open the desktop app.',
@@ -11,8 +11,14 @@ const STEPS = [
 ]
 
 export default async function LicensePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // PIVOT 2026-08-29: the un-guarded getUser() below dereferenced user.id on the
+  // next line, which threw a TypeError on a lapsed session. requireUser()
+  // redirects instead, and both calls are cache()d across the render pass.
+  //
+  // const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  const user = await requireUser()
+  const supabase = await getSupabase()
 
   const { data: licenses } = await supabase
     .from('licenses')

@@ -5,7 +5,14 @@ export const dynamic     = 'force-dynamic'
 export const maxDuration = 60
 
 // How often the server re-checks the license while the stream is open.
-const POLL_MS = 5000
+//
+// This was 5s, which — together with the desktop's own fallback poll — meant 18
+// licence lookups per minute per open app, forever. The session heartbeat is now
+// a far better liveness signal than either, so this can afford to be lazy. The
+// cost is that revocation takes up to 15s to reach an IDLE client; a revocation
+// during a live session is caught by the next heartbeat regardless, server-side,
+// in session_heartbeat().
+const POLL_MS = 15000
 
 // Serverless platforms cap function duration, so the stream closes itself well
 // before the cap and lets EventSource reconnect. Revocation is still caught on
@@ -63,14 +70,19 @@ export async function GET(request) {
       send({ type: 'connected' })
 
       const deadline = Date.now() + MAX_LIFETIME_MS
+      let lastMinutes = null
 
       while (open && Date.now() < deadline) {
         let result = null
         try {
           result = await validateLicense(licenseKey)
         } catch {
-          // Transient database trouble must never look like a revocation —
-          // the client logs the user out on valid:false. Skip this round.
+          // Transient database trouble must never look like a revocation — the
+          // client logs the user out on valid:false. Skip this round.
+          //
+          // validateLicense now THROWS on a query failure rather than returning
+          // valid:false, which is what finally makes this branch reachable. It
+          // used to treat a Supabase blip as "licence not found".
           comment('check-failed')
         }
 
@@ -84,6 +96,29 @@ export async function GET(request) {
           })
           finish()
           return
+        }
+
+        // Balance updates, so an idle app reflects a purchase or an admin grant
+        // without the user touching anything.
+        //
+        // CRITICAL: these frames carry NO `valid` key. App.jsx signs the user
+        // out on `msg.valid === false` regardless of the frame's type, and
+        // running out of credits must never do that — the licence is fine, the
+        // balance is simply empty. `undefined === false` is false, so an older
+        // client ignores these frames rather than misreading them.
+        if (result?.valid && result.minutesRemaining !== lastMinutes) {
+          const wasKnown = lastMinutes !== null
+          lastMinutes = result.minutesRemaining
+
+          send({
+            type: 'balance',
+            minutesRemaining: lastMinutes,
+            unlimited: !!result.unlimited,
+          })
+
+          if (wasKnown && !result.unlimited && lastMinutes <= 0) {
+            send({ type: 'credits_exhausted', minutesRemaining: 0 })
+          }
         }
 
         comment('keep-alive')

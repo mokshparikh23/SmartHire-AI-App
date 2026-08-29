@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase-server'
+import { requireAdminPage } from '@/lib/auth'
 import { Card, Badge, Stat, PageHeader, EmptyState } from '@/components/ui'
 
 export const metadata = { title: 'Usage — Admin' }
@@ -11,6 +12,10 @@ const ACTION_LABELS = {
 const TH = 'px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint'
 
 export default async function AdminUsagePage() {
+  // See app/admin/users/page.jsx — the layout is not a sufficient boundary for a
+  // service-role query.
+  await requireAdminPage()
+
   const supabase = createAdminClient()
 
   const [{ data: usage }, { count: total }] = await Promise.all([

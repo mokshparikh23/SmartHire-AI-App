@@ -39,6 +39,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+
+    scroll-behavior: smooth;
+    /* The sticky header is 4rem tall. Without this an in-page anchor lands
+       underneath it and the section heading is the first thing you cannot read. */
+    scroll-padding-top: 5rem;
   }
 
   body {
@@ -98,4 +103,8 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* The header then snaps rather than slides, and anchors jump rather than
+     glide — which is the point. */
+  html { scroll-behavior: auto !important; }
 }

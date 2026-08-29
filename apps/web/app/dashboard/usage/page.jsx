@@ -1,82 +1,138 @@
-import { createClient } from '@/lib/supabase-server'
-import { Card, Stat, PageHeader, EmptyState, Badge } from '@/components/ui'
+import { requireUser, getSupabase } from '@/lib/auth'
+import { formatBalance, END_REASON_LABEL } from '@/lib/credits'
+import { Card, Stat, PageHeader, EmptyState, Badge, Button, TH } from '@/components/ui'
 
-export const metadata = { title: 'Usage — Interview Assistant' }
+export const metadata = { title: 'Sessions — Smart Hire AI' }
 
-const ACTION_LABELS = {
-  answer:     ['Answer generated', 'accent'],
-  transcribe: ['Question transcribed', 'neutral'],
+/**
+ * Where the time went.
+ *
+ * This page used to list rows from `usage` — one per AI request — under the
+ * heading "Sessions". Under per-minute billing that is a different quantity from
+ * the one people pay for, so it now reads interview_sessions and shows minutes.
+ *
+ * end_reason is shown in plain words rather than hidden, because this is the
+ * page someone opens when they think they have been charged for time they did
+ * not use, and "Connection lost" answers that question on its own.
+ */
+const REASON_TONE = {
+  client_stop:     'neutral',
+  out_of_credits:  'critical',
+  stale:           'warning',
+  superseded:      'warning',
+  license_revoked: 'critical',
+  request_limit:   'warning',
+  admin_stop:      'warning',
 }
 
-export default async function UsagePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default async function SessionsPage() {
+  // PIVOT 2026-08-29: the un-guarded getUser() below dereferenced user.id on the
+  // next line, which threw a TypeError on a lapsed session. requireUser()
+  // redirects instead, and both calls are cache()d across the render pass.
+  //
+  // const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  const user = await requireUser()
+  const supabase = await getSupabase()
 
-  const { data: sessions } = await supabase
-    .from('usage')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  const { count: total } = await supabase
-    .from('usage').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-
+  // Month boundaries computed in UTC rather than from the web server's local
+  // clock, which was the previous behaviour and quietly differed between a
+  // developer's machine and production.
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const thisMonth = sessions?.filter(s => new Date(s.created_at) >= monthStart).length ?? 0
-  const lastUsed = sessions?.[0]?.created_at
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+
+  const [{ data: sessions }, { count: answers }] = await Promise.all([
+    supabase.from('interview_sessions')
+      .select('id, started_at, ended_at, minutes_elapsed, minutes_charged, metered, end_reason, ai_requests')
+      .eq('user_id', user.id)
+      .order('started_at', { ascending: false })
+      .limit(50),
+    supabase.from('usage')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('action', 'answer'),
+  ])
+
+  const rows = sessions ?? []
+  const totalMinutes = rows.reduce((sum, s) => sum + (s.minutes_elapsed || 0), 0)
+  const monthMinutes = rows
+    .filter(s => s.started_at >= monthStart)
+    .reduce((sum, s) => sum + (s.minutes_elapsed || 0), 0)
 
   return (
     <div>
-      <PageHeader title="Usage" lede="Every question answered and transcribed for you." />
+      <PageHeader title="Sessions" lede="Every interview you have run, and the minutes it used." />
 
       <div className="grid gap-5 sm:grid-cols-3">
-        <Stat label="Total" value={total || 0} sub="All time" icon="chart" />
         <Stat
-          label="This month" value={thisMonth}
-          sub={now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-          icon="bolt" tone="accent"
+          label="Time used" value={formatBalance(totalMinutes)}
+          sub={`Across ${rows.length} session${rows.length === 1 ? '' : 's'}`}
+          icon="clock"
         />
         <Stat
-          label="Last activity"
-          value={lastUsed ? new Date(lastUsed).toLocaleDateString() : '—'}
-          sub={lastUsed ? new Date(lastUsed).toLocaleTimeString() : 'Nothing yet'}
-          icon="clock" tone="neutral"
+          label="This month" value={formatBalance(monthMinutes)}
+          sub={now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          icon="chart" tone="accent"
+        />
+        {/* Kept because it is genuinely interesting, but placed after minutes so
+            it can no longer be mistaken for the billing number. */}
+        <Stat
+          label="Answers generated" value={answers || 0}
+          sub="Questions the assistant answered"
+          icon="bolt" tone="neutral"
         />
       </div>
 
       <Card className="mt-5" padded={false}>
         <div className="border-b border-line px-6 py-4">
-          <h2 className="text-[15px] font-semibold text-ink">Recent activity</h2>
+          <h2 className="text-[15px] font-semibold text-ink">Recent sessions</h2>
+          <p className="mt-0.5 text-[12px] text-faint">Newest first</p>
         </div>
 
-        {!sessions?.length ? (
+        {!rows.length ? (
           <EmptyState
-            title="Nothing here yet"
-            description="Activity appears once you start a session in the desktop app."
+            icon="clock"
+            title="No sessions yet"
+            description="Start a session in the desktop app and it appears here with the minutes it used."
+            action={<Button href="/dashboard/billing" variant="secondary" iconRight="arrowRight">See plans</Button>}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[14px]">
               <thead>
                 <tr className="border-b border-line-soft">
-                  <th className="px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">Action</th>
-                  <th className="px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">Date</th>
-                  <th className="px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">Time</th>
+                  <th className={TH}>Date</th>
+                  <th className={TH}>Started</th>
+                  <th className={TH}>Length</th>
+                  <th className={TH}>Charged</th>
+                  <th className={TH}>Ended</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-soft">
-                {sessions.map(s => {
-                  const [label, tone] = ACTION_LABELS[s.action] || [s.action || 'Session', 'neutral']
-                  return (
-                    <tr key={s.id} className="transition-colors hover:bg-canvas">
-                      <td className="px-6 py-3"><Badge tone={tone}>{label}</Badge></td>
-                      <td className="px-6 py-3 text-muted">{new Date(s.created_at).toLocaleDateString()}</td>
-                      <td className="px-6 py-3 text-faint">{new Date(s.created_at).toLocaleTimeString()}</td>
-                    </tr>
-                  )
-                })}
+                {rows.map(s => (
+                  <tr key={s.id} className="transition-colors hover:bg-canvas">
+                    <td className="px-6 py-3.5 text-muted" data-numeric>
+                      {new Date(s.started_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-3.5 text-faint" data-numeric>
+                      {new Date(s.started_at).toLocaleTimeString()}
+                    </td>
+                    <td className="px-6 py-3.5 text-ink" data-numeric>
+                      {formatBalance(s.minutes_elapsed)}
+                    </td>
+                    <td className="px-6 py-3.5" data-numeric>
+                      {s.metered
+                        ? <span className="text-ink">{formatBalance(s.minutes_charged)}</span>
+                        : <Badge tone="accent">Unlimited</Badge>}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      {s.ended_at
+                        ? <Badge tone={REASON_TONE[s.end_reason] || 'neutral'}>
+                            {END_REASON_LABEL[s.end_reason] || s.end_reason}
+                          </Badge>
+                        : <Badge tone="positive">Live now</Badge>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

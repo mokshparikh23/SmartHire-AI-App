@@ -1,30 +1,30 @@
 import { NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase-server'
+import { requireAdminApi } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase-server'
 
 export async function POST(request) {
   try {
-    // Verify caller is admin
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role !== 'admin')
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const gate = await requireAdminApi()
+    if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const { licenseId } = await request.json()
     if (!licenseId)
       return NextResponse.json({ error: 'licenseId is required' }, { status: 400 })
 
-    const adminSupabase = createAdminClient()
-    const { error } = await adminSupabase
+    const { error } = await createAdminClient()
       .from('licenses')
       .update({ status: 'revoked' })
       .eq('id', licenseId)
 
     if (error) throw error
 
+    // Nothing to do about a session running on this key: session_heartbeat()
+    // checks the licence status on every beat and closes the session itself,
+    // billed to that moment. That happens server-side within one heartbeat and
+    // does not depend on the SSE revocation frame reaching the desktop app.
+    //
+    // Closing it from here as well would mean settling against this server's
+    // clock rather than the database's, for the sake of at most twenty seconds.
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error('Revoke license error:', e)

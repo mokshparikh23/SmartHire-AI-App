@@ -3,13 +3,11 @@
 import { useMemo, useState } from 'react'
 import RevokeLicenseButton from './RevokeLicenseButton'
 import CopyButton from '@/components/dashboard/CopyButton'
-import { Badge, EmptyState } from '@/components/ui'
+import { Badge, EmptyState, TH } from '@/components/ui'
+import { formatBalance } from '@/lib/credits'
 
-const STATUS_TONE = { active: 'positive', revoked: 'critical', expired: 'neutral' }
-const PLAN_TONE   = { lifetime: 'warning', yearly: 'accent', monthly: 'positive' }
-const FILTERS     = ['all', 'active', 'revoked', 'expired']
-
-const TH = 'px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint'
+const STATUS_TONE = { active: 'positive', revoked: 'critical' }
+const FILTERS     = ['all', 'active', 'revoked']
 
 export default function LicenseTable({ licenses }) {
   const [filter, setFilter] = useState('all')
@@ -84,9 +82,8 @@ export default function LicenseTable({ licenses }) {
               <tr className="border-b border-line">
                 <th className={TH}>Key</th>
                 <th className={TH}>User</th>
-                <th className={TH}>Plan</th>
+                <th className={TH}>Balance</th>
                 <th className={TH}>Status</th>
-                <th className={TH}>Expires</th>
                 <th className={`${TH} text-right`}>Actions</th>
               </tr>
             </thead>
@@ -103,14 +100,18 @@ export default function LicenseTable({ licenses }) {
                     <p className="truncate font-medium text-ink">{l.profiles?.full_name || '—'}</p>
                     <p className="truncate text-[12px] text-faint">{l.profiles?.email}</p>
                   </td>
+                  {/* The owner's balance, not the key's — a licence has no
+                      entitlement of its own. This is the single most useful
+                      thing to see while deciding whether someone needs a top-up. */}
                   <td className="px-6 py-3.5">
-                    <Badge tone={PLAN_TONE[l.plan] || 'neutral'}>{l.plan}</Badge>
+                    {l.profiles?.credit_wallets?.subscription_kind
+                      ? <Badge tone="accent">Unlimited</Badge>
+                      : <span className="text-[13px] text-ink" data-numeric>
+                          {formatBalance(l.profiles?.credit_wallets?.minutes_balance)}
+                        </span>}
                   </td>
                   <td className="px-6 py-3.5">
                     <Badge tone={STATUS_TONE[l.status] || 'neutral'}>{l.status}</Badge>
-                  </td>
-                  <td className="px-6 py-3.5 text-[13px] text-muted" data-numeric>
-                    {l.expires_at ? new Date(l.expires_at).toLocaleDateString() : 'Never'}
                   </td>
                   <td className="px-6 py-3.5 text-right">
                     {l.status === 'active' && <RevokeLicenseButton licenseId={l.id} />}
