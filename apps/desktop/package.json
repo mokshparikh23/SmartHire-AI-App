@@ -1,6 +1,6 @@
 {
   "name": "smarthire-desktop",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Interviewer copilot — listens with the candidate's consent and suggests what to ask next",
   "main": "electron/main.cjs",
   "type": "module",
