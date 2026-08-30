@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /* The dev-tools indicator renders bottom-left, where it sits on top of the
+     account menu. Hidden entirely — compile and runtime errors still surface. */
+  devIndicators: false,
+
   experimental: {
     optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr']
   },

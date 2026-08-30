@@ -25,6 +25,10 @@ const PATHS = {
   sparkle: <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.3l-1.8-5.7L4.5 10.8 10.2 9z" />,
   lock: <><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" /></>,
   eye: <><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.8" /></>,
+  // AUTH 2026-08-30: the "hide" half of the password toggle. Same lens as `eye`,
+  // cut open where the slash crosses it — a slash laid over the closed shape
+  // reads as a struck-through eye at 17px, which is the wrong meaning.
+  eyeOff: <><path d="M10.7 6.7A9.9 9.9 0 0 1 12 5.5c6.4 0 10 6.5 10 6.5a17.4 17.4 0 0 1-3.2 4.1" /><path d="M6.5 8.1A16.9 16.9 0 0 0 2 12s3.6 6.5 10 6.5a10.4 10.4 0 0 0 4-.8" /><path d="M9.9 9.9a2.8 2.8 0 0 0 4 4" /><path d="m3.5 3.5 17 17" /></>,
   file: <><path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z" /><path d="M13.5 3v5.5H19" /></>,
   ban: <><circle cx="12" cy="12" r="9" /><path d="m6 6 12 12" /></>,
   logout: <><path d="M14 4.5h4.5A1.5 1.5 0 0 1 20 6v12a1.5 1.5 0 0 1-1.5 1.5H14" /><path d="M10 16l-4-4 4-4" /><path d="M6 12h10" /></>,
@@ -95,6 +99,35 @@ export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '
       {...rest}
     >
       {path}
+    </svg>
+  )
+}
+
+/**
+ * Busy indicator for an action that is waiting on the network.
+ *
+ * AUTH 2026-08-30: added because a submit button that only swaps its LABEL to
+ * "Please wait…" does not read as busy — a static button with different words
+ * on it looks like a button that did nothing. A moving part is what says the
+ * click landed.
+ *
+ * Not in PATHS: those are single-colour strokes at one width, and this needs a
+ * faint track under a solid arc to read as motion. Reduced-motion is handled in
+ * globals.css, which slows `.animate-spin` rather than freezing it.
+ */
+export function Spinner({ size = 16, className = '' }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className={`animate-spin ${className}`}
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   )
 }

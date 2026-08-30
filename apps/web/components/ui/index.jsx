@@ -30,6 +30,18 @@ const BUTTON_VARIANTS = {
     white, invisible text rather than losing both overrides visibly.
   */
   inverse: 'bg-paper text-ink hover:bg-canvas-2',
+  /*
+    AUTH 2026-08-30: the "it worked" state of a submit button, held for the beat
+    between a successful request and the navigation it triggers.
+
+    A VARIANT, not a `className="bg-positive"` override on primary, for exactly
+    the reason spelled out under `inverse`: that would put bg-ink and bg-positive
+    on the same element and let stylesheet order pick the winner.
+
+    No hover change — by the time this shows, the button is disabled and the
+    page is already leaving; a hover response would invite a second click.
+  */
+  positive: 'bg-positive text-paper',
 }
 
 const BUTTON_SIZES = {

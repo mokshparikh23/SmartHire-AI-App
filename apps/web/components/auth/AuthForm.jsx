@@ -4,23 +4,81 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import Icon from '@/components/ui/Icon'
+import Icon, { Spinner } from '@/components/ui/Icon'
 import { Button } from '@/components/ui'
 
-const FIELD =
-  'w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink ' +
+/*
+  AUTH 2026-08-30: split so the password field can inset its show/hide button
+  and reserve room for it. This is the same split, for the same reason, as
+  CONTROL_PADLESS in components/ui/index.jsx: stacking `pr-11` onto a class that
+  already carries `px-3.5` would NOT reliably win, because shorthand and
+  longhand of one property collide and Tailwind v4 resolves that by stylesheet
+  order, not by the order of your class attribute.
+
+  const FIELD =
+    'w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink ' +
+    'placeholder:text-faint outline-none transition-colors ' +
+    'focus:border-ink/40 focus-visible:outline-none'
+*/
+const FIELD_PADLESS =
+  'w-full rounded-xl border border-line bg-paper py-2.5 text-[14px] text-ink ' +
   'placeholder:text-faint outline-none transition-colors ' +
   'focus:border-ink/40 focus-visible:outline-none'
 
-function Field({ label, hint, ...props }) {
+const FIELD = `${FIELD_PADLESS} px-3.5`
+
+/** Room on the right for one inset control, and no more. */
+const FIELD_WITH_TRAILING = `${FIELD_PADLESS} pl-3.5 pr-11`
+
+function Field({ label, hint, trailing, ...props }) {
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
         <label htmlFor={props.name} className="text-[13px] font-medium text-ink-soft">{label}</label>
         {hint}
       </div>
-      <input id={props.name} className={FIELD} {...props} />
+      {/* Was a bare <input>; the wrapper is what the inset toggle positions
+          against, and it is only added when there is something to inset.
+          <input id={props.name} className={FIELD} {...props} /> */}
+      <div className={trailing ? 'relative' : ''}>
+        <input
+          id={props.name}
+          className={trailing ? FIELD_WITH_TRAILING : FIELD}
+          {...props}
+        />
+        {trailing}
+      </div>
     </div>
+  )
+}
+
+/**
+ * Show / hide control for a password box.
+ *
+ * type="button" is load-bearing: a bare <button> inside a <form> defaults to
+ * submit, so revealing the password would post the form instead.
+ */
+function PasswordToggle({ shown, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      // The label says what the click will DO, and aria-pressed carries the
+      // current state — announcing "hide password" while the field is masked
+      // would describe the opposite of what is on screen.
+      aria-label={shown ? 'Hide password' : 'Show password'}
+      aria-pressed={shown}
+      title={shown ? 'Hide password' : 'Show password'}
+      className={
+        'absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center ' +
+        'rounded-lg text-faint transition-colors hover:bg-canvas-2 hover:text-ink ' +
+        // No ring utilities anywhere in this app, so focus is shown the way the
+        // rest of the UI shows it: a background and a darker mark.
+        'focus-visible:bg-canvas-2 focus-visible:text-ink focus-visible:outline-none'
+      }
+    >
+      <Icon name={shown ? 'eyeOff' : 'eye'} size={17} />
+    </button>
   )
 }
 
@@ -38,6 +96,27 @@ export default function AuthForm({ mode }) {
   const [sent, setSent]       = useState(false)
   const [pending, startTransition] = useTransition()
 
+  // AUTH 2026-08-30: masked until asked otherwise, and then left as the user set
+  // it — including across a failed attempt. Re-masking on an error would take
+  // the password away at the exact moment it is being re-read for the typo that
+  // caused the error.
+  const [showPassword, setShowPassword] = useState(false)
+
+  /*
+    AUTH 2026-08-30: true from the moment Supabase accepts the credentials until
+    this component is unmounted by the navigation.
+
+    Kept separate from `loading`/`pending` because it means something different
+    to the person watching: those two say "still working", this one says "your
+    password was right, the wait from here is the app moving". Without it the
+    button says "please wait" for the whole span — the credential check AND the
+    dashboard load — and a correct password is indistinguishable from a hang.
+  */
+  const [signedIn, setSignedIn] = useState(false)
+
+  // True from the Google click until the browser actually leaves for Google.
+  const [oauth, setOauth] = useState(false)
+
   // Nothing on /login links to /dashboard, so the router never had a prefetch
   // entry for it and every successful sign-in paid a cold round trip before the
   // screen changed. Warming it here is most of why login felt slow.
@@ -47,8 +126,18 @@ export default function AuthForm({ mode }) {
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
+  // `loading` is the request; `pending` is the navigation it triggers. Both mean
+  // the same thing to the person waiting, so they are read as one flag.
+  const busy = loading || pending
+
   const handleSubmit = async e => {
     e.preventDefault()
+
+    // The submit button is disabled through all of this, but Enter in a text
+    // field submits the form regardless of the button's state — without this,
+    // a second Enter during the navigation fires a second sign-in.
+    if (loading || signedIn || oauth) return
+
     setError('')
     setLoading(true)
 
@@ -59,6 +148,15 @@ export default function AuthForm({ mode }) {
           password: form.password,
         })
         if (error) throw error
+
+        /*
+          AUTH 2026-08-30: flipped HERE, before the device call and the
+          navigation — not after them. Those two are the slow half of a sign-in,
+          and this is the exact instant the answer to "was my password right?"
+          becomes known. Holding the confirmation until they finish would put
+          the acknowledgement after the wait it exists to explain.
+        */
+        setSignedIn(true)
 
         /*
           DEVICES 2026-08-30: clear any revocation on this browser before
@@ -162,10 +260,29 @@ export default function AuthForm({ mode }) {
           autoComplete="email"
         />
 
+        {/*
+          AUTH 2026-08-30: was type="password" with no way back out of the mask.
+          A typo in a field you cannot read is the most common reason a correct
+          password "fails", and on the signup side a 6-character minimum you
+          cannot see is worse still.
+
+          <Field
+            label="Password" name="password" type="password" required minLength={6}
+            value={form.password} onChange={handleChange} placeholder="At least 6 characters"
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+          />
+        */}
         <Field
-          label="Password" name="password" type="password" required minLength={6}
+          label="Password" name="password" required minLength={6}
+          type={showPassword ? 'text' : 'password'}
           value={form.password} onChange={handleChange} placeholder="At least 6 characters"
           autoComplete={isLogin ? 'current-password' : 'new-password'}
+          trailing={
+            <PasswordToggle
+              shown={showPassword}
+              onToggle={() => setShowPassword(v => !v)}
+            />
+          }
         />
 
         {error && (
@@ -193,9 +310,59 @@ export default function AuthForm({ mode }) {
         {/* `pending` covers the navigation after a successful sign-in; `loading`
             covers the auth round trip before it. Without both, the button
             re-enables mid-transition and the form looks idle while it is moving. */}
-        <Button type="submit" disabled={loading || pending} size="lg" className="w-full">
-          {loading || pending ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
-        </Button>
+        {/*
+          AUTH 2026-08-30: was a single label swap to "Please wait…" —
+
+          <Button type="submit" disabled={loading || pending} size="lg" className="w-full">
+            {loading || pending ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
+          </Button>
+
+          — which is a STILL button with different words on it. Nothing moves, so
+          it reads as a button that swallowed the click, and it says the same
+          thing whether the password is being checked or has already been
+          accepted. Three distinct states now: idle, working (a spinner, and a
+          label naming the actual step), and accepted (green, a tick, and the
+          reason the screen has not changed yet).
+
+          aria-live on the wrapper, not the button: a screen reader announces a
+          button when it is focused, and this text changes while focus sits still
+          on it. `polite` so it waits for the reader to finish the sentence it
+          is on. Sign-in failures are announced by the error block above.
+        */}
+        <div aria-live="polite">
+          <Button
+            type="submit"
+            variant={signedIn ? 'positive' : 'primary'}
+            disabled={busy || signedIn}
+            size="lg"
+            className="w-full"
+            /*
+              The shared Button dims every disabled state to 40%. That is right
+              for "you cannot press this yet" and wrong for both states here: it
+              washes out the very feedback this change exists to add — a 40%
+              spinner is nearly invisible on paper, and a faded green tick reads
+              as one more thing switched off. Full strength for the
+              confirmation, 72% while busy, which still says "not pressable".
+
+              Inline rather than a `disabled:opacity-100` class, because two
+              opacity utilities on one element are resolved by stylesheet order,
+              not by the order of the class attribute.
+            */
+            style={signedIn ? { opacity: 1 } : busy ? { opacity: 0.72 } : undefined}
+          >
+            {signedIn ? (
+              <>
+                <Icon name="check" size={17} strokeWidth={2} />
+                Signed in — opening your dashboard…
+              </>
+            ) : busy ? (
+              <>
+                <Spinner size={16} />
+                {isLogin ? 'Checking your details…' : 'Creating your account…'}
+              </>
+            ) : isLogin ? 'Sign in' : 'Create account'}
+          </Button>
+        </div>
       </form>
 
       <div className="my-6 flex items-center gap-4">
@@ -204,23 +371,52 @@ export default function AuthForm({ mode }) {
         <span className="h-px flex-1 bg-line" />
       </div>
 
+      {/*
+        AUTH 2026-08-30: this button had no busy state at all, and it is the one
+        that waits longest — a redirect off to Google, over the network, with the
+        page sitting still. It also awaited signInWithOAuth and then ignored the
+        `error` it resolves with, so a failed redirect left the user staring at
+        an unchanged form with nothing said.
+
+        Disabled while the password form is mid-flight: two sign-ins racing each
+        other is not a state worth reasoning about.
+      */}
       <button
         type="button"
+        disabled={oauth || busy || signedIn}
         onClick={async () => {
-          await createClient().auth.signInWithOAuth({
+          setError('')
+          setOauth(true)
+          const { error } = await createClient().auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: `${window.location.origin}/auth/callback` },
           })
+          // Reached only when the redirect never happened. On success this page
+          // is already being torn down, so there is nothing to hand back.
+          if (error) {
+            setError(error.message)
+            setOauth(false)
+          }
         }}
-        className="flex h-12 w-full items-center justify-center gap-2.5 rounded-full border border-line bg-paper text-[15px] font-medium text-ink transition-colors hover:bg-canvas"
+        aria-live="polite"
+        className="flex h-12 w-full items-center justify-center gap-2.5 rounded-full border border-line bg-paper text-[15px] font-medium text-ink transition-colors hover:bg-canvas disabled:pointer-events-none disabled:opacity-40"
       >
-        <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-        </svg>
-        Continue with Google
+        {oauth ? (
+          <>
+            <Spinner size={16} />
+            Taking you to Google…
+          </>
+        ) : (
+          <>
+            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </>
+        )}
       </button>
     </div>
   )

@@ -3,7 +3,7 @@ import Icon from '@/components/ui/Icon'
 import { Container, Button, Badge } from '@/components/ui'
 import { SiteNav, SiteFooter } from '@/components/marketing/SiteChrome'
 import PricingPlans from '@/components/marketing/PricingPlans'
-import { PlatformMark } from '@/components/marketing/PlatformMarks'
+import { PlatformMark, PlatformMarkDefs } from '@/components/marketing/PlatformMarks'
 import Reveal, { ScrollProgress } from '@/components/marketing/Reveal'
 import Ticker from '@/components/marketing/Ticker'
 import LiveDemo from '@/components/marketing/LiveDemo'
@@ -69,13 +69,23 @@ const FEATURES = [
   { icon: 'lock',   title: 'Nothing to configure',       body: 'No API keys, no billing setup, no model wrangling. Your plan covers the AI cost.' },
 ]
 
+/*
+  LOGOS 2026-08-30: the band was six meeting tools. Superset and LeetCode are
+  neither — one is a campus-hiring portal, the other a coding-assessment site —
+  so adding them widens what this section claims. The lede below was rewritten to
+  match; the title did not need to change, because "whatever the interview is
+  running on" already covered both. Eight entries also retire the six-column
+  grid, which would have left two orphans on a wide screen.
+*/
 const PLATFORMS = [
-  { key: 'zoom',  name: 'Zoom' },
-  { key: 'teams', name: 'Microsoft Teams' },
-  { key: 'meet',  name: 'Google Meet' },
-  { key: 'webex', name: 'Webex' },
-  { key: 'lark',  name: 'Lark' },
-  { key: 'chime', name: 'Amazon Chime' },
+  { key: 'zoom',     name: 'Zoom' },
+  { key: 'teams',    name: 'Microsoft Teams' },
+  { key: 'meet',     name: 'Google Meet' },
+  { key: 'webex',    name: 'Webex' },
+  { key: 'lark',     name: 'Lark' },
+  { key: 'chime',    name: 'Amazon Chime' },
+  { key: 'superset', name: 'Superset' },
+  { key: 'leetcode', name: 'LeetCode' },
 ]
 
 /*
@@ -484,29 +494,97 @@ export default async function HomePage() {
         {/* ════════════════════════════════════════ 04 platforms ════════ */}
         <Reveal as="section" id="platforms" className="border-b border-line-soft bg-canvas py-24 sm:py-32">
           <Container wide>
+            {/* lede was: "It sits above the window rather than inside it, so the
+                meeting tool does not matter. These are the ones we check each
+                release." — see the note above PLATFORMS. */}
             <SectionMark
               no="04"
               label="Works with"
               title="Whatever the interview is running on."
-              lede="It sits above the window rather than inside it, so the meeting tool does not matter. These are the ones we check each release."
+              lede="It sits above the window rather than inside it, so it does not matter whether the interview is a call, a shared editor or an assessment portal. These are the ones we check each release."
               center
             />
+          </Container>
 
-            <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
-              {PLATFORMS.map((p, i) => (
-                <div key={p.key} className="stagger bg-paper p-7" style={{ '--i': i }}>
-                  <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-canvas-2 text-ink-soft">
-                    <PlatformMark name={p.key} size={30} />
-                  </span>
-                  <h3 className="text-[15px] font-semibold text-ink">{p.name}</h3>
-                  <p className="mono mt-1.5 flex items-center gap-1.5 text-[12px] text-faint">
-                    <span className="h-1.5 w-1.5 rounded-full bg-positive" />
-                    Supported
-                  </p>
-                </div>
-              ))}
+          {/*
+            Deliberately OUTSIDE the Container. A row that slides has to run off
+            both edges of the SCREEN to read as continuous; clipped to max-w-6xl
+            it would look like a box that happens to be animating. <Ticker /> is
+            placed the same way, for the same reason.
+          */}
+          <div>
+            {/*
+              Mounted once, outside the row that duplicates its items. Teams and
+              Webex are gradient logos, and their paint servers have to exist
+              exactly once in the document — see the note in PlatformMarks.jsx.
+              Renders nothing visible.
+            */}
+            <PlatformMarkDefs />
+
+            {/*
+              LOGOS 2026-08-30 (second pass): the card grid became one
+              auto-scrolling line and the marks went 30px -> 48px. Eight cards at
+              that size are far wider than any viewport, so the row scrolls
+              instead of wrapping — reusing the copy ticker's marquee
+              (`.ticker-row` in globals.css), which brings hover-to-pause and the
+              reduced-motion stop with it.
+
+              PLATFORMS is rendered TWICE. The keyframe translates by exactly
+              -50%, so the second copy is what occupies the viewport at the
+              moment the first wraps; drop it and the loop visibly jumps. The
+              duplicate is aria-hidden so the list is announced once, and the
+              grid's `stagger` is gone — a per-item entrance delay is invisible
+              on a row that is already sliding.
+
+              <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
+              <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+                {PLATFORMS.map((p, i) => (
+                  <div key={p.key} className="stagger bg-paper p-7" style={{ '--i': i }}>
+                    <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-canvas-2 text-ink-soft">
+                      <PlatformMark name={p.key} size={30} />
+                    </span>
+                    <h3 className="text-[15px] font-semibold text-ink">{p.name}</h3>
+                    <p className="mono mt-1.5 flex items-center gap-1.5 text-[12px] text-faint">
+                      <span className="h-1.5 w-1.5 rounded-full bg-positive" />
+                      Supported
+                    </p>
+                  </div>
+                ))}
+              </div>
+            */}
+            <div
+              className="mark-strip ticker relative mt-16 overflow-hidden"
+              style={{
+                maskImage:
+                  'linear-gradient(90deg, transparent, #000 6rem, #000 calc(100% - 6rem), transparent)',
+                WebkitMaskImage:
+                  'linear-gradient(90deg, transparent, #000 6rem, #000 calc(100% - 6rem), transparent)',
+              }}
+            >
+              <div className="ticker-row marks">
+                {[...PLATFORMS, ...PLATFORMS].map((p, i) => (
+                  <div
+                    key={i}
+                    aria-hidden={i >= PLATFORMS.length}
+                    className="mx-3 flex shrink-0 items-center gap-5 rounded-2xl border border-line bg-paper py-6 pl-6 pr-9"
+                  >
+                    <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-canvas-2 text-ink-soft">
+                      <PlatformMark name={p.key} size={48} />
+                    </span>
+                    <span className="whitespace-nowrap">
+                      <span className="block text-[17px] font-semibold text-ink">{p.name}</span>
+                      <span className="mono mt-1.5 flex items-center gap-1.5 text-[12px] text-faint">
+                        <span className="h-1.5 w-1.5 rounded-full bg-positive" />
+                        Supported
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
+          </div>
 
+          <Container wide>
             <p className="mt-10 text-center text-[15px] text-muted">
               Not listed? If it runs in a window on macOS or Windows, it works.
             </p>

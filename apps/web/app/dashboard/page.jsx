@@ -284,6 +284,8 @@ export default async function DashboardPage() {
                 they have to fetch 152MB again to try the real fix. Naming the
                 wrong button beats describing the right one.
               */}
+              {/* UNSIGNED-NOTICE 2026-08-30: removed on request — kept in place so it
+                  can come straight back if the builds are still unsigned when it matters.
               <div className="mt-4 max-w-md rounded-xl border border-line bg-canvas px-4 py-3">
                 <p className="flex items-start gap-2 text-[12px] font-medium leading-relaxed text-ink-soft">
                   <Icon name="lock" size={13} className="mt-0.5 shrink-0" />
@@ -297,6 +299,7 @@ export default async function DashboardPage() {
                   <strong className="font-medium text-ink">Open Anyway</strong>.
                 </p>
               </div>
+              */}
             </>
           ) : (
             <>
