@@ -88,12 +88,23 @@ app.whenReady().then(async () => {
     setTimeout(resolve, 3000)
   })
 
-  const image = await win.capturePage()
-  if (image.isEmpty()) {
+  const captured = await win.capturePage()
+  if (captured.isEmpty()) {
     console.error('Capture produced an empty image; icon not written.')
     app.exit(1)
     return
   }
+
+  /*
+    capturePage returns at the display's scale factor, so this comes back 2048px
+    on any Retina Mac and 1024px on a 1x display. Resizing to a fixed SIZE makes
+    the output identical whatever machine regenerates it — otherwise the file
+    committed here depends on whose screen last ran the script, and every
+    regeneration is a spurious binary diff.
+  */
+  const image = captured.getSize().width === SIZE
+    ? captured
+    : captured.resize({ width: SIZE, height: SIZE, quality: 'best' })
 
   const outDir = path.join(__dirname, '..', 'build')
   fs.mkdirSync(outDir, { recursive: true })
