@@ -175,10 +175,18 @@ app.whenReady().then(async () => {
     : shot.resize({ width: W * 2, height: H * 2, quality: 'best' })
   const at1x = shot.resize({ width: W, height: H, quality: 'best' })
 
-  fs.writeFileSync(path.join(outDir, 'dmg-background.png'), at1x.toPNG())
-  fs.writeFileSync(path.join(outDir, 'dmg-background@2x.png'), at2x.toPNG())
+  /*
+    These names are electron-builder's convention, not a preference: it looks
+    for background.png / background@2x.png inside directories.buildResources on
+    its own. An explicit `dmg.background` path was tried first and silently did
+    not resolve — the build succeeded and shipped electron-builder's stock
+    540x380 artwork, with no warning that the configured file had been ignored.
+    Relying on the convention removes the setting that can fail quietly.
+  */
+  fs.writeFileSync(path.join(outDir, 'background.png'), at1x.toPNG())
+  fs.writeFileSync(path.join(outDir, 'background@2x.png'), at2x.toPNG())
 
-  console.log(`Wrote ${outDir}/dmg-background.png (${W}x${H}) and @2x`)
+  console.log(`Wrote ${outDir}/background.png (${W}x${H}) and @2x`)
 
   win.destroy()
   app.exit(0)

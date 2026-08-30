@@ -104,7 +104,10 @@ module.exports = {
     arrow in the artwork is drawn to land between these two icons.
   */
   dmg: {
-    background: 'build/dmg-background.png',
+    // No `background` key on purpose. electron-builder finds
+    // build/background.png and build/background@2x.png by convention; an
+    // explicit path here did not resolve and fell back to its stock artwork
+    // without warning, which is a failure that only shows up by opening the dmg.
     window: { width: 600, height: 520 },
     iconSize: 92,
     contents: [
