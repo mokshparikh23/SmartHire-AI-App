@@ -1366,7 +1366,15 @@ on conflict (id) do update
 -- ============================================================ storage RLS
 -- Supabase already enables RLS on storage.objects; this is idempotent and states
 -- the assumption rather than relying on it.
-alter table storage.objects enable row level security;
+-- BUGFIX 2026-08-30: ...but stating it is not something this role is allowed to
+-- do. storage.objects is owned by supabase_storage_admin, and ALTER TABLE
+-- requires ownership, so `supabase db push` died here with
+-- "must be owner of table objects (SQLSTATE 42501)" and rolled the whole
+-- migration back. The assumption above is correct — Supabase enables RLS on that
+-- table itself — so the assertion costs nothing to drop and the policies below
+-- are unaffected. It only ever succeeded when pasted into the SQL editor, which
+-- runs as a role that happens to qualify.
+-- alter table storage.objects enable row level security;
 
 drop policy if exists "read own resume files"     on storage.objects;
 drop policy if exists "resumes: no client insert" on storage.objects;
