@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { askAIStream } from '../services/aiRouter'
 import { useVoice } from './useVoice'
+import { useLiveVoice } from './useLiveVoice'
 
 /**
  * Owns the live interview session: microphone capture, transcription and answer
@@ -153,12 +154,56 @@ export function useInterviewSession() {
   // REDESIGN 2026-08-29: the toolbar's mic toggle gates capture. micEnabled
   // changes on a click, not per token, so subscribing to it here is cheap —
   // unlike currentAnswer, which this hook must never subscribe to.
+  /* LIVE CAPTION 2026-08-30 ───────────────────────────────────────────────────
+     Two capture paths, exactly one running.
+
+     useLiveVoice holds a WebRTC transcription session and paints text while the
+     speaker is still talking. useVoice is the original: record a segment, upload
+     it after a pause. The live path hands over on anything it cannot serve — the
+     server being on the Gemini provider, a rejected SDP, ICE failure, the
+     capture track dying — so the floor of this feature is the app as it was.
+
+     liveFailed is state, not a ref, because the swap has to re-render: that is
+     the whole point of it. It flips at most once per session and is reset by
+     start(). */
+  const [liveFailed, setLiveFailed] = useState(false)
+
+  // Partial caption text. A REF on purpose — this updates several times a second
+  // and sessionStore.js is explicit that high-frequency values must not go
+  // through the store or through React state. TranscriptBar paints it from its
+  // own rAF, the same way StatusIndicator paints levelRef.
+  const partialRef = useRef('')
+
+  const onPartial = useCallback((text) => { partialRef.current = text }, [])
+
+  const onLiveUnsupported = useCallback(() => {
+    // Clear any half-written caption before the other path takes over, or it
+    // would sit on screen as a question nobody asked.
+    partialRef.current = ''
+    setLiveFailed(true)
+  }, [])
+
+  useLiveVoice({
+    enabled: isRunning && micEnabled && !liveFailed,
+    source: captureSource,
+    onQuestion,
+    onPartial,
+    onUnsupported: onLiveUnsupported,
+    levelRef,
+  })
+
   // SYSTEM-AUDIO 2026-08-30: capture source comes from the store so the toolbar
   // can switch it mid-session. useVoice has it in its dependency array, so a
   // change re-acquires rather than relabelling the stream already running.
   // useVoice({ enabled: isRunning, onQuestion, levelRef })
   // useVoice({ enabled: isRunning && micEnabled, onQuestion, levelRef })
-  useVoice({ enabled: isRunning && micEnabled, source: captureSource, onQuestion, levelRef })
+  // useVoice({ enabled: isRunning && micEnabled, source: captureSource, onQuestion, levelRef })
+  useVoice({
+    enabled: isRunning && micEnabled && liveFailed,
+    source: captureSource,
+    onQuestion,
+    levelRef,
+  })
 
   const askManual = useCallback((text) => generate(text, 'manual'), [generate])
 
@@ -190,6 +235,12 @@ export function useInterviewSession() {
       })
       return result || { ok: false }
     }
+
+    // LIVE CAPTION 2026-08-30: a new session gets a fresh attempt at the live
+    // path. Without this, one transient SDP failure would pin the app to the
+    // segmented path for the rest of the process's life.
+    partialRef.current = ''
+    setLiveFailed(false)
 
     useSessionStore.getState().startSession(result)
     window.electronAPI?.enterSessionMode?.()
@@ -437,5 +488,12 @@ export function useInterviewSession() {
   useEffect(() => () => { genRef.current++; chatGenRef.current++ }, [])
 
   // return { levelRef, start, stop, askManual, regenerate }
-  return { levelRef, start, stop, askManual, regenerate, askAboutScreen, sendChat }
+  // return { levelRef, start, stop, askManual, regenerate, askAboutScreen, sendChat }
+  // LIVE CAPTION 2026-08-30: partialRef joins levelRef as the second ref handed
+  // down for imperative painting. `live` is for chrome that wants to say which
+  // path is running; nothing depends on it functionally.
+  return {
+    levelRef, partialRef, live: !liveFailed,
+    start, stop, askManual, regenerate, askAboutScreen, sendChat,
+  }
 }

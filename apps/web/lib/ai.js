@@ -139,6 +139,26 @@ export const DEFAULT_MODEL    = 'gpt-4o'
    caller is ever added that needs word timings, it needs whisper-1, not this. */
 // export const TRANSCRIBE_MODEL = 'whisper-1'
 export const TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe'
+/* LIVE CAPTION 2026-08-30: the model for the WebRTC realtime path, and it is
+   deliberately NOT the same one.
+
+   Measured on one 8-second utterance through the loopback tap:
+
+     gpt-live-transcribe     deltas 8080ms -> 15719ms, ~one word every 200ms,
+                             arriving WHILE the speaker was still talking.
+     gpt-4o-mini-transcribe  speech_stopped at 15752ms, then every delta in a
+                             single burst at 16108-16386ms.
+
+   Both "stream". Only one of them streams during speech, and that is the entire
+   feature. The cost of the difference is real — $0.017/min against $0.003/min —
+   so the cheaper model stays on the HTTP path above, which is also the fallback.
+
+   Trade-off that comes with it: gpt-live-transcribe returns 400 for
+   turn_detection, so there is no server VAD and no .completed event. The desktop
+   VAD closes turns. Supported values if this ever needs revisiting: whisper-1,
+   gpt-realtime-whisper, gpt-live-transcribe, gpt-transcribe, gpt-4o-transcribe,
+   gpt-4o-mini-transcribe. */
+export const REALTIME_TRANSCRIBE_MODEL = 'gpt-live-transcribe'
 // Gemini's own speech-to-text model. Only reached through the native surface;
 // the OpenAI compatibility layer does not expose transcription at all.
 export const GEMINI_TRANSCRIBE_MODEL = 'gemini-3.5-transcribe'

@@ -113,7 +113,10 @@ const RESTART_RESET_MS = 30000  // capture alive this long clears the budget
    The three loopback details here are not in any documentation. They were
    established empirically in the Electron 28 -> 43 upgrade (4be5aa3), and each
    one is load-bearing. */
-async function acquire(source) {
+// LIVE CAPTION 2026-08-30: exported so useLiveVoice.js uses the SAME capture,
+// not a second copy that drifts. Every constraint below was measured; a
+// near-identical duplicate would silently lose one of them.
+export async function acquire(source) {
   if (source !== 'system') {
     return navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },

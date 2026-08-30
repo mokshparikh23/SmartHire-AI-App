@@ -418,11 +418,42 @@
   white-space: nowrap;
 }
 
-.ia-words--waiting {
+.ia-words--waiting,
+.ia-waiting {
   color: rgba(255, 255, 255, 0.38);
   font-size: 12.5px; font-weight: 500;
   padding-left: 2px;
 }
+
+/* LIVE CAPTION 2026-08-30 ─────────────────────────────────────────────────────
+   The live partial transcript, written straight into .ia-live by a rAF loop in
+   TranscriptBar. It is NOT chunked into pills: the text grows a word at a time,
+   and re-chunking every frame makes the whole row visibly re-flow. Flowing text
+   grows from the right edge instead, which is what reads as "being spoken".
+
+   This selector is what decides which of the three states is visible, without
+   React ever learning whether the caption is empty. An empty .ia-live matches
+   :empty and lets the committed pills (or the placeholder) show; the moment a
+   delta lands it stops matching and takes over the row. That covers the second
+   question of a session, where the live text has to REPLACE the previous
+   question's pills rather than appear beside them. */
+.ia-live {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 12.5px; font-weight: 500;
+  padding: 5px 2px;
+  /* Dimmer than a committed pill: this text is still provisional. Deltas were
+     measured to be append-only so it will not rewrite itself, but it can still
+     be cut short by a pause the speaker did not intend. */
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ia-committed {
+  display: flex; align-items: center; gap: 5px;
+  min-width: 0;
+}
+
+.ia-live:not(:empty) ~ .ia-committed { display: none; }
 
 .ia-input {
   -webkit-app-region: no-drag;

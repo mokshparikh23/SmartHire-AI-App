@@ -27,11 +27,12 @@ function chunkWords(text) {
 }
 
 export default function TranscriptBar({
-  question, source, typing, state, levelRef,
+  question, source, typing, state, levelRef, partialRef,
   onSubmit, onCancelTyping, onClear, onExpand,
 }) {
   const inputRef = useRef(null)
   const wordsRef = useRef(null)
+  const liveRef = useRef(null)
 
   useEffect(() => {
     if (typing) inputRef.current?.focus()
@@ -43,6 +44,40 @@ export default function TranscriptBar({
     const el = wordsRef.current
     if (el) el.scrollLeft = el.scrollWidth
   }, [question])
+
+  /* LIVE CAPTION 2026-08-30 ─────────────────────────────────────────────────
+     The partial transcript is painted straight to the DOM from a rAF loop,
+     never through state or the store. It changes several times a second while
+     someone talks, and this component sits inside the overlay panel — routing
+     it through React would re-render the panel on every word, which is the
+     exact thing sessionStore.js's header warns against.
+
+     Same pattern, same reason, as StatusIndicator's level meter.
+
+     No chunkWords() here: pills are for the committed question, where the text
+     is final. Re-chunking every frame would make the words visibly re-flow as
+     each one arrives. The live text is one flowing span that becomes pills at
+     the moment it is committed. */
+  useEffect(() => {
+    if (!partialRef) return
+    let raf = 0
+    let painted = null
+
+    const tick = () => {
+      const el = liveRef.current
+      const text = partialRef.current || ''
+      // Only touch the DOM when the text actually changed — most frames it has
+      // not, and textContent writes force layout.
+      if (el && text !== painted) {
+        painted = text
+        el.textContent = text
+        el.parentElement.scrollLeft = el.parentElement.scrollWidth
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [partialRef])
 
   return (
     <div className="ia-glass ia-bar ia-transcript">
@@ -65,15 +100,27 @@ export default function TranscriptBar({
             }
           }}
         />
-      ) : question ? (
-        <span className="ia-words" ref={wordsRef}>
-          {chunkWords(question).map((group, i) => (
-            <span className="ia-word" key={i}>{group}</span>
-          ))}
-        </span>
       ) : (
-        <span className="ia-words ia-words--waiting">
-          {source === 'manual' ? 'Type a question…' : 'Listening for a question…'}
+        /* LIVE CAPTION 2026-08-30: all three states are rendered, and CSS picks.
+           The live span's content arrives imperatively, so React cannot branch
+           on whether it is empty without the per-word re-render this design
+           exists to avoid. `.ia-live:not(:empty) ~ .ia-committed { display:none }`
+           does the same job for free — and it covers the case that matters most:
+           once someone starts a SECOND question, the live text must replace the
+           pills of the first, not appear underneath them. */
+        <span className="ia-words" ref={wordsRef}>
+          <span className="ia-live" ref={liveRef} />
+          <span className="ia-committed">
+            {question ? (
+              chunkWords(question).map((group, i) => (
+                <span className="ia-word" key={i}>{group}</span>
+              ))
+            ) : (
+              <span className="ia-waiting">
+                {source === 'manual' ? 'Type a question…' : 'Listening for a question…'}
+              </span>
+            )}
+          </span>
         </span>
       )}
 

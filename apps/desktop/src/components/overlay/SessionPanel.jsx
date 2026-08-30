@@ -128,9 +128,16 @@ export default function SessionPanel({ session }) {
             typing={typing}
             state={state}
             levelRef={session.levelRef}
+            partialRef={session.partialRef}
             onSubmit={submitTyped}
             onCancelTyping={() => setTyping(false)}
-            onClear={() => useSessionStore.getState().clearTranscript()}
+            onClear={() => {
+              // LIVE CAPTION 2026-08-30: the live caption lives in a ref, so
+              // clearTranscript() alone would wipe the committed question and
+              // leave a half-spoken sentence painted over the top of it.
+              if (session.partialRef) session.partialRef.current = ''
+              useSessionStore.getState().clearTranscript()
+            }}
             onExpand={() => setTyping((v) => !v)}
           />
 

@@ -10,6 +10,7 @@ import {
   askAI as backendAskAI,
   askAIStream as backendAskAIStream,
   transcribe as backendTranscribe,
+  openRealtimeCall as backendOpenRealtimeCall,
   hasCredentials,
   resetCredentials,
 } from './aiBackend'
@@ -80,4 +81,17 @@ export function askAIStream(transcript, onChunk, onDone, model, sessionId) {
 // }
 export function transcribe(audioBlob, fileName, sessionId) {
   return backendTranscribe(audioBlob, fileName, sessionId)
+}
+
+/**
+ * LIVE CAPTION 2026-08-30: WebRTC signalling for the realtime transcription
+ * session. Goes through this module for the same reason everything else does —
+ * one place that knows where the backend is.
+ *
+ * @param {string} sdp        the local offer
+ * @param {string} sessionId
+ * @returns {Promise<{ok: boolean, answer: string, callId: string|null}>}
+ */
+export function openRealtimeCall(sdp, sessionId) {
+  return backendOpenRealtimeCall(sdp, sessionId)
 }

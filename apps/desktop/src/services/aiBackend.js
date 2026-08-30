@@ -200,3 +200,34 @@ export async function transcribe(audioBlob, fileName = 'audio.webm', sessionId) 
   const data = await response.json()
   return data?.text?.trim() || ''
 }
+
+/* LIVE CAPTION 2026-08-30 ─────────────────────────────────────────────────────
+   Hands an SDP offer to our own backend and gets the answer back.
+
+   Note what this function does NOT return: any kind of credential. The backend
+   mints the ephemeral secret and spends it on the SDP exchange itself, so the
+   promise at the top of aiRouter.js — that this app ships no API credential of
+   any kind — stays literally true on the realtime path too.
+
+   `code: 'realtime_unsupported'` (HTTP 501) is not a failure to report. It means
+   the server is on the Gemini provider, and the caller is expected to fall back
+   to transcribe() above. */
+export async function openRealtimeCall(sdp, sessionId) {
+  const { webUrl, licenseKey } = await requireCredentials()
+
+  const response = await fetch(`${webUrl}/api/ai/realtime`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ licenseKey, sessionId: sessionId || '', sdp }),
+  })
+
+  if (!response.ok) {
+    const detail = await readErrorDetail(response)
+    const error = new Error(detail.message || `Live transcription failed (${response.status})`)
+    error.status = response.status
+    error.code   = detail.code
+    throw error
+  }
+
+  return response.json()
+}
