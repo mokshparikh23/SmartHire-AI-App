@@ -39,6 +39,42 @@ All run from the repo root.
 | `npm run build:web` | Next.js production build |
 | `npm run build:mac` / `build:win` / `build:all` | Packaged desktop installers |
 
+## Releasing the desktop app
+
+Cutting a tag is the whole process. `.github/workflows/release.yml` packages
+macOS and Windows on their own runners and attaches both to a GitHub Release:
+
+```sh
+npm version --workspace apps/desktop 1.0.1 --no-git-tag-version
+git commit -am "Desktop 1.0.1" && git tag v1.0.1 && git push --follow-tags
+```
+
+The dashboard picks it up on its own. [apps/web/lib/releases.js](apps/web/lib/releases.js)
+reads the release feed and the "Get the app" card turns from its pending state
+into download buttons within ten minutes, with no web deploy. The version is
+never hardcoded on the web side — that is exactly what went stale last time.
+
+Build locally with `npm run build:mac` when you only need a macOS dmg to test.
+Windows cannot be built on a Mac without wine, which is the reason the workflow
+exists rather than a local `build:all`.
+
+Two things worth knowing:
+
+- **Builds are unsigned.** There is no Apple Developer certificate, so
+  [scripts/afterPack.cjs](apps/desktop/scripts/afterPack.cjs) applies an ad-hoc
+  signature — without one, Apple Silicon refuses to launch the app at all. Users
+  still get a Gatekeeper warning on first open and have to allow it from System
+  Settings › Privacy & Security. To sign properly later, set `mac.identity` and
+  `notarize` in [electron-builder.config.cjs](apps/desktop/electron-builder.config.cjs)
+  and drop the hook.
+- **macOS ships as a dmg only.** The zip target was removed: a zipped `.app`
+  runs un-installed from Downloads, which is the worst case for an unsigned
+  build. Restore it only alongside auto-update, which needs the zip format and
+  is still an empty placeholder in `electron/updater.js`.
+
+The app icon is generated, not committed by hand — `npm run icon --workspace
+apps/desktop` regenerates `build/icon.png` from the same mark the web app uses.
+
 ## How the two apps talk
 
 The desktop app calls the web app for licensing. It reads `WEB_URL` from

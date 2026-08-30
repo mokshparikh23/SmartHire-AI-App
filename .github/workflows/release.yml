@@ -1,0 +1,107 @@
+# Packages the desktop app for macOS and Windows and attaches both to a
+# GitHub Release, which is the feed apps/web/lib/releases.js reads.
+#
+# Windows is the reason this exists rather than a local script. NSIS packaging
+# needs a Windows toolchain (or wine, which is not installed on the dev Mac), so
+# `npm run build:all` on a laptop can only ever produce half a release.
+#
+# Builds publish nothing themselves — each job packages with `--publish never`
+# and uploads its artifacts to the workflow. A single release job then attaches
+# everything at once. Letting both matrix legs publish directly, which is the
+# more common shape, races two jobs to create the same release and intermittently
+# yields a duplicate or a release missing one platform.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish (e.g. v1.0.1)'
+        required: true
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Package ${{ matrix.platform }}
+    strategy:
+      # One platform failing must not cancel the other: a macOS build that
+      # succeeded is still worth shipping while a Windows failure is fixed.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            os: macos-14
+            script: build:mac
+          - platform: windows
+            os: windows-latest
+            script: build:win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Root install: this is an npm-workspaces repo and the desktop app's
+      # runtime deps (electron-store, dotenv, unpdf) hoist to the root
+      # node_modules. Installing inside apps/desktop would not resolve them.
+      - run: npm ci
+
+      # `--` forwards the flag to electron-builder through the workspace script.
+      # Publishing is handled by the release job, not here.
+      - run: npm run ${{ matrix.script }} --workspace apps/desktop -- --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 7
+          # Only the installable artifacts. The unpacked mac-arm64/ and win-unpacked/
+          # trees are also in release/ and would add hundreds of MB for nothing.
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+
+  publish:
+    name: Attach to release
+    needs: build
+    runs-on: ubuntu-latest
+    # Creating and uploading to a release is a write to repository contents.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          ls -lh artifacts
+
+          # --clobber so re-running the workflow for a tag replaces the assets
+          # rather than failing on "asset already exists".
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; uploading assets."
+            gh release upload "$TAG" artifacts/* --clobber
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" artifacts/* \
+              --title "$TAG" \
+              --generate-notes
+          fi

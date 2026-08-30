@@ -1,14 +1,17 @@
 {
   "name": "smarthire-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered interview assistant with invisible overlay",
   "main": "electron/main.cjs",
   "type": "module",
+  "author": "Smart Hire AI",
+  "homepage": "https://smart-hire-ai-gamma.vercel.app",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "cross-env NODE_ENV=development ELECTRON_RUN_AS_NODE= electron .",
     "build": "vite build",
+    "icon": "cross-env ELECTRON_RUN_AS_NODE= electron scripts/make-icon.cjs",
     "build:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
     "build:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
     "build:all": "npm run build && electron-builder --config electron-builder.config.cjs --mac --win",
@@ -19,7 +22,7 @@
     "autoprefixer": "^10.4.27",
     "concurrently": "^8.0.0",
     "cross-env": "^7.0.3",
-    "electron": "^43.4.1",
+    "electron": "43.4.1",
     "electron-builder": "^26.15.3",
     "postcss": "^8.5.8",
     "vite": "^5.0.0"
