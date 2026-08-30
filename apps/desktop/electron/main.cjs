@@ -14,9 +14,27 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
 const isDev = process.env.NODE_ENV === 'development'
 const store = new Store()
-// Backend that issues and validates license keys.
-// Set WEB_URL in .env to point at a locally running build of the web app.
-const WEB_URL = process.env.WEB_URL || 'https://smart-hire-ai-gamma.vercel.app'
+/*
+  Backend that issues and validates license keys.
+  Set WEB_URL in .env to point at a locally running build of the web app.
+
+  BACKEND MOVED 2026-08-30. This default is baked into every packaged build, so
+  changing it strands every copy already installed — which is exactly what
+  happened to the previous value:
+
+    // const WEB_URL = process.env.WEB_URL || 'https://smart-hire-ai-gamma.vercel.app'
+
+  That deployment was deleted when the project moved to an account Vercel's
+  GitHub app could actually see, so shipped builds started getting
+  DEPLOYMENT_NOT_FOUND from every licence check — an app that opens fine and
+  then refuses a perfectly good key.
+
+  This URL is tied to the Vercel PROJECT NAME ("web") plus the account slug.
+  Renaming that project changes this host and breaks installed builds again. If
+  this needs to move a third time, put a custom domain in front of it first and
+  bake THAT in — a domain survives project renames, this hostname does not.
+*/
+const WEB_URL = process.env.WEB_URL || 'https://web-moksh-8946s-projects.vercel.app'
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173'
 
 if (isDev) console.log(`[main] license backend: ${WEB_URL}`)

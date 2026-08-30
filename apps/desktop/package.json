@@ -1,11 +1,11 @@
 {
   "name": "smarthire-desktop",
   "version": "1.0.3",
-  "description": "AI-powered interview assistant with invisible overlay",
+  "description": "Interviewer copilot — listens with the candidate's consent and suggests what to ask next",
   "main": "electron/main.cjs",
   "type": "module",
   "author": "Smart Hire AI",
-  "homepage": "https://smart-hire-ai-gamma.vercel.app",
+  "homepage": "https://web-moksh-8946s-projects.vercel.app",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
