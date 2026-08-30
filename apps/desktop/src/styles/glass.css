@@ -1,0 +1,269 @@
+/*
+  SETUP-TO-WEB 2026-08-30: the shared glass surface.
+
+  The overlay's bars and the launcher window are the same material, so the
+  recipe lives here once and both use it. Before this it existed only inside
+  .ia-bar in overlay.css, and the launcher would have had to copy it — which is
+  exactly how two surfaces drift apart.
+
+  Note on `backdrop-filter`: it cannot blur the desktop. Chromium only blurs
+  content inside its own page, and a transparent window has none. The glass read
+  comes from the translucent fill, the inset top highlight and the shadow. The
+  filter is kept because it does blur sticky chrome over scrolling content
+  inside the page, which is a real effect.
+*/
+
+:root {
+  /* Driven from settingsStore.overlayOpacity by usePanelOpacity(). */
+  --ia-alpha: 0.86;
+  --ia-radius: 16px;
+  --ia-font: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.ia-glass {
+  border-radius: var(--ia-radius);
+
+  background-color: rgba(10, 11, 13, var(--ia-alpha));
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 140px);
+  -webkit-backdrop-filter: blur(30px) saturate(140%);
+  backdrop-filter: blur(30px) saturate(140%);
+
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 24px 64px -12px rgba(0, 0, 0, 0.72),
+    0 2px 8px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--ia-font);
+}
+
+/* ── Launcher ─────────────────────────────────────────────────────────────
+   One card filling the window. It must reach the window edges: the window is
+   transparent for its whole life and macOS paints the traffic lights on the
+   frame, so any inset here would leave those three dots floating over the
+   user's desktop instead of sitting on the card.                            */
+
+.ia-launcher {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Title bar. The whole strip drags; every control inside sets no-drag. */
+.ia-lhead {
+  flex-shrink: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  /* Left padding clears the macOS traffic lights at trafficLightPosition
+     { x: 12, y: 10 } — 3 buttons plus their spacing. */
+  padding: 0 10px 0 78px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  -webkit-app-region: drag;
+}
+
+.ia-ltitle {
+  font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ia-lsub {
+  font-size: 11px; font-weight: 500;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.ia-lbody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 0;
+}
+
+.ia-lsection {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 10px;
+}
+.ia-lsection h2 {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── Profile list ───────────────────────────────────────────────────────── */
+.ia-llist {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 7px;
+  padding-bottom: 4px;
+}
+
+.ia-lrow {
+  -webkit-app-region: no-drag;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.ia-lrow:hover { background: rgba(255, 255, 255, 0.09); }
+.ia-lrow[data-selected='true'] {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.ia-lrow-main { flex: 1; min-width: 0; }
+.ia-lrow-name {
+  font-size: 13px; font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ia-lrow-meta {
+  margin-top: 2px;
+  font-size: 11px; font-weight: 500;
+  color: rgba(255, 255, 255, 0.42);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Résumé / consent state, so it is legible before the interview starts and not
+   only implicit in what the copilot does or does not cite. */
+.ia-ltag {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.01em;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+.ia-ltag--on  { background: rgba(52, 211, 153, 0.16); color: #6ee7b7; }
+.ia-ltag--off { background: rgba(251, 191, 36, 0.14); color: #fcd34d; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.ia-lfoot {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 9px;
+  padding: 12px 16px 14px;
+}
+
+.ia-lstart {
+  -webkit-app-region: no-drag;
+  flex: 1;
+  height: 42px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; border-radius: 12px;
+  background: #fff;
+  color: #0b0c0e;
+  font-family: inherit; font-size: 13.5px; font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: opacity 120ms, transform 90ms;
+}
+.ia-lstart:hover:not(:disabled)  { opacity: 0.9; }
+.ia-lstart:active:not(:disabled) { transform: scale(0.99); }
+.ia-lstart:disabled { opacity: 0.32; cursor: default; }
+
+.ia-llink {
+  -webkit-app-region: no-drag;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: none; padding: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer;
+}
+.ia-llink:hover { color: #fff; }
+
+/* ── Licence gate ───────────────────────────────────────────────────────── */
+.ia-gate {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 20px 26px 30px;
+  text-align: center;
+}
+
+.ia-gate-mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 52px; height: 52px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2px;
+}
+
+.ia-gate h1 {
+  font-size: 16px; font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.ia-gate-lede {
+  font-size: 12px; line-height: 1.6;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: -6px;
+}
+
+.ia-gate-input {
+  -webkit-app-region: no-drag;
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  /* globals.css sets user-select:none on body; a key must be pasteable and
+     selectable, or activation becomes retyping a 24-character string. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+.ia-gate-input:focus            { border-color: rgba(255, 255, 255, 0.34); }
+.ia-gate-input::placeholder     { color: rgba(255, 255, 255, 0.24); }
+.ia-gate-input[data-invalid='true'] { border-color: rgba(239, 68, 68, 0.55); }
+
+.ia-gate-notice {
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: rgba(251, 191, 36, 0.10);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  color: #fcd34d;
+  font-size: 11px; line-height: 1.5;
+}
+
+.ia-gate-foot {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+/* ── States ─────────────────────────────────────────────────────────────── */
+.ia-lempty {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 12px; line-height: 1.6;
+}
+.ia-lempty strong {
+  display: block;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px; font-weight: 600;
+}

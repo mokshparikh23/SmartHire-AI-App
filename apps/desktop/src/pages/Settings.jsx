@@ -155,10 +155,15 @@ export default function Settings({ onBack }) {
           </div>
           <div style={{ padding:'10px 13px', display:'flex', flexDirection:'column', gap:7 }}>
             {[
-              ['mic',   'Mic captures interview questions live'],
+              // PIVOT 2026-08-30: rows three and four described the app writing
+              // the candidate's answers. It suggests the interviewer's questions.
+              // ['mic',   'Mic captures interview questions live'],
+              // ['robot', 'OpenAI generates personalized answers'],
+              // ['bolt',  'Answers stream in real time'],
+              ['mic',   'Mic captures the conversation live'],
               ['pen',   'OpenAI Whisper transcribes speech to text'],
-              ['robot', 'OpenAI generates personalized answers'],
-              ['bolt',  'Answers stream in real time'],
+              ['robot', 'OpenAI suggests the follow-ups worth asking'],
+              ['bolt',  'Suggestions stream in real time'],
               ['lock',  'No API key needed — your licence covers it'],
             ].map(([icon, text]) => (
               <div key={text} style={{ display:'flex', alignItems:'center', gap:10 }}>

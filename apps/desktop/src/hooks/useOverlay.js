@@ -27,19 +27,50 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
  * Panel-local keyboard shortcuts. Renderer-scoped on purpose — a global
  * shortcut would have to focus the window first, which defeats the point.
  */
-export function usePanelHotkeys({ onType, onStop, onCopy, onRetry }) {
+// REDESIGN 2026-08-29: the new chrome puts a shortcut chip on nearly every
+// control, so the guard can no longer require Shift — Answer is ⌘↵, Clear
+// answer is ⌘⌫, and the pager is ⌘←/⌘→. Each branch checks its own modifiers.
+//
+// The reference design shows Chat on ⌘⇧⌫, which is also its transcript Clear.
+// Chat is ⌘⇧J here so the two do not collide.
+// export function usePanelHotkeys({ onType, onStop, onCopy, onRetry }) {
+export function usePanelHotkeys({
+  onType, onStop, onCopy, onRetry,
+  onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
+}) {
   useEffect(() => {
     const onKeyDown = (e) => {
       const mod = e.metaKey || e.ctrlKey
-      if (!mod || !e.shiftKey) return
+      if (!mod) return
+
+      // ⌘← / ⌘→ mean line-start / line-end inside a text field, and ⌘⌫ means
+      // delete-to-start. Never steal those from an input the user is typing in.
+      const el = e.target
+      const typing = el instanceof HTMLElement &&
+        (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 
       const key = e.key.toLowerCase()
-      if (key === 'k')      { e.preventDefault(); onType?.() }
-      else if (key === 'x') { e.preventDefault(); onStop?.() }
-      else if (key === 'c') { e.preventDefault(); onCopy?.() }
-      else if (key === 'r') { e.preventDefault(); onRetry?.() }
+
+      if (e.shiftKey) {
+        if (key === 'k')          { e.preventDefault(); onType?.() }
+        else if (key === 'x')     { e.preventDefault(); onStop?.() }
+        else if (key === 'c')     { e.preventDefault(); onCopy?.() }
+        else if (key === 'r')     { e.preventDefault(); onRetry?.() }
+        else if (key === 'j')     { e.preventDefault(); onChat?.() }
+        else if (key === 'enter') { e.preventDefault(); onScreenshot?.() }
+        else if (key === 'backspace') { e.preventDefault(); onClearTranscript?.() }
+        return
+      }
+
+      if (key === 'enter')          { e.preventDefault(); onAnswer?.() }
+      else if (key === 'backspace') { if (!typing) { e.preventDefault(); onClearAnswer?.() } }
+      else if (key === 'arrowleft') { if (!typing) { e.preventDefault(); onPrev?.() } }
+      else if (key === 'arrowright'){ if (!typing) { e.preventDefault(); onNext?.() } }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onType, onStop, onCopy, onRetry])
+  }, [
+    onType, onStop, onCopy, onRetry,
+    onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
+  ])
 }

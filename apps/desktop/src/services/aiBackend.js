@@ -30,6 +30,20 @@ export function resetCredentials() {
   cachedLicenseKey = null
 }
 
+/* SESSION GATE 2026-08-29: /api/ai/chat and /api/ai/transcribe were put behind
+   requireSession(licenseKey, sessionId) by commit 4b2c816, but this client was
+   never updated — every AI call was coming back 402 no_session.
+
+   The session lifecycle that produces that id lives in the MAIN process
+   (session:start / session:heartbeat / session:stop in electron/main.cjs), not
+   here, for the reason lib/http.js spells out: the session routes send no CORS
+   headers because they are meant to be called from Node, and this module runs
+   in the renderer — origin "null" once the app is packaged and loading from
+   file://. /api/ai/* does send CORS, so those calls stay in this file.
+
+   The renderer only ever holds the sessionId that main hands back, and passes
+   it to the two calls below. */
+
 async function requireCredentials() {
   const [webUrl, licenseKey] = await Promise.all([getWebUrl(), getLicenseKey()])
   if (!webUrl) throw new Error('Backend URL is not configured')
@@ -52,6 +66,25 @@ async function readError(response) {
     const body = await response.text()
     try { return JSON.parse(body)?.error || body } catch { return body }
   } catch { return '' }
+}
+
+/**
+ * SESSION GATE 2026-08-29: like readError, but keeps the `code` jsonError puts
+ * alongside `error` (out_of_credits, no_session, request_limit). The overlay
+ * branches on it, so flattening the body to a string throws that away.
+ */
+async function readErrorDetail(response) {
+  try {
+    const body = await response.text()
+    try {
+      const parsed = JSON.parse(body)
+      return { message: parsed?.error || body, code: parsed?.code }
+    } catch {
+      return { message: body, code: undefined }
+    }
+  } catch {
+    return { message: '', code: undefined }
+  }
 }
 
 function messagesFor(transcript) {
@@ -88,18 +121,30 @@ async function pumpStream(response, onChunk) {
 /**
  * Streaming answer. onChunk(text) per token, onDone() at the end.
  */
-export async function askAIStream(transcript, onChunk, onDone, model) {
+// SESSION GATE 2026-08-29: sessionId added — the route rejects a body without
+// one, so this signature is not optional despite the parameter reading like it.
+// export async function askAIStream(transcript, onChunk, onDone, model) {
+export async function askAIStream(transcript, onChunk, onDone, model, sessionId) {
   const { webUrl, licenseKey } = await requireCredentials()
   if (!transcript?.length) throw new Error('Transcript is empty')
 
   const response = await fetch(`${webUrl}/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ licenseKey, model, messages: messagesFor(transcript) }),
+    // body: JSON.stringify({ licenseKey, model, messages: messagesFor(transcript) }),
+    body: JSON.stringify({ licenseKey, sessionId, model, messages: messagesFor(transcript) }),
   })
 
   if (!response.ok) {
-    throw new Error(`AI request failed (${response.status}): ${await readError(response)}`)
+    // SESSION GATE 2026-08-29: the status and code ride along on the error, so
+    // the overlay can tell "you are out of credits" (402, offer a top-up) from
+    // "your licence is gone" (403, sign out) instead of printing one red string.
+    // throw new Error(`AI request failed (${response.status}): ${await readError(response)}`)
+    const detail = await readErrorDetail(response)
+    const error = new Error(detail.message || `AI request failed (${response.status})`)
+    error.status = response.status
+    error.code   = detail.code
+    throw error
   }
 
   try {
@@ -113,9 +158,11 @@ export async function askAIStream(transcript, onChunk, onDone, model) {
  * Non-streaming answer, collected from the same stream so there is only one
  * endpoint to maintain.
  */
-export async function askAI(transcript, model) {
+// export async function askAI(transcript, model) {
+export async function askAI(transcript, model, sessionId) {
   let text = ''
-  await askAIStream(transcript, (chunk) => { text += chunk }, null, model)
+  // await askAIStream(transcript, (chunk) => { text += chunk }, null, model)
+  await askAIStream(transcript, (chunk) => { text += chunk }, null, model, sessionId)
   if (!text) throw new Error('The assistant returned an empty response')
   return text
 }
@@ -125,11 +172,15 @@ export async function askAI(transcript, model) {
  * @param {Blob} audioBlob
  * @returns {Promise<string>}
  */
-export async function transcribe(audioBlob, fileName = 'audio.webm') {
+// SESSION GATE 2026-08-29: the transcribe route reads sessionId off the form and
+// gates on it exactly like /chat, so the mic path was 402-ing too.
+// export async function transcribe(audioBlob, fileName = 'audio.webm') {
+export async function transcribe(audioBlob, fileName = 'audio.webm', sessionId) {
   const { webUrl, licenseKey } = await requireCredentials()
 
   const form = new FormData()
   form.append('licenseKey', licenseKey)
+  form.append('sessionId', sessionId || '')
   form.append('file', audioBlob, fileName)
 
   const response = await fetch(`${webUrl}/api/ai/transcribe`, {
@@ -138,7 +189,12 @@ export async function transcribe(audioBlob, fileName = 'audio.webm') {
   })
 
   if (!response.ok) {
-    throw new Error(`Transcription failed (${response.status}): ${await readError(response)}`)
+    // throw new Error(`Transcription failed (${response.status}): ${await readError(response)}`)
+    const detail = await readErrorDetail(response)
+    const error = new Error(detail.message || `Transcription failed (${response.status})`)
+    error.status = response.status
+    error.code   = detail.code
+    throw error
   }
 
   const data = await response.json()

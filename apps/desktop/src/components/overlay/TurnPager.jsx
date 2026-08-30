@@ -1,5 +1,6 @@
 import React from 'react'
 import Icon from '../ui/Icon'
+import Kbd from './Kbd'
 
 /**
  * Replaces the dashboard's 288px question list with ~78px in the header.
@@ -20,16 +21,21 @@ export default function TurnPager({ turns, activeTurnId, onSelect, drawerOpen, o
     onSelect(turns[next].id)
   }
 
+  // REDESIGN 2026-08-29: the arrows now carry their shortcut, matching the
+  // reference's ⌘← / ⌘→ chips. The position stays between them and still opens
+  // the drawer, which is the cheapest way to reach an older question.
   return (
     <span className="ia-pager">
+      {/* The chip already carries an arrow glyph, so a chevron beside it is the
+          same information twice — the reference shows the chip alone. */}
       <button onClick={() => step(-1)} disabled={position <= 1} title="Previous question">
-        <Icon name="chevronL" size={13} />
+        <Kbd combo="mod left" />
       </button>
       <span onClick={onToggleDrawer} title={drawerOpen ? 'Hide history' : 'Show history'}>
         {position}/{turns.length}
       </span>
       <button onClick={() => step(1)} disabled={position >= turns.length} title="Next question">
-        <Icon name="chevronR" size={13} />
+        <Kbd combo="mod right" />
       </button>
     </span>
   )
@@ -44,7 +50,15 @@ export function TurnDrawer({ turns, activeTurnId, onSelect }) {
           data-active={turn.id === activeTurnId}
           onClick={() => onSelect(turn.id)}
         >
-          <Icon name={turn.source === 'manual' ? 'keyboard' : 'mic'} size={12} />
+          {/* REDESIGN 2026-08-29: 'screen' joined 'manual' and 'voice' when the
+              Screenshot button landed, so this is a lookup rather than a pair. */}
+          {/* <Icon name={turn.source === 'manual' ? 'keyboard' : 'mic'} size={12} /> */}
+          <Icon
+            name={turn.source === 'manual' ? 'keyboard'
+                : turn.source === 'screen' ? 'monitor'
+                : 'mic'}
+            size={12}
+          />
           <span>{turn.q}</span>
         </button>
       ))}

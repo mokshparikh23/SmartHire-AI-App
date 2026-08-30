@@ -14,7 +14,11 @@ const STEPS = ['Company & Role', 'Resume', 'Job Description']
 export default function InterviewSetup({ onComplete }) {
   const setInterviewContext = useSettingsStore(s=>s.setInterviewContext)
   const [step,setStep] = useState(0)
-  const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'' })
+  // PIVOT 2026-08-30: resumeConsent added. buildSystemPrompt() drops the résumé
+  // entirely unless this is true, so an unticked box is not a soft warning —
+  // the text never reaches the model.
+  // const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'' })
+  const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'', resumeConsent:false })
   const [resumeFileName,setResumeFileName] = useState('')
   const [parsing,setParsing] = useState(false)
   const [parseSuccess,setParseSuccess] = useState(false)
@@ -45,9 +49,37 @@ export default function InterviewSetup({ onComplete }) {
       if(!form.company.trim()) return setError('Please enter company name.')
       if(!form.role.trim()) return setError('Please enter job role.')
     }
+    // PIVOT 2026-08-30: a résumé with no confirmed consent is a dead weight —
+    // buildSystemPrompt() would silently drop it and the interviewer would spend
+    // the interview wondering why no follow-up ever cites it. Better to stop
+    // here and make the choice explicit: confirm, or clear the text.
+    if(step===1 && form.resume.trim() && !form.resumeConsent){
+      return setError('Confirm the candidate agreed to their résumé being used, or clear it.')
+    }
     setError('')
     if(step<STEPS.length-1) setStep(step+1)
     else{ setInterviewContext(form); onComplete() }
+  }
+
+  /**
+   * PIVOT 2026-08-30: skipping the résumé step discards whatever is in the box
+   * along with any consent given for it, then advances. Leaving the text behind
+   * would send it to the model on the strength of a box ticked before the
+   * interviewer changed their mind.
+   */
+  const skip = () => {
+    if(step===1){
+      setForm(p=>({ ...p, resume:'', resumeConsent:false }))
+      setResumeFileName(''); setParseSuccess(false)
+      setError(''); setStep(2)
+      return
+    }
+    // Step 2 skips the JOB DESCRIPTION, not the résumé — that decision was
+    // already made and consented to on the previous step, so `form` goes through
+    // untouched.
+    setError('')
+    setInterviewContext(form)
+    onComplete()
   }
 
   const inputStyle = {
@@ -71,7 +103,9 @@ export default function InterviewSetup({ onComplete }) {
           display:'flex', alignItems:'center', justifyContent:'center',
           fontSize:14, fontWeight:800, color:'#fff', margin:'0 auto 10px' }}>IA</div>
         <div style={{ fontSize:15, fontWeight:800, color:'#fff', lineHeight:1 }}>Interview Setup</div>
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', marginTop:4 }}>Personalize your AI answers</div>
+        {/* PIVOT 2026-08-30: was "Personalize your AI answers" — this app does
+            not write answers any more. See services/systemPrompt.js. */}
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', marginTop:4 }}>Set up the questions it suggests</div>
       </div>
 
       {/* Steps */}
@@ -127,8 +161,9 @@ export default function InterviewSetup({ onComplete }) {
               {form.company&&form.role&&(
                 <div style={{ background:G.accent, border:`1px solid ${G.border2}`, borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:8 }}>
                   <span style={{ display:'flex', color:G.primary }}><Icon name="check" size={13} strokeWidth={2.4} /></span>
+                  {/* PIVOT 2026-08-30: was "Tailored answers for …". */}
                   <span style={{ fontSize:11, color:G.text2 }}>
-                    Tailored answers for <strong>{form.role}</strong> at <strong>{form.company}</strong>
+                    Follow-ups tuned for <strong>{form.role}</strong> at <strong>{form.company}</strong>
                   </span>
                 </div>
               )}
@@ -181,16 +216,44 @@ export default function InterviewSetup({ onComplete }) {
                 onFocus={e=>e.target.style.borderColor=G.primary}
                 onBlur={e=>e.target.style.borderColor=G.border2} />
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                {/* PIVOT 2026-08-30: was "Skip for generic answers". */}
                 <span style={{ fontSize:10, color:G.muted2 }}>
-                  {form.resume.length>0?`${form.resume.length} chars`:'Skip for generic answers'}
+                  {form.resume.length>0?`${form.resume.length} chars`:'Skip to work from the conversation alone'}
                 </span>
                 {form.resume.length>0&&(
-                  <button onClick={()=>{ update('resume',''); setResumeFileName(''); setParseSuccess(false) }}
+                  <button onClick={()=>{ update('resume',''); update('resumeConsent',false); setResumeFileName(''); setParseSuccess(false) }}
                     style={{ fontSize:10, fontWeight:600, color:G.muted2, background:'none', border:'none', cursor:'pointer' }}
                     onMouseEnter={e=>e.target.style.color=G.red}
                     onMouseLeave={e=>e.target.style.color=G.muted2}>Clear</button>
                 )}
               </div>
+
+              {/*
+                PIVOT 2026-08-30: the consent gate the site has been advertising
+                since the pivot. Only rendered once there is a résumé to consent
+                to — an empty checkbox above an empty box is noise, and there is
+                nothing to authorise yet.
+              */}
+              {form.resume.trim().length>0&&(
+                <label
+                  style={{ display:'flex', alignItems:'flex-start', gap:9, cursor:'pointer',
+                    background: form.resumeConsent?G.accent:G.bg,
+                    border:`1.5px solid ${form.resumeConsent?G.primary:G.border2}`,
+                    borderRadius:12, padding:'10px 12px', transition:'all 0.15s' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.resumeConsent}
+                    onChange={e=>update('resumeConsent', e.target.checked)}
+                    style={{ marginTop:1, width:14, height:14, accentColor:G.primary, cursor:'pointer', flexShrink:0 }} />
+                  <span style={{ fontSize:10.5, lineHeight:1.5, color:G.text2 }}>
+                    The candidate knows this résumé is being used to shape the
+                    questions I ask them.
+                    <span style={{ display:'block', color:G.muted, marginTop:3 }}>
+                      Without this the résumé is left out of the prompt entirely.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           )}
 
@@ -214,6 +277,11 @@ export default function InterviewSetup({ onComplete }) {
                   ['Company', form.company],
                   ['Role',    form.role],
                   ['Resume',  form.resume ? `${form.resume.length} chars` : null],
+                  // PIVOT 2026-08-30: surfaced here so the last thing seen before
+                  // starting is what the candidate has and has not agreed to.
+                  // The unapproved string is quoted verbatim on the marketing
+                  // site's consent section. Keep the two in step.
+                  ...(form.resume ? [['Consent', form.resumeConsent ? 'Approved' : 'Not approved — unused']] : []),
                   ['JD',      form.jobDescription ? `${form.jobDescription.length} chars` : null],
                 ].map(([label,value])=>(
                   <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -255,7 +323,13 @@ export default function InterviewSetup({ onComplete }) {
 
         {step>=1&&(
           <div style={{ textAlign:'center', marginTop:10 }}>
-            <button onClick={next} style={{ fontSize:11, color:G.muted2, background:'none', border:'none', cursor:'pointer', textDecoration:'underline' }}>
+            {/*
+              PIVOT 2026-08-30: "Skip resume" now actually discards it. It used
+              to call next() straight through, which since the consent gate would
+              mean a skip that refuses to advance while a résumé sits in the box
+              — asking someone to consent to something they just said to skip.
+            */}
+            <button onClick={skip} style={{ fontSize:11, color:G.muted2, background:'none', border:'none', cursor:'pointer', textDecoration:'underline' }}>
               {step===1?'Skip resume →':'Skip and start →'}
             </button>
           </div>

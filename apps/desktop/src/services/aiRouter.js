@@ -50,8 +50,12 @@ export { resetCredentials }
  * @param {string} [model]
  * @returns {Promise<string>}
  */
-export function askAI(transcript, model) {
-  return backendAskAI(transcript, resolveModel(model))
+// SESSION GATE 2026-08-29: sessionId threaded through — the AI routes gate on it.
+// export function askAI(transcript, model) {
+//   return backendAskAI(transcript, resolveModel(model))
+// }
+export function askAI(transcript, model, sessionId) {
+  return backendAskAI(transcript, resolveModel(model), sessionId)
 }
 
 /**
@@ -60,14 +64,20 @@ export function askAI(transcript, model) {
  * @param {() => void} [onDone]
  * @param {string} [model]
  */
-export function askAIStream(transcript, onChunk, onDone, model) {
-  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model))
+// export function askAIStream(transcript, onChunk, onDone, model) {
+//   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model))
+// }
+export function askAIStream(transcript, onChunk, onDone, model, sessionId) {
+  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId)
 }
 
 /**
  * @param {Blob} audioBlob
  * @returns {Promise<string>}
  */
-export function transcribe(audioBlob, fileName) {
-  return backendTranscribe(audioBlob, fileName)
+// export function transcribe(audioBlob, fileName) {
+//   return backendTranscribe(audioBlob, fileName)
+// }
+export function transcribe(audioBlob, fileName, sessionId) {
+  return backendTranscribe(audioBlob, fileName, sessionId)
 }

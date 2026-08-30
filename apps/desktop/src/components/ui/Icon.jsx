@@ -10,6 +10,10 @@ import React from 'react'
  */
 const PATHS = {
   mic:        <><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><path d="M12 18v4" /></>,
+  // SYSTEM-AUDIO 2026-08-30: the capture toggle needs to distinguish "listening
+  // to system output" from "listening to the room", so a speaker reads where a
+  // second mic glyph would not.
+  speaker:    <><path d="M11 4.5 6.5 8.5H3.5v7h3l4.5 4z" /><path d="M15.5 9a4 4 0 0 1 0 6" /><path d="M18.5 6a8 8 0 0 1 0 12" /></>,
   keyboard:   <><rect x="2.5" y="6" width="19" height="12" rx="2" /><path d="M6.5 9.5h.01M10 9.5h.01M13.5 9.5h.01M17 9.5h.01M8 13h8" /></>,
   check:      <path d="m4.5 12.5 5 5 10-11" />,
   close:      <><path d="M6 6l12 12" /><path d="M18 6 6 18" /></>,
@@ -36,6 +40,21 @@ const PATHS = {
   plus:       <><path d="M12 5v14" /><path d="M5 12h14" /></>,
   clock:      <><circle cx="12" cy="12" r="9" /><path d="M12 7v5.2l3.4 2" /></>,
   inbox:      <><path d="M3 13h5l1.5 3h5L16 13h5" /><path d="M5.5 4.5h13l2.5 8.5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" /></>,
+
+  /* REDESIGN 2026-08-29: the new overlay chrome. The reference design marks the
+     question and answer with 💬 and ⭐; these replace them for the reason at the
+     top of this file — emoji render differently on every OS, carry their own
+     colour, and sit off the baseline. */
+  monitor:    <><rect x="2.5" y="4" width="19" height="13" rx="2.5" /><path d="M8.5 21h7" /><path d="M12 17v4" /></>,
+  camera:     <><path d="M4.5 7.5h3l1.5-2.5h6l1.5 2.5h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" /><circle cx="12" cy="13" r="3.4" /></>,
+  chat:       <><path d="M20.5 12.5a7.5 7.5 0 0 1-10.9 6.7L4 20.5l1.4-5.4A7.5 7.5 0 1 1 20.5 12.5z" /></>,
+  move:       <><path d="M12 3v18" /><path d="M3 12h18" /><path d="m9 6 3-3 3 3" /><path d="m9 18 3 3 3-3" /><path d="m6 9-3 3 3 3" /><path d="m18 9 3 3-3 3" /></>,
+  collapse:   <><path d="M4 9h5V4" /><path d="M20 9h-5V4" /><path d="M4 15h5v5" /><path d="M20 15h-5v5" /></>,
+  expand:     <><path d="M9 4H4v5" /><path d="M15 4h5v5" /><path d="M9 20H4v-5" /><path d="M15 20h5v-5" /></>,
+  dots:       <><circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" /></>,
+  thumbUp:    <><path d="M7 10.5v9" /><path d="M11 3.5 9.5 8.2a2 2 0 0 1-.4.8L7 10.5v9h9.6a2.5 2.5 0 0 0 2.4-1.9l1.4-6a2 2 0 0 0-2-2.5H14V5.5a2 2 0 0 0-3-2z" /></>,
+  thumbDown:  <><path d="M7 13.5v-9" /><path d="M11 20.5 9.5 15.8a2 2 0 0 0-.4-.8L7 13.5v-9h9.6a2.5 2.5 0 0 1 2.4 1.9l1.4 6a2 2 0 0 1-2 2.5H14v3a2 2 0 0 1-3 2z" /></>,
+  trash:      <><path d="M4 6.5h16" /><path d="M9.5 6.5V4.5h5v2" /><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5" /></>,
 }
 
 export default function Icon({ name, size = 16, strokeWidth = 1.6, style, ...rest }) {

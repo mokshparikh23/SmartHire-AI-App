@@ -118,6 +118,10 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
 
   const [selectedIdx, setSelectedIdx] = useState(null)
   const [manualInput, setManualInput] = useState('')
+  // SESSION GATE 2026-08-29: starting is a network call now, and it can be
+  // refused (no credits, revoked licence). Both states are surfaced by the bar.
+  const [starting,   setStarting]   = useState(false)
+  const [startError, setStartError] = useState(null)
   const hideWindow = () => window.electronAPI?.toggleOverlay?.()
 
   const answerRef = useRef(null)
@@ -137,16 +141,48 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
       answerRef.current.scrollTop = answerRef.current.scrollHeight
   }, [answer])
 
-  const addManual = () => {
+  // SESSION GATE 2026-08-29: asking anything needs an open metered session, so
+  // a question typed here has to start one first — otherwise /api/ai/chat
+  // answers 402 no_session and nothing appears.
+  // const addManual = () => {
+  //   const t = manualInput.trim(); if (!t) return
+  //   setManualInput('')
+  //   session.askManual(t)      // starting a question moves us into the panel
+  // }
+  const addManual = async () => {
     const t = manualInput.trim(); if (!t) return
     setManualInput('')
-    session.askManual(t)      // starting a question moves us into the panel
+    if (!isRunning) {
+      const started = await session.start()
+      if (!started?.ok) return          // startError already shows the reason
+    }
+    session.askManual(t)        // starting a question moves us into the panel
   }
 
   const deleteQ = () => {}    // the turn log is immutable once a session ends
   const clearAll = () => setSelectedIdx(null)
 
-  const handleStartStop = () => (isRunning ? session.stop() : session.start())
+  // SESSION GATE 2026-08-29: start() opens a metered session over the network
+  // now, so it is async and can fail — out of credits, revoked licence, backend
+  // unreachable. Entering the panel regardless would show a live-looking overlay
+  // whose first question 402s.
+  // const handleStartStop = () => (isRunning ? session.stop() : session.start())
+  const handleStartStop = async () => {
+    if (isRunning) { session.stop(); return }
+
+    setStarting(true)
+    setStartError(null)
+    const result = await session.start()
+    setStarting(false)
+
+    if (!result?.ok) {
+      setStartError(
+        result?.code === 'out_of_credits'
+          ? 'You have run out of credits. Top up to start a session.'
+          : result?.reason || 'Could not start the session.'
+      )
+    }
+  }
 
   const selQ = selectedIdx !== null ? questions[selectedIdx] : null
 
@@ -234,9 +270,10 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
         borderBottom:`1px solid ${G.border}`, background:G.card,
         display:'flex', gap:8, alignItems:'center' }}>
         {/* START / STOP */}
-        <button onClick={handleStartStop} style={{
+        <button onClick={handleStartStop} disabled={starting} style={{
           flex:1, height:38, borderRadius:11, border:'none',
-          cursor:'pointer', color:'#fff', transition:'all .2s',
+          cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1,
+          color:'#fff', transition:'all .2s',
           fontWeight:800, fontSize:12, letterSpacing:'0.03em',
           display:'flex', alignItems:'center', justifyContent:'center', gap:7,
           background: isRunning
@@ -257,11 +294,27 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
               <div style={{ width:0, height:0, flexShrink:0,
                 borderTop:'5px solid transparent', borderBottom:'5px solid transparent',
                 borderLeft:'8px solid #fff', filter:'drop-shadow(0 0 3px rgba(255,255,255,.4))' }} />
-              Start Session
+              {starting ? 'Starting…' : 'Start Session'}
             </>
           )}
         </button>
       </div>
+
+      {/* SESSION GATE 2026-08-29: why a start was refused. Out of credits is the
+          common case and is not an error the user can fix by retrying. */}
+      {startError && (
+        <div style={{ flexShrink:0, padding:'8px 12px', background:'#fef2f2',
+          borderBottom:`1px solid ${G.border}`, display:'flex', gap:7,
+          alignItems:'center', color:G.red, fontSize:11, fontWeight:600 }}>
+          <Icon name="warning" size={13} />
+          <span style={{ flex:1 }}>{startError}</span>
+          <button onClick={() => setStartError(null)} style={{
+            border:'none', background:'none', cursor:'pointer',
+            color:G.red, display:'flex', padding:2 }}>
+            <Icon name="close" size={12} />
+          </button>
+        </div>
+      )}
 
       {/* ── Two panels ── */}
       <div style={{ flex:1, overflow:'hidden', display:'flex' }}>
@@ -379,8 +432,10 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
                 background: isGenerating
                   ? 'linear-gradient(180deg,#059669,#34d399)' : G.border2 }} />
               <div>
+                {/* PIVOT 2026-08-30: was "AI Answer". The panel shows follow-up
+                    questions for the interviewer, not an answer to read out. */}
                 <div style={{ fontSize:10, fontWeight:800, color:G.dark,
-                  textTransform:'uppercase', letterSpacing:'0.07em' }}>AI Answer</div>
+                  textTransform:'uppercase', letterSpacing:'0.07em' }}>Ask next</div>
                 {isGenerating && (
                   <div style={{ fontSize:9, color:G.primary, marginTop:1,
                     display:'flex', alignItems:'center', gap:4 }}>
@@ -453,7 +508,8 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
                 <div style={{ fontSize:9, fontWeight:800, color:G.primary, textTransform:'uppercase',
                   letterSpacing:'0.07em', marginBottom:10,
                   display:'flex', alignItems:'center', gap:6 }}>
-                  <Icon name="bulb" size={13} /> Answer
+                  {/* PIVOT 2026-08-30: was "Answer". */}
+                  <Icon name="bulb" size={13} /> Ask next
                 </div>
                 <div style={{ fontSize:12, color:'#1f2937', lineHeight:1.9,
                   whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
