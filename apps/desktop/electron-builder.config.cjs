@@ -29,10 +29,11 @@ module.exports = {
     is fine and deliberate: the binary is not the product. It is inert without
     a licence key, which is what /api/license/validate actually gates.
   */
+  // owner: 'vaishalparikh' — see lib/releases.js, releases moved with the repo.
   publish: [
     {
       provider: 'github',
-      owner: 'vaishalparikh',
+      owner: 'mokshparikh23',
       repo: 'SmartHire-AI-App'
     }
   ],

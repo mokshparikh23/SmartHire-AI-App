@@ -20,7 +20,18 @@ import { cache } from 'react'
  * pending card for it.
  */
 
-const REPO = 'vaishalparikh/SmartHire-AI-App'
+// const REPO = 'vaishalparikh/SmartHire-AI-App'
+/*
+  MOVED 2026-08-30: releases are cut from mokshparikh23's copy now, because
+  that is the account Vercel has GitHub access to — the old repo never appeared
+  in the import list, so nothing could deploy from it.
+
+  This repo has to stay PUBLIC. Both halves of the download path are
+  unauthenticated: the releases API call below, and the browser_download_url
+  the button redirects to. Making it private returns 404 here (falling back to
+  the pending card) and would put a login wall in front of the binary.
+*/
+const REPO = 'mokshparikh23/SmartHire-AI-App'
 
 /*
   Ten minutes. Long enough that the unauthenticated GitHub limit (60/hour per
