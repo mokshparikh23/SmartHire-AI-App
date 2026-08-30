@@ -39,11 +39,15 @@ export default function AuthLayout({ children }) {
             What using it feels like, according to the people who do.
           </p>
         */}
+        {/* CONCEPT 2026-08-30: the interviewer-side line was "The best follow-up
+            is the one you think of in the room, not in the write-up afterwards."
+            Same shape, the reader's side of it. Still a statement about the
+            product rather than a testimonial, so it still needs no attribution. */}
         <div className="max-w-md">
           <p className="display text-[2.25rem] leading-[1.15] text-paper">
-            The best follow-up is the one
-            <span className="display-italic"> you think of in the room</span>, not
-            in the write-up afterwards.
+            The answer you needed was the one
+            <span className="display-italic"> you thought of in the room</span>, not
+            on the drive home.
           </p>
           <p className="mt-6 text-[14px] text-paper/50">
             That is the whole product.
@@ -55,12 +59,14 @@ export default function AuthLayout({ children }) {
             // PIVOT 2026-08-29: was
             //   ['eye',  'Hidden from screen sharing and recordings'],
             //   ['file', 'Answers grounded in your own résumé'],
-            // Both described the covert candidate-side tool.
-            ['shield', 'Résumé used only once the candidate agrees'],
-            // CORRECTION 2026-08-30: "and the research" removed — there is no
-            // company research feature; the desktop app never calls the route.
-            // ['file', 'Follow-ups grounded in the résumé and the research'],
-            ['file',   'Follow-ups grounded in the résumé and the job description'],
+            // The first of those does not come back — it is a claim about window
+            // compositing, and this app makes none. The second is simply true
+            // again, so it is restored as it stood.
+            // CONCEPT 2026-08-30: the interviewer-side pair it replaces —
+            // ['shield', 'Résumé used only once the candidate agrees'],
+            // ['file',   'Follow-ups grounded in the résumé and the job description'],
+            ['file',   'Answers grounded in your own résumé'],
+            ['shield', 'It never writes in your voice'],
             ['lock',   'No API key to set up or pay for'],
           ].map(([icon, text]) => (
             <li key={text} className="flex items-center gap-3 text-[14px] text-paper/70">

@@ -5,10 +5,36 @@ import Link from 'next/link'
 import { Logo } from '@/components/ui/Icon'
 import { Container, Button } from '@/components/ui'
 
+/*
+  COMPARE 2026-08-30: the hrefs were bare fragments, which only worked because
+  this header had exactly one page under it. From /compare, `#how` resolves to
+  /compare#how — an anchor that does not exist there, so the link silently does
+  nothing. Rooting them at `/` fixes that in both directions: on the landing page
+  the browser still treats `/#how` as a same-document navigation and smooth
+  scrolls, and from anywhere else it navigates home and lands on the section.
+
+  const LINKS = [
+    ['How it works', '#how'],
+    ['Features', '#features'],
+    ['Pricing', '#pricing'],
+  ]
+*/
+/*
+  DESI-MODE 2026-08-30: a fifth link, added rather than swapped for Features.
+
+  The worry was the row wrapping into itself at md, where the bar is 768px and
+  nav has no shrink-0 — so it was measured in a browser at 768/820/1024 rather
+  than estimated: five links come to 419px of nav inside a 768px bar, one row,
+  no page overflow. There is room for a sixth before this needs revisiting.
+
+  ['How it works', '/#how'], ['Features', '/#features'], ['Compare', '/compare'], ['Pricing', '/#pricing'],
+*/
 const LINKS = [
-  ['How it works', '#how'],
-  ['Features', '#features'],
-  ['Pricing', '#pricing'],
+  ['How it works', '/#how'],
+  ['Features', '/#features'],
+  ['Desi Mode', '/#desi'],
+  ['Compare', '/compare'],
+  ['Pricing', '/#pricing'],
 ]
 
 /** Inside this band the bar always shows — there is no screen to reclaim yet. */

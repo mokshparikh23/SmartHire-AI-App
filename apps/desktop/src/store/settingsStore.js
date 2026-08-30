@@ -25,8 +25,53 @@ export const useSettingsStore = create(
       // buildSystemPrompt() in services/systemPrompt.js branches on this. It is
       // an ordinary preference, so unlike resumeConsent it persists — see the
       // partialize note at the bottom of this file.
+      //
+      // ANSWER-STYLE 2026-08-30: setAnswerMode has a call site now. Until today
+      // it had none anywhere in the app — grep it — so answerMode was pinned at
+      // its default for the life of every install and the OTHER prompt in
+      // systemPrompt.js was code that had never run on a user's machine. The
+      // launcher's ⋮ menu exposes it, so the choice is the user's now.
+      //
+      // CONCEPT 2026-08-30 (later): the default stays 'answer'. It was briefly
+      // flipped to 'followups' while this app was the interviewer's, along with
+      // a persisted-state migration to carry the flip onto existing installs.
+      // Both were reverted with the direction: the product answers the question
+      // that was asked, and that is what a fresh install should do. Nothing was
+      // ever released with the flip, so there is no install to migrate — and now
+      // that the ⋮ menu exists, a value someone dislikes is one click away
+      // rather than something the store has to reach in and correct.
       answerMode: 'answer',
       setAnswerMode: (m) => set({ answerMode: m === 'followups' ? 'followups' : 'answer' }),
+
+      // ── Answer style ────────────────────────────────────────────────────────
+      //
+      // ANSWER-STYLE 2026-08-30: the REGISTER the copilot writes in. Orthogonal
+      // to answerMode above — it applies to both, because "plainly" is a thing
+      // you can want a follow-up said in and a thing you can want an answer said
+      // in, and they are not two features.
+      //
+      //   'plain' — the prompt exactly as this app has always sent it
+      //   'desi'  — plain, direct Indian English; short everyday words
+      //
+      // What this is NOT: it is not the candidate-side "answers that sound like
+      // you" this competes with. It changes how the copilot words what the
+      // INTERVIEWER reads. styleBlock() in services/systemPrompt.js is the only
+      // consumer, and its doc comment is where that boundary is written down.
+      //
+      // Deliberately top-level rather than a field inside interviewContext.
+      // That object is facts about the interview — it is cleared wholesale by
+      // clearInterviewContext() and rewritten wholesale by setInterviewContext()
+      // — and this is a preference. Keeping it here also keeps
+      // buildSystemPrompt()'s read to one flat destructure alongside answerMode.
+      //
+      // Seeded per candidate: Launcher copies the picked profile's default in
+      // when the candidate is selected. The ⋮ menu then overrides it. The full
+      // precedence rule is written at the seed effect in pages/Launcher.jsx.
+      answerStyle: 'plain',
+      // Anything unrecognised lands on the shipped default rather than on a
+      // value it happens to sort next to. A profile from a server that predates
+      // the answer_style column arrives as undefined and must land on 'plain'.
+      setAnswerStyle: (s) => set({ answerStyle: s === 'desi' ? 'desi' : 'plain' }),
 
       // ── Interview context ───────────────────────────────────────────────────
       //
@@ -69,6 +114,26 @@ export const useSettingsStore = create(
       name: 'ia-settings',
 
       /*
+        CONCEPT 2026-08-30 (later): there is deliberately no `version` / `migrate`
+        pair here.
+
+        One was written while the default above was briefly 'followups', because
+        flipping a default reaches nobody who has already opened the app —
+        rehydration merges the persisted blob OVER the initial state, so an
+        existing install keeps whatever it stored. Reverting the default removed
+        the reason for it: no build has ever shipped with the flip, so there is
+        no stored value that disagrees with the default.
+
+        If a migration is ever needed here, the thing to know before writing one
+        is that zustand's persist middleware defaults `version` to 0 AND WRITES
+        IT, so existing blobs contain "version":0 and clear the
+        `typeof version === 'number'` guard on the rehydrate path — which is what
+        makes `migrate` fire at all. That is a property of the middleware, not of
+        our config: setting `storage`, `serialize` or `deserialize` here sends an
+        old blob to `merge` instead, and a migration would silently never run.
+      */
+
+      /*
         PIVOT 2026-08-30: consent does not survive a restart.
 
         Everything else here is a preference and SHOULD persist — the model, the
@@ -81,6 +146,14 @@ export const useSettingsStore = create(
         The résumé text itself still persists. That is the safe pairing — on a
         restart the text is present but the flag is false, so buildSystemPrompt()
         omits the résumé until consent is confirmed again for the new candidate.
+
+        ANSWER-STYLE 2026-08-30: answerMode and answerStyle both persist, and
+        that is chosen rather than inherited from the spread below. Neither is a
+        statement about a person, which is the whole test resumeConsent fails.
+        answerStyle is additionally re-seeded from the picked profile whenever a
+        candidate is selected (see pages/Launcher.jsx), so what survives a
+        restart is only the value used in the window between the app opening and
+        a candidate being picked — a window in which no session can start.
       */
       partialize: (s) => ({
         ...s,

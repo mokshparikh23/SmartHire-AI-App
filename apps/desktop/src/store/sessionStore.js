@@ -142,6 +142,39 @@ export const useSessionStore = create((set, get) => ({
 
   appendAnswer: (chunk) => set((s) => ({ currentAnswer: s.currentAnswer + chunk })),
 
+  /* SEGMENTATION 2026-08-30 ─ the turn that used to vanish ────────────────────
+     A question arriving mid-stream superseded the one before it, and the partial
+     answer was lost outright: generate()'s finally block gates everything on
+     `gen === genRef.current`, so setAnswerDone() never ran for the superseded
+     generation, and setQuestion() above had already blanked currentAnswer.
+     Whatever had streamed was gone from the screen and absent from turns[].
+
+     The fix cannot live in that finally — by the time the old generation reaches
+     it the wipe has happened. It has to run at the supersede site, BEFORE
+     setQuestion. Hence a separate action rather than a flag on setQuestion:
+     ordering is the whole point of it.
+
+     activeTurnId is the existing "is the live pair already committed?" signal —
+     setAnswerDone sets it, setQuestion nulls it, selectTurn points it at
+     history. A non-null id here means there is nothing uncommitted to rescue. */
+  commitInterrupted: () => {
+    const { currentQuestion, currentAnswer, source, turns, activeTurnId, error } = get()
+    if (!currentQuestion || activeTurnId !== null) return
+
+    set({
+      turns: [...turns, {
+        id: `${turns.length}-${currentQuestion.slice(0, 24)}`,
+        q: currentQuestion,
+        a: currentAnswer,
+        ts: Date.now(),
+        source,
+        error,
+        feedback: null,
+        interrupted: true,   // the answer was cut short, not finished
+      }],
+    })
+  },
+
   setAnswerDone: () => {
     const { currentQuestion, currentAnswer, source, turns, error } = get()
     if (!currentQuestion) return set({ isThinking: false })

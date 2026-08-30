@@ -19,7 +19,12 @@
   }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    /* MULTILINGUAL 2026-08-30: same Indic fallbacks as --ia-font in glass.css.
+       See the note there for why each face is named. */
+    /* font-family: 'Inter', system-ui, sans-serif; */
+    font-family: 'Inter', 'Kohinoor Devanagari', 'Devanagari Sangam MN',
+                 'Kohinoor Gujarati', 'Gujarati Sangam MN', 'Nirmala UI',
+                 system-ui, sans-serif;
     color: #ffffff;
     overflow: hidden;
     user-select: none;

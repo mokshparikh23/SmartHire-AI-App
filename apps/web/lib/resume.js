@@ -94,6 +94,13 @@ export const BLANK_ROW = {
   resume_file_path: null,
   resume_file_name: null,
   job_description:  '',
+  /* ANSWER-STYLE 2026-08-30: 'plain' and not ''. This column is NOT NULL with a
+     CHECK, so an empty string is not a harmless blank here — it is a write the
+     database rejects with a constraint violation. The default is stated in three
+     places on purpose: the column default in the migration, here, and the
+     normaliser in /api/profiles. Each covers a different way a row can arrive
+     without one, and none is redundant with the others. */
+  answer_style:     'plain',
 }
 
 /**
@@ -111,6 +118,14 @@ export function hydrate(row) {
   const out = { ...BLANK_ROW, ...(row || {}) }
   for (const k of TEXT_COLUMNS) out[k] = typeof out[k] === 'string' ? out[k] : ''
   out.resume_consent = out.resume_consent === true
+  /* ANSWER-STYLE 2026-08-30: deliberately NOT added to TEXT_COLUMNS above. That
+     loop turns a non-string into '', and '' is the one value this column may
+     never hold — a NOT NULL + CHECK write of '' is a guaranteed 23514 on the
+     next save. A row written by a caller that skipped the column, or fetched
+     against a database where the backfill has not run, still has to reach the
+     form as one of the two real values or the picker renders with neither
+     option selected. */
+  out.answer_style   = out.answer_style === 'desi' ? 'desi' : 'plain'
   out.resume_parsed  = normalizeParsed(out.resume_parsed)
   return out
 }
@@ -121,6 +136,12 @@ export function hydrate(row) {
  * resume_file_path is absent on purpose and its absence is load-bearing: the
  * migration removes that column from the browser's update grant, so only the
  * service-role parse route moves it. Sending it here would fail the write.
+ *
+ * ANSWER-STYLE 2026-08-30: answer_style, by contrast, IS sent — it is named in
+ * both of the new migration's column grants because this form is the only thing
+ * that authors it. Note that toRow() is used by the save AND by the insert that
+ * creates a profile, which is why the column had to be in the insert grant as
+ * well as the update grant.
  */
 export function toRow(form) {
   const parsed = isEmptyRecord(form.resume_parsed) ? null : form.resume_parsed
@@ -149,6 +170,10 @@ export function toRow(form) {
     // the flag is meaningless without the text it governs.
     resume_consent:  resume ? form.resume_consent === true : false,
     job_description: form.job_description.trim() || null,
+    // ANSWER-STYLE 2026-08-30: the same two-value narrowing as hydrate(), so
+    // whatever the form state got to, exactly one of the values the CHECK
+    // constraint allows leaves this function.
+    answer_style:    form.answer_style === 'desi' ? 'desi' : 'plain',
   }
 }
 
@@ -242,7 +267,15 @@ export function summarise(rec) {
  * likely — nobody proof-reads an upload — and this function is the single point
  * every résumé now passes through, so it is the right place to close it.
  */
-const CONTROL_TAGS = /\[(?:HEARD|INTERVIEWER|SCREENSHOT)\]/gi
+/* PROMPT-TAGS 2026-08-30: [INTERVIEWER] was renamed to [TYPED] with the move to
+   system audio (see TAG in hooks/useInterviewSession.js) and this list was not
+   updated with it — so the one tag the app actually uses was the one tag a
+   résumé could smuggle through into the system prompt.
+
+   INTERVIEWER stays in the pattern: rows written before the rename still
+   contain it, and this strips text, not schema. */
+// const CONTROL_TAGS = /\[(?:HEARD|INTERVIEWER|SCREENSHOT)\]/gi
+const CONTROL_TAGS = /\[(?:HEARD|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
 
 const clean = (v) => (v || '').replace(CONTROL_TAGS, '').trim()
 

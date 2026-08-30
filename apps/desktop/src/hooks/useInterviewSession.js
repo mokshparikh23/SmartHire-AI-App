@@ -2,8 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { askAIStream } from '../services/aiRouter'
+import { createUtteranceAggregator } from '../utils/utteranceAggregator'
+import { createLogger } from '../utils/logger'
 import { useVoice } from './useVoice'
 import { useLiveVoice } from './useLiveVoice'
+
+const segLog = createLogger('seg')
 
 /**
  * Owns the live interview session: microphone capture, transcription and answer
@@ -74,6 +78,9 @@ export function useInterviewSession() {
   const levelRef = useRef(0)   // live mic RMS, read by the level meter's own rAF
   const bufRef   = useRef('')  // chunks awaiting the next frame
   const rafRef   = useRef(0)
+  // SEGMENTATION 2026-08-30: genRef only ever discarded a superseded stream's
+  // tokens. This actually stops it — see askAIStream's `signal`.
+  const abortRef = useRef(null)
 
   // Stream deltas arrive one microtask apart, so an uncoalesced stream is one
   // React render per delta. Flushing on a frame caps that at ~60/s.
@@ -100,6 +107,35 @@ export function useInterviewSession() {
     store.setError(e?.message || 'The request failed.')
   }, [])
 
+  /* SEGMENTATION 2026-08-30 ─ the voice path finally sends history ────────────
+     Every [HEARD] question used to go up as a single-element messages array, so
+     each answer was stateless. "aur struct se kya farak hai" — a follow-up that
+     is only a follow-up — had no antecedent at all, and the model answered a
+     question about nothing.
+
+     Stitching makes this matter more rather than less: a question assembled
+     across a pause is more likely to be the second half of a thought.
+
+     Bounded on both axes. Three turns is enough for a follow-up to resolve
+     without turning every question into a long prompt, and answers are clipped
+     because the model needs to know what it said, not to re-read all of it.
+
+     Every user turn is tagged, not just the last — the same reasoning sendChat
+     records below: an untagged history drifts the model straight back to
+     treating typed input as something overheard. */
+  const HISTORY_TURNS = 3
+  const HISTORY_ANSWER_CHARS = 800
+
+  const recentHistory = useCallback(() => {
+    const { turns } = useSessionStore.getState()
+    return turns.slice(-HISTORY_TURNS).flatMap((t) => {
+      if (!t.q) return []
+      const pair = [{ role: 'user', content: tagContent(t.q, t.source || 'voice') }]
+      if (t.a) pair.push({ role: 'assistant', content: t.a.slice(0, HISTORY_ANSWER_CHARS) })
+      return pair
+    })
+  }, [])
+
   // REDESIGN 2026-08-29: `content` is passed through rather than always being a
   // string, so the Screenshot button can send OpenAI's multimodal array shape.
   // messagesFor() in aiBackend only prepends the system prompt and never
@@ -111,6 +147,18 @@ export function useInterviewSession() {
     if (!q) return
 
     const gen = ++genRef.current
+
+    /* SEGMENTATION 2026-08-30: rescue the outgoing turn, then actually cancel it.
+
+       Order matters and is the whole reason commitInterrupted is a separate
+       action: setQuestion below blanks currentAnswer, so anything not saved by
+       this line is gone. It no-ops unless a live, uncommitted pair exists. */
+    useSessionStore.getState().commitInterrupted()
+
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     useSessionStore.getState().setQuestion(q, source)
     bufRef.current = ''
 
@@ -124,7 +172,8 @@ export function useInterviewSession() {
         // questions about someone greeting you. The tag is what the prompt reads.
         // [{ role: 'user', content: q }],
         // [{ role: 'user', content: content ?? q }],
-        [{ role: 'user', content: tagContent(content ?? q, source) }],
+        // [{ role: 'user', content: tagContent(content ?? q, source) }],
+        [...recentHistory(), { role: 'user', content: tagContent(content ?? q, source) }],
         (chunk) => {
           if (gen !== genRef.current) return     // a newer question took over
           bufRef.current += chunk
@@ -135,9 +184,14 @@ export function useInterviewSession() {
         useSettingsStore.getState().model,
         // Same reason: the id is not known when this callback is created.
         useSessionStore.getState().sessionId,
+        controller.signal,
       )
     } catch (e) {
       // if (gen === genRef.current) useSessionStore.getState().setError(e.message)
+      // SEGMENTATION 2026-08-30: an abort is a supersede, not a failure. Without
+      // this the act of replacing a question paints a red error over the answer
+      // that replaced it.
+      if (e?.name === 'AbortError') return
       if (gen === genRef.current) reportFailure(e)
     } finally {
       if (gen === genRef.current) {
@@ -146,10 +200,17 @@ export function useInterviewSession() {
         useSessionStore.getState().setAnswerDone()
       }
     }
-  }, [flush, reportFailure])
+  // }, [flush, reportFailure])
+  }, [flush, reportFailure, recentHistory])
 
   // Stable identity: useVoice tears down and re-acquires the mic if this changes.
   const onQuestion = useCallback((text) => generate(text, 'voice'), [generate])
+
+  // SEGMENTATION 2026-08-30: the aggregator is built once and never rebuilt, so
+  // its emit callback reads the CURRENT onQuestion through a ref rather than
+  // closing over the one that existed when it was constructed.
+  const onQuestionRef = useRef(onQuestion)
+  onQuestionRef.current = onQuestion
 
   // REDESIGN 2026-08-29: the toolbar's mic toggle gates capture. micEnabled
   // changes on a click, not per token, so subscribing to it here is cheap —
@@ -174,19 +235,62 @@ export function useInterviewSession() {
   // own rAF, the same way StatusIndicator paints levelRef.
   const partialRef = useRef('')
 
-  const onPartial = useCallback((text) => { partialRef.current = text }, [])
+  /* SEGMENTATION 2026-08-30: the caption is now TWO things joined.
+
+     `heldRef` is what the aggregator is holding across a pause; `text` is the
+     deltas for whatever is being said right now. Writing only the latter — as
+     this did — erases "So what is" from the screen the instant the speaker
+     resumes, which is the exact moment the user most needs to see that their
+     first half was kept. */
+  const heldRef = useRef('')
+  // const onPartial = useCallback((text) => { partialRef.current = text }, [])
+  const onPartial = useCallback((text) => {
+    const held = heldRef.current
+    partialRef.current = held && text ? `${held} ${text}` : (held || text)
+  }, [])
+
+  /* SEGMENTATION 2026-08-30 ─ where the end of a question is decided ───────────
+     Created HERE, not inside either capture hook, for three reasons:
+
+       - it has to survive the live -> segmented handover with its held text
+         intact, and a hook effect is torn down by exactly that switch;
+       - a ref object has stable identity, so passing it through the hooks'
+         dependency arrays cannot re-acquire the capture device;
+       - onQuestion now has exactly one caller instead of two.
+
+     onHoldChange drives the live caption. While a fragment is held, the partial
+     text STAYS on screen — the user watches "So what is" persist across their
+     own pause, which is the clearest possible signal that the app is waiting on
+     purpose rather than having dropped the question. */
+  const aggRef = useRef(null)
+  if (aggRef.current === null) {
+    aggRef.current = createUtteranceAggregator({
+      log: segLog,
+      emit: (u) => { onQuestionRef.current?.(u.text) },
+      onHoldChange: (text) => { heldRef.current = text; partialRef.current = text },
+    })
+  }
 
   const onLiveUnsupported = useCallback(() => {
     // Clear any half-written caption before the other path takes over, or it
     // would sit on screen as a question nobody asked.
-    partialRef.current = ''
+    // SEGMENTATION 2026-08-30: the half-written part is the DELTAS, which die
+    // with the WebRTC session. A held fragment is not half-written — it is a
+    // complete fragment waiting for its continuation, the aggregator survives
+    // the handover holding it, and the segmented path will join to it. So the
+    // caption falls back to what is held rather than to nothing.
+    // partialRef.current = ''
+    partialRef.current = heldRef.current
     setLiveFailed(true)
   }, [])
 
   useLiveVoice({
     enabled: isRunning && micEnabled && !liveFailed,
     source: captureSource,
-    onQuestion,
+    // SEGMENTATION 2026-08-30: onQuestion -> aggRef. The hook reports fragments
+    // and speech edges; the aggregator decides when a question has ended.
+    // onQuestion,
+    aggRef,
     onPartial,
     onUnsupported: onLiveUnsupported,
     levelRef,
@@ -201,7 +305,11 @@ export function useInterviewSession() {
   useVoice({
     enabled: isRunning && micEnabled && liveFailed,
     source: captureSource,
-    onQuestion,
+    // SEGMENTATION 2026-08-30: onQuestion -> aggRef, as above. Both paths feed
+    // the SAME aggregator instance, so a live -> segmented handover mid-question
+    // keeps whatever was already held.
+    // onQuestion,
+    aggRef,
     levelRef,
   })
 
@@ -240,6 +348,10 @@ export function useInterviewSession() {
     // path. Without this, one transient SDP failure would pin the app to the
     // segmented path for the rest of the process's life.
     partialRef.current = ''
+    // SEGMENTATION 2026-08-30: drop anything held from the previous session
+    // WITHOUT emitting it — a half-question from the last interview must not be
+    // the first thing this one answers.
+    aggRef.current?.reset()
     setLiveFailed(false)
 
     useSessionStore.getState().startSession(result)
@@ -267,6 +379,12 @@ export function useInterviewSession() {
    *  round trip back at it. */
   const endLocally = useCallback(() => {
     genRef.current++                    // orphan anything still streaming
+    // SEGMENTATION 2026-08-30: genRef alone only orphaned it. Stop it, and drop
+    // any held fragment rather than firing an answer into a closing panel.
+    abortRef.current?.abort()
+    abortRef.current = null
+    aggRef.current?.reset()
+    partialRef.current = ''
     useSessionStore.getState().stopSession()
     window.electronAPI?.exitSessionMode?.()
   }, [])
@@ -485,15 +603,28 @@ export function useInterviewSession() {
 
   // Unmounting (sign-out, licence revoked) must not leave a stream writing.
   // useEffect(() => () => { genRef.current++ }, [])
-  useEffect(() => () => { genRef.current++; chatGenRef.current++ }, [])
+  // useEffect(() => () => { genRef.current++; chatGenRef.current++ }, [])
+  // SEGMENTATION 2026-08-30: abort and dispose too. The counters stopped the
+  // WRITES; the request itself kept running and being billed for.
+  useEffect(() => () => {
+    genRef.current++
+    chatGenRef.current++
+    abortRef.current?.abort()
+    aggRef.current?.dispose()
+  }, [])
 
   // return { levelRef, start, stop, askManual, regenerate }
   // return { levelRef, start, stop, askManual, regenerate, askAboutScreen, sendChat }
   // LIVE CAPTION 2026-08-30: partialRef joins levelRef as the second ref handed
   // down for imperative painting. `live` is for chrome that wants to say which
   // path is running; nothing depends on it functionally.
+  // SEGMENTATION 2026-08-30: discardHeld lets the Clear button drop a fragment
+  // that is mid-hold. Without it, Clear wiped the painted caption while the
+  // aggregator still held the text and answered it a second later.
+  const discardHeld = useCallback(() => { aggRef.current?.reset() }, [])
+
   return {
-    levelRef, partialRef, live: !liveFailed,
+    levelRef, partialRef, live: !liveFailed, discardHeld,
     start, stop, askManual, regenerate, askAboutScreen, sendChat,
   }
 }

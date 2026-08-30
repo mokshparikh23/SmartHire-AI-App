@@ -28,6 +28,12 @@ export async function OPTIONS() {
  * on the desktop needs both the text and resume_consent to decide whether the
  * RESUME section is assembled at all, and the flag is worthless without the
  * text it governs travelling alongside it.
+ *
+ * ANSWER-STYLE 2026-08-30: answer_style travels with the rest of the context. It
+ * is the candidate's register, not the interviewer's preference, which is why it
+ * is a column on this row and arrives through this list rather than through the
+ * licence snapshot. The desktop is free to override it for the session in front
+ * of it; nothing here writes back.
  */
 export async function POST(request) {
   let body
@@ -52,7 +58,15 @@ export async function POST(request) {
   try {
     const { data, error } = await createAdminClient()
       .from('interview_profiles')
-      .select('id, candidate_name, company, role, resume, resume_consent, job_description, updated_at')
+      // ANSWER-STYLE 2026-08-30: answer_style joins the projection. This route
+      // names its columns rather than using select('*'), which is right — a
+      // licence-authenticated caller should not receive columns nobody decided
+      // to send it — but it means a new column is invisible here by default, and
+      // the failure is silent: the desktop would simply see `undefined`, fall
+      // back to its own default, and keep writing in the old register while the
+      // dashboard insisted the setting had saved.
+      // .select('id, candidate_name, company, role, resume, resume_consent, job_description, updated_at')
+      .select('id, candidate_name, company, role, resume, resume_consent, answer_style, job_description, updated_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
@@ -73,6 +87,15 @@ export async function POST(request) {
       role:            r.role || '',
       resume:          r.resume || '',
       resumeConsent:   r.resume_consent === true,
+      // ANSWER-STYLE 2026-08-30: normalised here rather than passed through. The
+      // CHECK constraint means a row cannot hold a third value, but it can still
+      // arrive as null from a service-role write that predates or skips the
+      // column — and the desktop should never have to decide what an
+      // unrecognised register means with an interview already running. Deciding
+      // it once, on the server, means the desktop only ever receives a value it
+      // has a prompt for. Same shape as the `=== true` on the line above, and
+      // for the same reason: coerce at the boundary, not at every reader.
+      answerStyle:     r.answer_style === 'desi' ? 'desi' : 'plain',
       jobDescription:  r.job_description || '',
       updatedAt:       r.updated_at,
     })),

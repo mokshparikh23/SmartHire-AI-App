@@ -137,6 +137,9 @@ export const DEFAULT_MODEL    = 'gpt-4o'
    response_format 'json' and a `language` hint, both of which this model
    supports. It does NOT support 'verbose_json' or the srt/vtt formats — if a
    caller is ever added that needs word timings, it needs whisper-1, not this. */
+/* MULTILINGUAL 2026-08-30: the `language` half of that sentence is no longer
+   true — the route sends `prompt` and NO language, deliberately. See
+   TRANSCRIBE_PROMPT below and the note at the call site. The rest stands. */
 // export const TRANSCRIBE_MODEL = 'whisper-1'
 export const TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe'
 /* LIVE CAPTION 2026-08-30: the model for the WebRTC realtime path, and it is
@@ -162,6 +165,24 @@ export const REALTIME_TRANSCRIBE_MODEL = 'gpt-live-transcribe'
 // Gemini's own speech-to-text model. Only reached through the native surface;
 // the OpenAI compatibility layer does not expose transcription at all.
 export const GEMINI_TRANSCRIBE_MODEL = 'gemini-3.5-transcribe'
+
+/* MULTILINGUAL 2026-08-30 ─────────────────────────────────────────────────────
+   A vocabulary hint for the two OpenAI transcription paths — /audio/transcriptions
+   in /api/ai/transcribe and, if the model accepts it, the realtime session in
+   /api/ai/realtime.
+
+   It is NOT a language setting and must never become one. `language` ASSERTS
+   what the audio is; `prompt` only biases what words are expected, which is the
+   half that helps a code-switched sentence ("C# me multiple inheritance ke baare
+   me batao") without making the other four languages unreadable.
+
+   DELIBERATELY ONE SHORT LINE. Whisper-family models transcribe the prompt back
+   at you when the audio is near-silent — the same failure mode as the phantom
+   "thank you" the desktop's filler list already suppresses — and the longer this
+   string is, the more of it comes back as a question nobody asked. Anything
+   added here costs that. */
+export const TRANSCRIBE_PROMPT =
+  'A technical job interview. English, Hindi, Gujarati or a mix, with English technical terms.'
 /* THINKING 2026-08-30: raised from 1024, and it is not headroom for a longer
    answer — the reply is still capped at ~60 words by the prompt.
 

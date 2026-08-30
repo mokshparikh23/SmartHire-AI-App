@@ -40,6 +40,9 @@ export default function SessionPanel({ session }) {
   const micEnabled   = useSessionStore((s) => s.micEnabled)
 
   const overlayOpacity = useSettingsStore((s) => s.overlayOpacity)
+  // ANSWER-STYLE 2026-08-30: the card holds follow-ups rather than an answer in
+  // the default mode, and the Clear title has to say which.
+  const followups      = useSettingsStore((s) => s.answerMode === 'followups')
   // The stage carries --ia-alpha now, so all three bars inherit one value.
   usePanelOpacity(stageRef, overlayOpacity)
 
@@ -135,6 +138,11 @@ export default function SessionPanel({ session }) {
               // LIVE CAPTION 2026-08-30: the live caption lives in a ref, so
               // clearTranscript() alone would wipe the committed question and
               // leave a half-spoken sentence painted over the top of it.
+              // SEGMENTATION 2026-08-30: and the ref is no longer the whole
+              // story — a held fragment would repaint itself a frame later and,
+              // worse, still be answered once its hold expired. Clearing the
+              // transcript has to drop what is held, not just what is drawn.
+              session.discardHeld?.()
               if (session.partialRef) session.partialRef.current = ''
               useSessionStore.getState().clearTranscript()
             }}
@@ -154,7 +162,12 @@ export default function SessionPanel({ session }) {
               // ⌘⇧⌫ is the transcript bar's, which stays visible in chat mode,
               // so reusing it here would give one chord two meanings on screen.
               clearCombo="mod del"
-              clearTitle={chatMode ? 'Clear the chat' : 'Clear the answer'}
+              // ANSWER-STYLE 2026-08-30: a third arm. Outside chat the card holds
+              // follow-ups by default now, not an answer.
+              // clearTitle={chatMode ? 'Clear the chat' : 'Clear the answer'}
+              clearTitle={chatMode
+                ? 'Clear the chat'
+                : followups ? 'Clear the suggestion' : 'Clear the answer'}
               onExpand={() => setDrawerOpen((v) => !v)}
             >
               {!chatMode && (

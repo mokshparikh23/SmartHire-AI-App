@@ -254,9 +254,15 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
               checked={value.resume_consent}
               onChange={(e) => { set('resume_consent', e.target.checked); setConsentReset(false) }}
             />
+            {/* CONCEPT 2026-08-30: this read "The candidate has agreed to their
+                résumé being used by the copilot during this interview." — the
+                interviewer confirming permission for someone else's document.
+                The résumé is the reader's own now, so the tick is a switch over
+                their own file. The GATE is unchanged: `resume_consent` still
+                decides whether buildSystemPrompt() includes the RÉSUMÉ block at
+                all, and unticked still means the text never reaches the model. */}
             <span className="text-[13px] leading-relaxed text-ink">
-              The candidate has agreed to their résumé being used by the copilot
-              during this interview.
+              Use my résumé in this interview.
               <span className="mt-1 block text-muted">
                 {/* RESUME-UPLOAD 2026-08-30: the old copy said only that the
                     résumé is "stored but never sent to the model". With the
@@ -264,7 +270,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
                     truth, and unticking is no longer a way to get rid of it —
                     so this has to say where the file lives and where delete is. */}
                 Leave this unticked and neither the details nor the file are sent to
-                the model — follow-ups will come only from what is said in the room.
+                the model — answers will come only from what is said in the room.
                 {hasFile && ' The original PDF stays on your account either way; use Remove above to delete it.'}
               </span>
             </span>
@@ -273,7 +279,8 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
           {consentReset && (
             <p className="mt-2 flex items-start gap-2 text-[12px] text-muted">
               <Icon name="warning" size={13} className="mt-0.5 shrink-0 text-warning" />
-              Consent was cleared because the résumé changed. Confirm again for the new file.
+              {/* was "Consent was cleared because the résumé changed." */}
+              The tick was cleared because the résumé changed. Confirm again for the new file.
             </p>
           )}
         </>

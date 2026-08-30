@@ -1,17 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+// DESI-MODE 2026-08-30: useCallback, useEffect, useLayoutEffect and useRef were
+// all used only by the private Tabs below, which has moved to
+// components/ui/PillTabs.jsx. useState is the only one left.
+// import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import PillTabs from '@/components/ui/PillTabs'
 import { Badge, Button } from '@/components/ui'
 
-/**
- * useLayoutEffect warns when it runs during server rendering, and this is a
- * client component that Next still renders on the server for the first paint.
- * Falling back to useEffect there keeps the console clean; the effect itself is
- * a DOM measurement, so there is nothing for it to do on the server anyway.
- */
-const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+/*
+  DESI-MODE 2026-08-30: useIsoLayoutEffect moved to components/ui/PillTabs.jsx
+  along with the Tabs component that was its only user. Unchanged there.
+
+  const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+*/
 
 /**
  * The two things Smart Hire AI sells.
@@ -73,7 +77,22 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
 
   return (
     <div>
-      <Tabs mode={mode} onChange={setMode} />
+      {/* DESI-MODE 2026-08-30: the private Tabs became components/ui/PillTabs.
+          The rendered DOM is identical — this wrapper is the `flex justify-center`
+          div that used to live inside Tabs, and PillTabs' root carries the same
+          class string its inner div did. The one behavioural change is that the
+          tabs now respond to arrow keys, which role="tablist" was already
+          promising a screen reader user.
+          <Tabs mode={mode} onChange={setMode} /> */}
+      <div className="flex justify-center">
+        <PillTabs
+          items={[['sub', 'Subscription'], ['credits', 'Credits']]}
+          value={mode}
+          onChange={setMode}
+          label="Billing type"
+          idBase="billing"
+        />
+      </div>
 
       <div className="mt-10 overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_1px_2px_rgba(0,0,0,0.04),0_24px_60px_-30px_rgba(0,0,0,0.16)]">
         {mode === 'sub' ? (
@@ -85,8 +104,13 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
             meter={savingMeter(tiers, tier)}
             features={[
               ['check', 'Unlimited interview time'],
-              ['check', 'Follow-ups on every answer'],
-              ['check', 'Consent gate on every CV'],
+              /* CONCEPT 2026-08-30: the two middle lines described the
+                 interviewer-side build — follow-ups after an answer, and the
+                 consent tick on someone else's CV.
+                 ['check', 'Follow-ups on every answer'],
+                 ['check', 'Consent gate on every CV'], */
+              ['check', 'An answer to every question'],
+              ['check', 'Your CV and the JD as context'],
               ['check', 'Top models'],
             ]}
           >
@@ -187,67 +211,72 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
 
 /* ──────────────────────────────────────────────────────────────── tabs */
 
-/**
- * The sliding indicator is positioned from the active tab's measured offset
- * rather than a percentage, so it stays correct when the two labels are
- * different widths — which they are, and which a 50% split would get wrong.
- */
-function Tabs({ mode, onChange }) {
-  const wrapRef = useRef(null)
-  const [glide, setGlide] = useState({ left: 0, width: 0 })
+/*
+  DESI-MODE 2026-08-30: moved to components/ui/PillTabs.jsx, generalised over an
+  items array and given arrow-key navigation. Kept here per the convention in
+  this repo; the call site above is the wrapper it used to render itself.
 
-  const measure = useCallback(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    const active = wrap.querySelector('[data-active="true"]')
-    if (!active) return
-    setGlide({ left: active.offsetLeft, width: active.offsetWidth })
-  }, [])
+  The sliding indicator is positioned from the active tab's measured offset
+  rather than a percentage, so it stays correct when the two labels are
+  different widths — which they are, and which a 50% split would get wrong.
 
-  // Layout effect so the indicator is in place on the first paint rather than
-  // sliding in from zero on mount.
-  useIsoLayoutEffect(measure, [measure, mode])
+  function Tabs({ mode, onChange }) {
+    const wrapRef = useRef(null)
+    const [glide, setGlide] = useState({ left: 0, width: 0 })
 
-  useEffect(() => {
-    window.addEventListener('resize', measure)
-    // Webfonts land after hydration and change the label widths under the
-    // indicator, so re-measure once they are ready.
-    document.fonts?.ready.then(measure).catch(() => {})
-    return () => window.removeEventListener('resize', measure)
-  }, [measure])
+    const measure = useCallback(() => {
+      const wrap = wrapRef.current
+      if (!wrap) return
+      const active = wrap.querySelector('[data-active="true"]')
+      if (!active) return
+      setGlide({ left: active.offsetLeft, width: active.offsetWidth })
+    }, [])
 
-  return (
-    <div className="flex justify-center">
-      <div
-        ref={wrapRef}
-        role="tablist"
-        aria-label="Billing type"
-        className="relative inline-flex gap-0.5 rounded-full border border-line bg-paper p-1.5"
-      >
-        <span
-          aria-hidden="true"
-          className="absolute bottom-1.5 top-1.5 rounded-full bg-ink transition-all duration-[450ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
-          style={{ left: glide.left, width: glide.width }}
-        />
-        {[['sub', 'Subscription'], ['credits', 'Credits']].map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            type="button"
-            data-active={mode === key}
-            aria-selected={mode === key}
-            onClick={() => onChange(key)}
-            className={`relative z-10 rounded-full px-7 py-2.5 text-[14px] font-medium transition-colors duration-300 ${
-              mode === key ? 'text-paper' : 'text-muted hover:text-ink'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+    // Layout effect so the indicator is in place on the first paint rather than
+    // sliding in from zero on mount.
+    useIsoLayoutEffect(measure, [measure, mode])
+
+    useEffect(() => {
+      window.addEventListener('resize', measure)
+      // Webfonts land after hydration and change the label widths under the
+      // indicator, so re-measure once they are ready.
+      document.fonts?.ready.then(measure).catch(() => {})
+      return () => window.removeEventListener('resize', measure)
+    }, [measure])
+
+    return (
+      <div className="flex justify-center">
+        <div
+          ref={wrapRef}
+          role="tablist"
+          aria-label="Billing type"
+          className="relative inline-flex gap-0.5 rounded-full border border-line bg-paper p-1.5"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute bottom-1.5 top-1.5 rounded-full bg-ink transition-all duration-[450ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
+            style={{ left: glide.left, width: glide.width }}
+          />
+          {[['sub', 'Subscription'], ['credits', 'Credits']].map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              type="button"
+              data-active={mode === key}
+              aria-selected={mode === key}
+              onClick={() => onChange(key)}
+              className={`relative z-10 rounded-full px-7 py-2.5 text-[14px] font-medium transition-colors duration-300 ${
+                mode === key ? 'text-paper' : 'text-muted hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
+*/
 
 /* ─────────────────────────────────────────────────────────────── panel */
 

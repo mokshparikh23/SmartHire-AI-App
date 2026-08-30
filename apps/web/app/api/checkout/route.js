@@ -3,6 +3,10 @@ import { headers } from 'next/headers'
 import { createClient, createAdminClient } from '@/lib/supabase-server'
 import { getStripe, siteUrl } from '@/lib/stripe'
 import {
+  createPaymentLink, createSubscription, planIdFor, assertPlanMatchesPricing,
+} from '@/lib/razorpay'
+import { gatewayFor } from '@/lib/gateway'
+import {
   PACK_BY_ID, SUBSCRIPTION_TIERS, resolveCurrency, priceOf, PRICE_TABLE,
 } from '@/lib/pricing'
 import { MINUTES_PER_CREDIT } from '@/lib/credits'
@@ -27,8 +31,19 @@ const INTERVAL = {
  * geo headers. If either could be named by the client, anyone would post
  * `currency: 'INR'` or `amount: 100` and pay whatever they liked.
  *
- * The order row is written BEFORE redirecting to Stripe, in `pending`, so the
- * webhook has something to find and cannot credit an account twice.
+ * The order row is written BEFORE redirecting to the gateway, in `pending`, so
+ * the webhook has something to find and cannot credit an account twice.
+ *
+ * RAZORPAY 2026-08-30: two gateways now, chosen by the currency this route
+ * already resolved — INR to Razorpay for UPI and net banking, everything else to
+ * Stripe. See lib/gateway.js for why that is derived from the currency rather
+ * than sent by the client.
+ *
+ * WHAT DELIBERATELY DID NOT CHANGE: the response is still `{ url }`, and the
+ * order row is still written pending before the customer leaves. Both Razorpay
+ * paths return a hosted page — a Payment Link for a credit pack, a subscription
+ * authorisation page for a tier — so PricingPlans.jsx did not need a single
+ * edit, and neither gateway can be told an amount by the browser.
  */
 export async function POST(request) {
   try {
@@ -49,8 +64,14 @@ export async function POST(request) {
       return NextResponse.json({ error: 'That pack has no price set' }, { status: 400 })
     }
 
-    const stripe = getStripe()
+    // const stripe = getStripe()
+    //
+    // RAZORPAY 2026-08-30: constructing the Stripe client unconditionally would
+    // throw on a deployment that has only Razorpay keys, before the branch that
+    // does not need it is even reached. Each gateway now builds its own client
+    // inside its own branch.
     const base = siteUrl(request)
+    const gateway = gatewayFor(currency)
     const subscriptionKind = SUB_KIND_BY_ID[packId] ?? null
     const isSubscription = !!subscriptionKind
 
@@ -79,6 +100,7 @@ export async function POST(request) {
         subscription_kind: subscriptionKind,
         amount_minor:      amountMinor,
         currency,
+        gateway,
         status:            'pending',
       })
       .select()
@@ -86,6 +108,78 @@ export async function POST(request) {
 
     if (orderError) throw orderError
 
+    const successUrl = `${base}/dashboard/billing?checkout=success`
+    const cancelUrl  = `${base}/dashboard/billing?checkout=cancelled`
+
+    /*
+      ───────────────────────────────────────────────────── Razorpay (INR)
+
+      Both paths return a hosted page to redirect to, so the contract with the
+      caller is identical to Stripe's.
+
+      `notes` is Razorpay's metadata, and it comes back on every webhook event
+      for the object. orderId is what the handler joins on, exactly as Stripe's
+      `metadata.orderId` is.
+    */
+    if (gateway === 'razorpay') {
+      const notes = {
+        orderId: order.id,
+        userId:  user.id,
+        packId,
+        // Stripe's metadata carries this so a support question can be answered
+        // from the dashboard alone, without a database round trip.
+        minutes: String(totalCredits * MINUTES_PER_CREDIT),
+        subscriptionKind: subscriptionKind || '',
+      }
+
+      if (isSubscription) {
+        const planId = planIdFor(subscriptionKind)
+
+        // Fails closed if the Razorpay dashboard and lib/pricing.js disagree
+        // about what this tier costs. A plan is the one place in this codebase
+        // where a price lives outside lib/pricing.js, so it is checked rather
+        // than trusted — see the long note on this function.
+        await assertPlanMatchesPricing(planId, { kind: subscriptionKind, currency })
+
+        const subscription = await createSubscription({
+          planId,
+          kind:  subscriptionKind,
+          email: user.email || undefined,
+          notes,
+        })
+
+        await admin
+          .from('credit_orders')
+          .update({ razorpay_subscription_id: subscription.id })
+          .eq('id', order.id)
+
+        return NextResponse.json({ url: subscription.short_url })
+      }
+
+      const link = await createPaymentLink({
+        amountMinor,
+        currency,
+        description: `${productName} — ${description}`,
+        email:       user.email || undefined,
+        notes,
+        // Where the customer comes BACK to. Not evidence of payment: credits are
+        // granted by the webhook and nowhere else. There is no cancel URL to
+        // give Razorpay — a customer who abandons a payment link simply closes
+        // it, and the order row stays pending, which is the same visible
+        // evidence an abandoned Stripe checkout leaves.
+        callbackUrl: successUrl,
+      })
+
+      await admin
+        .from('credit_orders')
+        .update({ razorpay_payment_link_id: link.id })
+        .eq('id', order.id)
+
+      return NextResponse.json({ url: link.short_url })
+    }
+
+    /* ─────────────────────────────────────────────── Stripe (everything else) */
+    const stripe = getStripe()
     const session = await stripe.checkout.sessions.create({
       mode: isSubscription ? 'subscription' : 'payment',
       // Lets Stripe reuse an existing customer for this email, which keeps a
@@ -101,8 +195,8 @@ export async function POST(request) {
         },
       }],
       // /dashboard/credits does not exist — a paying customer landed on a 404.
-      success_url: `${base}/dashboard/billing?checkout=success`,
-      cancel_url:  `${base}/dashboard/billing?checkout=cancelled`,
+      success_url: successUrl,
+      cancel_url:  cancelUrl,
       // The webhook reads these back. orderId is the join key; the rest is
       // there so a subscription event that arrives without a checkout session
       // can still be attributed.

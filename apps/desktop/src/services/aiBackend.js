@@ -91,30 +91,43 @@ function messagesFor(transcript) {
   return [{ role: 'system', content: buildSystemPrompt() }, ...transcript]
 }
 
-async function pumpStream(response, onChunk) {
+// async function pumpStream(response, onChunk) {
+async function pumpStream(response, onChunk, signal) {
   const reader  = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      // SEGMENTATION 2026-08-30: an aborted fetch rejects reader.read() on its
+      // own, but not always before the next chunk is delivered. Checking here as
+      // well means a superseded answer stops writing on the very next loop.
+      if (signal?.aborted) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop()
+      const { done, value } = await reader.read()
+      if (done) break
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const json = line.slice(6).trim()
-      if (json === '[DONE]') continue
-      try {
-        const chunk = JSON.parse(json).choices?.[0]?.delta?.content
-        if (chunk) onChunk(chunk)
-      } catch {
-        // ignore malformed SSE lines
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const json = line.slice(6).trim()
+        if (json === '[DONE]') continue
+        try {
+          const chunk = JSON.parse(json).choices?.[0]?.delta?.content
+          if (chunk) onChunk(chunk)
+        } catch {
+          // ignore malformed SSE lines
+        }
       }
     }
+  } finally {
+    // Close the socket rather than leaving it to GC. Without this the response
+    // body stays open after an abort and the connection is held for the length
+    // of the upstream generation.
+    try { await reader.cancel() } catch { /* already closed */ }
   }
 }
 
@@ -123,14 +136,31 @@ async function pumpStream(response, onChunk) {
  */
 // SESSION GATE 2026-08-29: sessionId added — the route rejects a body without
 // one, so this signature is not optional despite the parameter reading like it.
+/* SEGMENTATION 2026-08-30: `signal` added, as a trailing optional parameter so
+   no existing caller has to change.
+
+   There was no cancellation at all before this. A superseded answer streamed to
+   completion and was billed for in full; the genRef guard in generate() only
+   discarded its tokens on the way in. With the aggregator now able to supersede
+   more often — a held fragment that turns out to be one question, not two —
+   paying for an answer nobody will ever see is no longer a rare case.
+
+   HONEST LIMIT: this reliably stops OUR consumption and closes OUR connection.
+   Whether OpenAI stops generating is unverified — /api/ai/chat passes
+   upstream.body straight through, but fetchWithRetry in apps/web/lib/ai.js
+   overwrites init.signal with its own timeout controller, so request.signal
+   cannot currently be threaded to the provider. That is a server change and is
+   deliberately not in this commit. */
 // export async function askAIStream(transcript, onChunk, onDone, model) {
-export async function askAIStream(transcript, onChunk, onDone, model, sessionId) {
+// export async function askAIStream(transcript, onChunk, onDone, model, sessionId) {
+export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
   const { webUrl, licenseKey } = await requireCredentials()
   if (!transcript?.length) throw new Error('Transcript is empty')
 
   const response = await fetch(`${webUrl}/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal,
     // body: JSON.stringify({ licenseKey, model, messages: messagesFor(transcript) }),
     body: JSON.stringify({ licenseKey, sessionId, model, messages: messagesFor(transcript) }),
   })
@@ -148,7 +178,8 @@ export async function askAIStream(transcript, onChunk, onDone, model, sessionId)
   }
 
   try {
-    await pumpStream(response, onChunk)
+    // await pumpStream(response, onChunk)
+    await pumpStream(response, onChunk, signal)
   } finally {
     if (onDone) onDone()
   }

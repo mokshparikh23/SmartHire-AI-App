@@ -1,10 +1,12 @@
 /**
- * Two rows of sample follow-ups scrolling in opposite directions.
+ * Two rows of sample interview questions scrolling in opposite directions.
  *
- * REDESIGN 2026-08-30: ported from the reference design's ticker. The content is
- * the interviewer's side of it — the follow-ups the copilot suggests and the
- * hedges it picks up on — rather than the reference's list of questions a
- * candidate might be asked.
+ * REDESIGN 2026-08-30: ported from the reference design's ticker.
+ *
+ * CONCEPT 2026-08-30 (later): the rows carried the interviewer's follow-ups.
+ * They carry the QUESTIONS now — the ones that arrive in the left pane of the
+ * hero frame — because the band sits directly under that frame and the two have
+ * to be reading the same conversation. The eyebrow says what the band is for.
  *
  * A server component: there is no state and no effect here. The loop is pure CSS
  * (see `.ticker-row` in globals.css), which also means the global
@@ -16,19 +18,37 @@
  * — that is what makes the loop seamless rather than jumping.
  */
 
+/*
+  The interviewer-side rows, kept per the convention in this repo.
+
+  const LINES = [
+    '“Improved a lot” — ask for the number, before and after.',
+    'They said “we”. Ask which part was theirs.',
+    '“It went smoothly” across a billing migration. Ask what broke.',
+    'Four months on that team [resume] — ask what they owned.',
+    'The JD asks for on-call. They have not mentioned it once.',
+    'They described the fix. Ask how they found the cause.',
+    '“Best practice” — ask which one, and where it failed them.',
+    'Ask who disagreed with the decision, and what they said.',
+    'No numbers yet in eight minutes. Ask for one.',
+    '“We deprecated it” — ask what replaced it and who migrated.',
+    'They skipped the outcome. Ask what happened after launch.',
+    'Ask what they would do differently with the same brief.',
+  ]
+*/
 const LINES = [
-  '“Improved a lot” — ask for the number, before and after.',
-  'They said “we”. Ask which part was theirs.',
-  '“It went smoothly” across a billing migration. Ask what broke.',
-  'Four months on that team [resume] — ask what they owned.',
-  'The JD asks for on-call. They have not mentioned it once.',
-  'They described the fix. Ask how they found the cause.',
-  '“Best practice” — ask which one, and where it failed them.',
-  'Ask who disagreed with the decision, and what they said.',
-  'No numbers yet in eight minutes. Ask for one.',
-  '“We deprecated it” — ask what replaced it and who migrated.',
-  'They skipped the outcome. Ask what happened after launch.',
-  'Ask what they would do differently with the same brief.',
+  '“Tell me about yourself.”',
+  '“Why are you leaving your current role?”',
+  '“Walk me through a system you designed end to end.”',
+  '“How would you keep this API idempotent under retries?”',
+  '“Tell me about a time you disagreed with your manager.”',
+  '“What is the hardest bug you have debugged?”',
+  '“Why this company, and why now?”',
+  '“How do you decide what to cut when the date will not move?”',
+  '“What would your last team say you are worst at?”',
+  '“Explain indexing to someone who has never written SQL.”',
+  '“Where do you want to be in three years?”',
+  '“What questions do you have for me?”',
 ]
 
 function Row({ items, reverse = false }) {
@@ -51,8 +71,9 @@ function Row({ items, reverse = false }) {
 export default function Ticker() {
   return (
     <div className="border-y border-line-soft py-16 sm:py-20">
+      {/* <p …>The kind of thing it catches</p> */}
       <p className="mono text-center text-[13px] uppercase tracking-[0.2em] text-faint">
-        The kind of thing it catches
+        The kind of thing it answers
       </p>
 
       {/*

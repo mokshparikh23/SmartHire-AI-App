@@ -17,16 +17,35 @@ export function SiteFooter() {
               <span className="text-[14px] font-semibold tracking-tight text-ink">Smart Hire AI</span>
             </div>
             {/* PIVOT 2026-08-29: was "Real-time answers during live interviews,
-                drawn from your own résumé." — the candidate-side pitch. */}
+                drawn from your own résumé." — the candidate-side pitch.
+                CONCEPT 2026-08-30: which is the pitch again, so it is restored
+                verbatim. The interviewer-side line it replaced: "A copilot for
+                the person running the interview, used with the candidate's
+                knowledge." */}
             <p className="mt-3 text-[13px] leading-relaxed text-muted">
-              A copilot for the person running the interview, used with the candidate’s
-              knowledge.
+              Real-time answers during live interviews, drawn from your own résumé.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-x-14 gap-y-8 sm:grid-cols-3">
-            {[
+            {/*
+              COMPARE 2026-08-30: the Product fragments were bare — `#how` rather
+              than `/#how`. The footer renders on every page, so from /compare
+              each of those pointed at an anchor that does not exist on that page
+              and did nothing at all. See the same note in SiteNav.jsx.
+
               ['Product', [['How it works', '#how'], ['Consent', '#consent'], ['Features', '#features'], ['Limits', '#limits'], ['Pricing', '#pricing']]],
+            */}
+            {[
+              /* DESI-MODE 2026-08-30: '/#desi' added after Features, rooted like
+                 its neighbours per the COMPARE note above. The footer is where
+                 the full section list lives; the header carries a subset.
+                 ['Product', [['How it works', '/#how'], ['Consent', '/#consent'], ['Features', '/#features'], ['Compare', '/compare'], ['Limits', '/#limits'], ['Pricing', '/#pricing']]], */
+              /* CONCEPT 2026-08-30: '/#consent' → '/#grounded'. The section it
+                 pointed at is now Grounding — same slot, different argument, new
+                 id — and a stale fragment here would scroll nowhere.
+                 ['Product', [['How it works', '/#how'], ['Consent', '/#consent'], …]], */
+              ['Product', [['How it works', '/#how'], ['Grounding', '/#grounded'], ['Features', '/#features'], ['Desi Mode', '/#desi'], ['Compare', '/compare'], ['Limits', '/#limits'], ['Pricing', '/#pricing']]],
               ['Account', [['Log in', '/login'], ['Create account', '/signup'], ['Dashboard', '/dashboard']]],
               ['Legal',   [['Privacy', '#'], ['Terms', '#']]],
             ].map(([heading, links]) => (

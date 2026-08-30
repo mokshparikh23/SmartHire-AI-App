@@ -65,6 +65,17 @@ const PATHS = {
   // The placeholder in a company slot with no logo. A generic building, not an
   // office tower: the users here are staffing firms and startups alike.
   building: <><path d="M3 21h18" /><path d="M5 21V5.5A1.5 1.5 0 0 1 6.5 4h7A1.5 1.5 0 0 1 15 5.5V21" /><path d="M15 10h3.5A1.5 1.5 0 0 1 20 11.5V21" /><path d="M8 8h4M8 12h4M8 16h4" /></>,
+
+  /* DESI-MODE 2026-08-30: the mark for the register section. No bubble existed,
+     and nothing already in this set reads as "how something is said" — `globe`
+     says international, `file` says document, and `mic` already means "hears the
+     room" on the landing page.
+
+     Body is a 3px-radius rectangle from (3,3) to (21,18); the tail is the
+     triangle (10,18)–(6,21)–(6,18), which keeps the whole glyph inside a 3px
+     margin top and bottom. Stroke only, so it is deliberately absent from the
+     `filled` list below. */
+  speech:   <path d="M6 3h12a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H10l-4 3v-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />,
 }
 
 export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '', ...rest }) {

@@ -17,7 +17,19 @@
   /* Driven from settingsStore.overlayOpacity by usePanelOpacity(). */
   --ia-alpha: 0.86;
   --ia-radius: 16px;
-  --ia-font: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* MULTILINGUAL 2026-08-30: Inter has no Devanagari or Gujarati coverage, so a
+     Hindi or Gujarati question fell through to whatever the OS happened to pick
+     — different metrics on every machine, and on a Windows install without
+     Nirmala UI, tofu. Naming the faces makes it deterministic.
+
+     Nothing that renders today changes: a fallback face is only consulted for
+     codepoints the face before it does not have, and Inter still wins for Latin.
+     macOS ships the Kohinoor and Sangam faces; Windows 8+ ships Nirmala UI,
+     which covers both scripts. */
+  /* --ia-font: Inter, -apple-system, BlinkMacSystemFont, sans-serif; */
+  --ia-font: Inter, 'Kohinoor Devanagari', 'Devanagari Sangam MN',
+             'Kohinoor Gujarati', 'Gujarati Sangam MN', 'Nirmala UI',
+             -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .ia-glass {

@@ -1,5 +1,6 @@
 import {
   OPENAI_BASE, GEMINI_NATIVE_BASE, CORS, TRANSCRIBE_MODEL, GEMINI_TRANSCRIBE_MODEL,
+  TRANSCRIBE_PROMPT,
   requireProvider, requireSession, recordUsage, jsonError, upstreamError,
   fetchWithRetry, friendlyUpstreamMessage,
 } from '@/lib/ai'
@@ -89,7 +90,27 @@ async function transcribeWithWhisper(file, apiKey) {
   form.append('file', file, file.name || 'audio.webm')
   form.append('model', TRANSCRIBE_MODEL)
   form.append('response_format', 'json')
-  form.append('language', 'en')
+  /* MULTILINGUAL 2026-08-30 ───────────────────────────────────────────────────
+     The hard-coded 'en' was the whole bug on this path.
+
+     `language` is not a hint to this model, it is an ASSERTION. Told the audio is
+     English, gpt-4o-mini-transcribe transcribes Hindi AS English: it emits
+     English words that merely sound like what it heard, confidently and with no
+     marker that anything went wrong, so the answer stage cannot tell a wrong
+     transcript from a right one. "શું તમે inheritance સમજાવો" came back as
+     English noise and got a fluent answer to a question nobody asked.
+
+     Omitting the field is auto-detection, which is exactly what "understand any
+     of these languages" means. Do NOT put a language back here to raise accuracy
+     on one of them; it takes accuracy on the other four to zero. The answer is
+     forced to English in buildSystemPrompt(), not here — understanding the input
+     and choosing the output language are separate problems, and that split is
+     the whole design.
+
+     `prompt` replaces it. See TRANSCRIBE_PROMPT in lib/ai.js for why it is one
+     short line. */
+  // form.append('language', 'en')
+  form.append('prompt', TRANSCRIBE_PROMPT)
 
   let upstream
   try {
@@ -136,10 +157,32 @@ async function transcribeWithGemini(file, apiKey) {
           // The instruction matters: without it the model narrates the clip
           // ("A person asks about...") instead of transcribing it, and useVoice
           // feeds whatever comes back straight in as the interview question.
+          /* MULTILINGUAL 2026-08-30: the language clause is as load-bearing as
+             the verbatim clause, and for the same kind of reason.
+
+             Asked only to transcribe, this model TRANSLATES Hindi and Gujarati
+             into English. That is worse than a garbled transcript, because it
+             reads as a clean one — a fluent English sentence with no marker that
+             it is a paraphrase — so the error is invisible at every point
+             downstream, including to the user reading the transcript bar. "Do
+             not translate" is what stops it.
+
+             The script rule matches what OpenAI's auto-detect does natively, on
+             purpose: this is the FALLBACK path, and a question should not change
+             appearance in the overlay depending on which provider happened to
+             serve it. */
+          // { type: 'text', text:
+          //   'Transcribe this audio verbatim. Output only the spoken words, with no ' +
+          //   'preamble, quotation marks, speaker labels or commentary. If there is no ' +
+          //   'intelligible speech, output nothing at all.' },
           { type: 'text', text:
             'Transcribe this audio verbatim. Output only the spoken words, with no ' +
             'preamble, quotation marks, speaker labels or commentary. If there is no ' +
-            'intelligible speech, output nothing at all.' },
+            'intelligible speech, output nothing at all. The speech may be English, ' +
+            'Hindi, Gujarati, or two of them mixed inside one sentence. Write every ' +
+            'word in the language it was actually spoken in: Hindi in Devanagari, ' +
+            'Gujarati in Gujarati script, and English words in Latin script even when ' +
+            'they sit inside a Hindi or Gujarati sentence. Do not translate anything.' },
           { type: 'audio', data: base64, mime_type: mime },
         ],
       }),

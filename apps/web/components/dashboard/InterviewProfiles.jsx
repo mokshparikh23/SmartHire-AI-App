@@ -13,7 +13,7 @@ import CompanyLogo from './interview/CompanyLogo'
   SETUP-TO-WEB 2026-08-30
 
   Replaces the desktop's three-step InterviewSetup wizard. Same fields, plus a
-  candidate name so one account can hold several interviews at once.
+  name per row so one account can hold several interviews at once.
 
   Writes go straight to Supabase as the signed-in user — the migration grants
   insert/update/delete on this table specifically, unlike the billing tables,
@@ -45,9 +45,23 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
       ? prev.map(p => (p.id === row.id ? row : p))
       : [row, ...prev])
 
+  /*
+    CONCEPT 2026-08-30: `candidate_name` is now the NAME OF THE INTERVIEW, not
+    the name of a person. The reader of the app is the candidate, so a field
+    holding somebody else's name has nobody to hold — what one account needs
+    instead is a label per interview ("Google · SDE2 · round 2") to pick from in
+    the desktop app.
+
+    The COLUMN keeps its name on purpose. Renaming it means a migration, a change
+    in /api/profiles, and a matching change in the desktop's profile picker, all
+    to rename a string that is already doing the right job. The label, the
+    placeholder and the messages below are what the user reads, and those are
+    what changed. If the column is ever renamed, this comment is the map.
+  */
   const save = async () => {
     const form = editing
-    if (!form.candidate_name.trim()) return setError('Candidate name is required.')
+    // if (!form.candidate_name.trim()) return setError('Candidate name is required.')
+    if (!form.candidate_name.trim()) return setError('Give this interview a name.')
 
     setBusy(true)
     setError(null)
@@ -74,8 +88,8 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
    * parse route writes resume_file_path, which the browser is not granted, so
    * the file cannot be recorded client-side afterwards either. Saving the row at
    * the moment of the drop is the honest resolution — the user has just handed
-   * us a candidate's document, so an interview existing for it is expected, and
-   * it is visible in the list rather than held in limbo.
+   * us their own CV, so an interview existing for it is expected, and it is
+   * visible in the list rather than held in limbo.
    *
    * Returns null and surfaces the reason if it cannot, so the panel can stop
    * cleanly instead of uploading into nowhere.
@@ -84,7 +98,8 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
     if (editing?.id) return editing.id
 
     if (!editing.candidate_name.trim()) {
-      setError('Add the candidate’s name before attaching a résumé.')
+      // setError('Add the candidate’s name before attaching a résumé.')
+      setError('Name this interview before attaching a résumé.')
       return null
     }
 
@@ -151,7 +166,8 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
           <EmptyState
             icon="users"
             title="No interviews set up"
-            description="Add a candidate here, then pick them in the desktop app when the interview starts."
+            // description="Add a candidate here, then pick them in the desktop app when the interview starts."
+            description="Add an interview here, then pick it in the desktop app when the call starts."
             action={<Button icon="plus" onClick={startNew}>New interview</Button>}
           />
         </Card>
@@ -175,13 +191,30 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* CONCEPT 2026-08-30: the badge read "consented / not
+                    consented" — the interviewer confirming someone else's
+                    permission. The document is the reader's own now, so the flag
+                    means "in the prompt or not", which is what the badge says.
+                    The column and the gate are untouched.
+                    {p.resume_consent ? 'Résumé · consented' : 'Résumé · not consented'} */}
                 {p.resume
                   ? <Badge tone={p.resume_consent ? 'positive' : 'warning'}>
-                      {p.resume_consent ? 'Résumé · consented' : 'Résumé · not consented'}
+                      {p.resume_consent ? 'Résumé · in use' : 'Résumé · not in use'}
                     </Badge>
                   : <Badge>No résumé</Badge>}
                 {p.resume_file_path && <Badge>PDF</Badge>}
                 {p.job_description && <Badge>JD</Badge>}
+                {/* ANSWER-STYLE 2026-08-30: only the non-default is worth a
+                    badge. A row reading "Standard" on every candidate is noise;
+                    a row reading "Indian English" on one of five is the fact you
+                    wanted to check before starting.
+
+                    Default `neutral` tone and no className. Recolouring a Badge
+                    through className puts two same-property utilities on one
+                    element and Tailwind v4 picks the winner by stylesheet order
+                    rather than by the order you wrote them — add a tone to TONES
+                    in components/ui/index.jsx if a colour is ever wanted here. */}
+                {p.answer_style === 'desi' && <Badge>Indian English</Badge>}
               </div>
 
               <div className="flex items-center gap-2">

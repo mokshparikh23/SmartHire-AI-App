@@ -1716,4 +1716,300 @@ grant execute on function public.session_settle(uuid,timestamptz,boolean,text)
 
 notify pgrst, 'reload schema';
 
+-- ============================================================ 20260830040000_answer_style.sql
+-- ANSWER-STYLE 2026-08-30
+--
+-- The register the copilot writes in, chosen per candidate.
+--
+-- Everything the copilot produces today comes out in one voice: formal written
+-- English, full sentences, the register of a cover letter. That is the right
+-- default and it stays the default. It is also, for a large part of who this
+-- product is actually for, the wrong voice to be handed mid-interview — India is
+-- the reference market (see apps/web/lib/pricing.js, where INR is the currency
+-- every price was set in), the conversation in the room is plain Indian English,
+-- and a follow-up the interviewer has to rewrite in their head before they can
+-- say it out loud is a follow-up that arrives too late to use.
+--
+-- So this is a REGISTER switch and nothing more. 'desi' changes word choice,
+-- sentence length and the kind of example reached for. It does not change what
+-- a follow-up may claim, what the résumé is allowed to contribute, or whether
+-- the résumé is used at all — that gate is still resume_consent, still enforced
+-- in buildSystemPrompt() on the desktop, and this column is nowhere near it.
+-- styleBlock() in apps/desktop/src/services/systemPrompt.js is the only consumer,
+-- and its doc comment is where the boundary is written down.
+--
+-- WHY PER PROFILE AND NOT PER ACCOUNT
+--
+-- Because it is a fact about the candidate, not a preference of the
+-- interviewer's. One account interviews a Bengaluru SDE2 on Monday and a
+-- Singapore PM on Tuesday, and an account-level setting would silently carry
+-- Monday's register into Tuesday's room. It lives in the same row as the
+-- company, the role and the résumé for the same reason those do: it is the
+-- context of one interview, created once on the web and picked in the desktop
+-- launcher.
+--
+-- The desktop may override it for the session in front of it without writing
+-- back. This column is the starting value, not the running one.
+
+-- ============================================================ column
+-- NOT NULL with a default rather than a nullable column, matching resume_source
+-- in 20260830020000. Every existing row backfills to 'plain', which is what they
+-- have effectively been all along, and nothing downstream ever has to answer
+-- "what does null mean here" — a question three separate files would otherwise
+-- each have to answer the same way, and eventually not.
+--
+-- Postgres 11+ records a non-volatile default in the catalogue instead of
+-- rewriting the heap, so this is fast on a table of any size.
+alter table public.interview_profiles
+  add column if not exists answer_style text not null default 'plain';
+
+comment on column public.interview_profiles.answer_style is
+  'Register the copilot writes in: plain (formal written English, the default) or desi (plain, direct Indian English). Read by the desktop through /api/profiles; the desktop may override it for one session without writing back.';
+
+-- ============================================================ constraint
+-- A CHECK, not a bare text column. Three reasons, in order of how much they
+-- matter:
+--
+--   1. This column IS browser-writable — it is in the column grants below,
+--      because the dashboard form has to write it as the signed-in user. So
+--      "the UI only ever sends one of two strings" is a statement about our
+--      code, not about the data. Anyone holding the anon key that ships in the
+--      web bundle can PATCH this column to any string they like from a console.
+--   2. That string then travels to the desktop through /api/profiles and lands
+--      in the store buildSystemPrompt() reads. Whether it is interpolated into
+--      a prompt or used to look one up is the desktop's business and may
+--      change; a column that can only ever hold one of two known tokens means
+--      that decision can never become a prompt-injection question.
+--   3. It is the same discipline as resume_source above and credit_ledger.kind.
+--      A new closed vocabulary in this schema is a CHECK list, so a reader
+--      learns the allowed values from the table rather than from whichever
+--      component happened to be honest.
+--
+-- The cost is that adding a third register needs a migration. That cost is the
+-- feature: 'desi' has to mean the same thing to the database, the dashboard and
+-- the prompt on the same day, and a migration is what makes those three land
+-- together. An enum type would do the same job with worse ergonomics — altering
+-- one is transactionally awkward and PostgREST surfaces it as a bespoke type.
+--
+-- `add constraint if not exists` does not exist, so drop-then-add keeps this
+-- re-runnable — same note as 20260830020000.
+alter table public.interview_profiles
+  drop constraint if exists interview_profiles_answer_style_check;
+
+alter table public.interview_profiles
+  add constraint interview_profiles_answer_style_check
+    check (answer_style in ('plain', 'desi'));
+
+-- ============================================================ column grants
+-- SECURITY / READ THIS BEFORE ADDING ANY FURTHER COLUMN TO THIS TABLE.
+--
+-- 20260830020000 withdrew the blanket insert/update grant on this table and
+-- re-granted it PER COLUMN, so that resume_file_path could not be forged or
+-- blanked from a browser. The consequence, which is easy to miss because it
+-- fails quietly and in the wrong place, is that a column added afterwards is
+-- INVISIBLE TO THE BROWSER WRITER until it is named in a grant. There are TWO
+-- lists over there — `grant insert (...)` and `grant update (...)` — and a
+-- column named in only one of them produces a feature that works when you
+-- create an interview and fails when you edit one, or the reverse.
+--
+-- These two lines are ADDITIVE, not a restatement of those lists. Column
+-- privileges accumulate: granting UPDATE on one column does not disturb the
+-- grants on the other eight, because each lands as its own entry in
+-- pg_attribute.attacl. Restating the whole list here would mean repeating the
+-- table-level `revoke insert, update` first to make the restatement exact — and
+-- a table-level REVOKE also revokes every column-level privilege on that table,
+-- so it would silently strip any column granted by a migration written between
+-- that file and this one. Two lines that can only add are the safer shape.
+--
+-- The effective grant is therefore the UNION of the lists in 20260830020000 and
+-- the two lines below. information_schema.column_privileges is where you read
+-- the real answer.
+--
+-- Nothing is granted to anon. 20260830000000 revoked everything from that role
+-- on this table on purpose — the desktop holds a licence key, not a Supabase
+-- session, and reads through /api/profiles on the service role.
+grant insert (answer_style) on public.interview_profiles to authenticated;
+grant update (answer_style) on public.interview_profiles to authenticated;
+
+-- ============================================================ schema cache
+-- Same failure as every other new column here: PostgREST answers from a cached
+-- copy of the schema, so the first save can fail with "Could not find the
+-- 'answer_style' column of 'interview_profiles' in the schema cache" — which
+-- reads exactly like the migration did not apply, when in fact it did.
+notify pgrst, 'reload schema';
+
+-- ============================================================ 20260830050000_razorpay.sql
+-- ============================================================================
+-- RAZORPAY 2026-08-30 — a second payment gateway, alongside Stripe.
+--
+-- WHY TWO. UPI and net banking are what buyers in India actually want, and both
+-- are INR-only by definition. Stripe is what reaches everyone else. The site
+-- already prices in two currencies from geo headers (lib/pricing.js), so the
+-- gateway follows the currency it already resolved:
+--
+--     INR  -> Razorpay   (UPI, net banking, cards, wallets)
+--     USD  -> Stripe     (international cards)
+--
+-- Nothing Stripe-shaped is dropped here. Its columns, its webhook and its half
+-- of subscription_set() are untouched, because a live subscriber's renewal has
+-- to keep landing while the Razorpay side is still being switched on. The two
+-- gateways never write the same row: `gateway` says which one owns an order,
+-- and each has its own id columns.
+--
+-- WHY NOT RENAME THE STRIPE COLUMNS TO provider_*. It would be tidier, and it
+-- would also mean rewriting the Stripe webhook, the admin subscription route and
+-- this function in the same change that introduces an untested gateway. Adding
+-- alongside keeps the blast radius to code that did not exist yesterday.
+-- ============================================================================
+
+-- ------------------------------------------------------------ credit_orders
+alter table public.credit_orders
+  -- Existing rows are all Stripe, which is exactly what the default says. The
+  -- CHECK is deliberately narrow: a typo'd gateway name should fail the insert
+  -- rather than produce an order no webhook will ever claim.
+  add column if not exists gateway text not null default 'stripe'
+    check (gateway in ('stripe', 'razorpay')),
+
+  -- The idempotency key on the Razorpay side, and the direct counterpart of
+  -- stripe_checkout_session_id. UNIQUE for the same reason: it is what makes a
+  -- redelivered webhook find exactly one order, and the handler's
+  -- pending-status check then makes the second delivery a no-op.
+  --
+  -- NAMED FOR WHAT IT HOLDS. A credit pack is bought through a Razorpay Payment
+  -- Link, so the id here is a `plink_…`, not the `order_…` that Razorpay also
+  -- mints underneath it. Calling the column razorpay_order_id would have read as
+  -- the latter and sent the next person to the wrong entity in their dashboard.
+  --
+  -- Postgres allows many NULLs in a unique index, so every Stripe order — and
+  -- every Razorpay subscription — leaving this null costs nothing.
+  add column if not exists razorpay_payment_link_id text unique,
+  add column if not exists razorpay_payment_id text,
+
+  -- UNIQUE here, unlike stripe_subscription_id on this table.
+  --
+  -- A Razorpay subscription has no separate checkout object to key on — the
+  -- subscription IS what is created when the customer clicks buy, so this column
+  -- plays the role stripe_checkout_session_id plays for Stripe and needs the same
+  -- guarantee of exactly one match. Exactly one order row is created per
+  -- subscription; renewals (`subscription.charged`) update wallet state and never
+  -- claim an order, so they do not collide with it.
+  add column if not exists razorpay_subscription_id text unique;
+
+-- ----------------------------------------------------------- credit_wallets
+alter table public.credit_wallets
+  add column if not exists razorpay_customer_id text,
+  add column if not exists razorpay_subscription_id text unique;
+
+-- Mirrors credit_wallets_stripe_customer_idx. The subscription webhook looks an
+-- account up by whichever id the event carries, and a sequential scan of every
+-- wallet on each renewal is the kind of thing that is fine until it is not.
+create index if not exists credit_wallets_razorpay_customer_idx
+  on public.credit_wallets (razorpay_customer_id)
+  where razorpay_customer_id is not null;
+
+-- ========================================================== subscription_set
+--
+-- DROP FIRST, AND THIS IS NOT OPTIONAL.
+--
+-- `create or replace function` only replaces when the argument list is
+-- identical. Adding two parameters — even with defaults — creates an OVERLOAD,
+-- and that has two consequences, one merely annoying and one a security hole:
+--
+--   1. PostgREST calls this by NAMED arguments. A call carrying the original
+--      seven names could satisfy both signatures, and Postgres answers an
+--      ambiguous call with "function is not unique" rather than picking one.
+--      Every subscription write would start failing.
+--
+--   2. Worse: the revoke/grant block in 20260829120000_credit_billing.sql lists
+--      functions by EXACT signature, and its own comment says a revoke against a
+--      stale signature "silently does nothing and leaves the function
+--      world-callable". A new overload is not in that list, so it would keep
+--      Postgres's default grant of EXECUTE to PUBLIC — reachable at
+--      POST /rest/v1/rpc/subscription_set by anyone holding the anon key, which
+--      ships in the web bundle. That is a "give myself an unlimited
+--      subscription" endpoint.
+--
+-- So: drop the old signature, create the new one, and re-run the revoke/grant
+-- against the new exact signature at the bottom of this file.
+drop function if exists public.subscription_set(uuid,text,text,timestamptz,text,text,uuid);
+
+-- Passing p_kind null clears the subscription. Credits are never touched either
+-- way: a lapsed subscriber falls straight back onto whatever balance they had,
+-- which is what makes cancelling safe.
+--
+-- The two Razorpay parameters are APPENDED, after p_actor_id, rather than being
+-- slotted in beside their Stripe counterparts. Named callers do not care, but it
+-- keeps any positional call that exists in a psql session or a runbook working.
+create or replace function public.subscription_set(
+  p_user_id       uuid,
+  p_kind          text,
+  p_status        text,
+  p_period_end    timestamptz,
+  p_stripe_customer     text default null,
+  p_stripe_subscription text default null,
+  p_actor_id      uuid default null,
+  p_razorpay_customer     text default null,
+  p_razorpay_subscription text default null
+) returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_kind is not null and p_kind not in ('weekly', 'monthly', 'yearly') then
+    return json_build_object('ok', false, 'code', 'bad_kind', 'reason', 'Unknown subscription kind');
+  end if;
+  if p_kind is not null and (p_status is null or p_period_end is null) then
+    return json_build_object('ok', false, 'code', 'bad_shape',
+                             'reason', 'A subscription needs a status and a period end');
+  end if;
+
+  insert into public.credit_wallets (user_id) values (p_user_id) on conflict (user_id) do nothing;
+
+  update public.credit_wallets
+     set subscription_kind       = p_kind,
+         subscription_status     = case when p_kind is null then null else p_status end,
+         subscription_period_end = case when p_kind is null then null else p_period_end end,
+         stripe_customer_id      = coalesce(p_stripe_customer, stripe_customer_id),
+         stripe_subscription_id  = case when p_kind is null then null
+                                        else coalesce(p_stripe_subscription, stripe_subscription_id) end,
+
+         -- Same shape as the Stripe pair above, and the same reasoning: the
+         -- customer id is sticky because it outlives any one subscription, and
+         -- the subscription id is cleared when the subscription is, so a
+         -- cancelled account does not keep pointing at a dead Razorpay object.
+         razorpay_customer_id     = coalesce(p_razorpay_customer, razorpay_customer_id),
+         razorpay_subscription_id = case when p_kind is null then null
+                                         else coalesce(p_razorpay_subscription, razorpay_subscription_id) end,
+
+         updated_at              = now()
+   where user_id = p_user_id;
+
+  return json_build_object('ok', true,
+    'subscriptionKind',   p_kind,
+    'subscriptionStatus', case when p_kind is null then null else p_status end,
+    'periodEnd',          case when p_kind is null then null else p_period_end end,
+    'unlimited',          public.wallet_is_unlimited(p_user_id));
+end $$;
+
+-- The revoke half, against the NEW signature. Copied from the block in
+-- 20260829120000_credit_billing.sql rather than referenced, because that block
+-- names the old signature and must not be edited retroactively — a migration
+-- that has already run somewhere is not a file you get to change.
+--
+-- If this is ever wrong, the symptom is silent: the function stays callable by
+-- `authenticated`. Verify with
+--     \df+ public.subscription_set
+-- and check the access privileges column says service_role only.
+do $$
+declare f text := 'public.subscription_set(uuid,text,text,timestamptz,text,text,uuid,text,text)';
+begin
+  execute format('revoke all on function %s from public, anon, authenticated', f);
+  execute format('grant execute on function %s to service_role', f);
+end $$;
+
+comment on column public.credit_orders.gateway is
+  'Which payment gateway owns this order: stripe (USD) or razorpay (INR). Set at '
+  'checkout from the currency resolved from geo headers, never from the client.';
+
 notify pgrst, 'reload schema';

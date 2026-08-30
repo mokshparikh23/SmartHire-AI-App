@@ -1,6 +1,10 @@
 import { useEffect } from 'react'
 import { transcribe } from '../services/aiRouter'
 import { useSessionStore } from '../store/sessionStore'
+import { createSilenceDetector } from '../utils/silenceDetector'
+import { createLogger } from '../utils/logger'
+
+const log = createLogger('vad-seg')
 
 /**
  * Audio capture with voice-activity detection. Pure audio → text: it owns no AI
@@ -9,7 +13,11 @@ import { useSessionStore } from '../store/sessionStore'
  *
  * @param {boolean}  enabled     start/stop capture
  * @param {string}   source      'system' (loopback) or 'mic'
- * @param {Function} onQuestion  called with each transcribed utterance
+ * @param {object}   aggRef      SEGMENTATION 2026-08-30: replaced onQuestion.
+ *                               This hook no longer decides when a question has
+ *                               ended — it reports transcribed fragments and
+ *                               speech edges to the shared aggregator, which
+ *                               owns that policy for both capture paths.
  * @param {object}   levelRef    optional ref that receives the live RMS level.
  *                               A ref, not state — this updates ~60×/s and
  *                               would otherwise re-render the whole tree.
@@ -52,12 +60,18 @@ import { useSessionStore } from '../store/sessionStore'
    question longer than 12s arrives in two parts instead of very late.
 
    MIN_BLOB_BYTES had to come down with the bitrate — see below. */
+/* SEGMENTATION 2026-08-30: these four moved to utils/silenceDetector.js with
+   their values unchanged — VAD_DEFAULTS there is this block, verbatim. The note
+   above still explains why each number is what it is, and is why it stays here
+   rather than moving with them: 700 is still the base, and the reasoning is what
+   a future reader needs when they wonder why the hold in the aggregator is added
+   ON TOP of it rather than replacing it. */
 // const SILENCE_MS      = 1200
-const SILENCE_MS      = 700    // silence before an utterance is closed
-const MIN_SPEECH_MS   = 250    // shorter than this is a cough or a keystroke
+// const SILENCE_MS      = 700    // silence before an utterance is closed
+// const MIN_SPEECH_MS   = 250    // shorter than this is a cough or a keystroke
 // const MAX_SEGMENT_MS  = 25000
-const MAX_SEGMENT_MS  = 12000  // hard stop, so one long answer still gets sent
-const IDLE_FLUSH_MS   = 6000   // recycle the recorder when nothing was said
+// const MAX_SEGMENT_MS  = 12000  // hard stop, so one long answer still gets sent
+// const IDLE_FLUSH_MS   = 6000   // recycle the recorder when nothing was said
 
 /* LATENCY 2026-08-30: measured, not guessed. The loopback tap is forced stereo
    at 48kHz — channelCount:1 is NOT honoured on it, and applyConstraints throws
@@ -86,17 +100,25 @@ const IDLE_FLUSH_MS   = 6000   // recycle the recorder when nothing was said
 const AUDIO_BITS_PER_SECOND = 32000
 // const MIN_BLOB_BYTES  = 2000
 const MIN_BLOB_BYTES  = 800    // below this there is no usable audio
-const MIN_TEXT_CHARS  = 3
 const TIMESLICE_MS    = 250    // ondataavailable cadence while recording
 
 // Speech has to clear the measured noise floor by this much. Multiplicative so
 // it scales with gain, plus a small absolute term so a near-silent room does
 // not make the threshold zero.
-const NOISE_FACTOR = 1.9
-const NOISE_MARGIN = 2.5
-const FLOOR_MIN    = 1.5
+// SEGMENTATION 2026-08-30: moved to utils/silenceDetector.js, unchanged.
+// const NOISE_FACTOR = 1.9
+// const NOISE_MARGIN = 2.5
+// const FLOOR_MIN    = 1.5
 
-const FILLER = /^(thank you|thanks|okay|ok|yes|no|yeah|hmm+|uh+|um+|mm+|\.+)$/i
+/* MULTILINGUAL 2026-08-30: MIN_TEXT_CHARS and FILLER moved to
+   utils/utterance.js, where the aggregator applies them for both capture paths.
+
+   The copies were English-only, so every Hindi and Gujarati acknowledgement
+   bought a full metered answer. The length floor also counted UTF-16 code units,
+   which means something different in every script — "हाँ" is three of them and
+   one syllable. Both are fixed there, once. */
+// const MIN_TEXT_CHARS  = 3
+// const FILLER = /^(thank you|thanks|okay|ok|yes|no|yeah|hmm+|uh+|um+|mm+|\.+)$/i
 
 // A loopback track dies whenever the output device changes — headphones in or
 // out, AirPods connecting — and never comes back on its own. Restarts are
@@ -156,14 +178,17 @@ export async function acquire(source) {
   return stream
 }
 
-export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
+// export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
+export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
   useEffect(() => {
     if (!enabled) return
 
     // Guards every async continuation below. Without it, a session stopped
     // while acquire() is still resolving leaks a live capture.
     let cancelled = false
-    const own = { stream: null, rec: null, ctx: null, raf: 0, silence: null, stable: null }
+    // SEGMENTATION 2026-08-30: ctx/raf/silence moved into the shared detector.
+    // const own = { stream: null, rec: null, ctx: null, raf: 0, silence: null, stable: null }
+    const own = { stream: null, rec: null, vad: null, stable: null }
 
     // SYSTEM-AUDIO 2026-08-30: restarts are counted across the whole effect, not
     // per stream, so a device that ends every track it hands out stops after
@@ -181,13 +206,11 @@ export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
     /** Releases the current stream's resources, leaving the effect alive. */
     const release = () => {
       runSeq++
-      if (own.raf) { cancelAnimationFrame(own.raf); own.raf = 0 }
-      if (own.silence) { clearTimeout(own.silence); own.silence = null }
+      own.vad?.stop()
+      own.vad = null
       if (own.stable) { clearTimeout(own.stable); own.stable = null }
       if (own.rec?.state === 'recording') { try { own.rec.stop() } catch { /* already stopped */ } }
       own.rec = null
-      own.ctx?.close().catch(() => {})
-      own.ctx = null
       own.stream?.getTracks().forEach((t) => t.stop())
       own.stream = null
       if (levelRef) levelRef.current = 0
@@ -266,22 +289,40 @@ export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
       own.rec = recorder
 
       let chunks = []
-      // Whether the segment currently being recorded contained real speech.
-      // Read in onstop, which is why it lives out here rather than in the tick.
-      let sawSpeech = false
-      let speechMs = 0
-      let segmentStart = performance.now()
+      /* SEGMENTATION 2026-08-30: sawSpeech/speechMs/segmentStart moved into the
+         shared detector, which now reports them on onSegmentEnd. `pendingMeta`
+         is what carries that report across the async gap to recorder.onstop —
+         stop() is called from the detector's callback, onstop fires a task or
+         two later, and the two have to be paired. */
+      // let sawSpeech = false
+      // let speechMs = 0
+      // let segmentStart = performance.now()
+      let pendingMeta = null
+
+      /* SEGMENTATION 2026-08-30 ─ transcription is now SERIALISED.
+
+         handleUtterance was fired and forgotten per segment, so two uploads
+         could be in flight and resolve in EITHER ORDER. genRef in
+         useInterviewSession hid that by answering whichever landed last, which
+         is why it was never noticed.
+
+         It stops being invisible the moment fragments are joined: a question
+         split across a pause would be assembled backwards. One chain, so the
+         aggregator sees fragments in the order they were spoken. */
+      let transcribeChain = Promise.resolve()
 
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: mimeType })
-        const worthSending = sawSpeech && speechMs >= MIN_SPEECH_MS && blob.size > MIN_BLOB_BYTES
+        const meta = pendingMeta
+        // `tooShort` is the detector's MIN_SPEECH_MS check, applied identically
+        // on both capture paths now rather than only on this one.
+        const worthSending = !!meta && !meta.tooShort && meta.reason !== 'idle'
+          && blob.size > MIN_BLOB_BYTES
 
         chunks = []
-        sawSpeech = false
-        speechMs = 0
-        segmentStart = performance.now()
+        pendingMeta = null
 
         // onstop also fires during teardown. Transcribing that tail would cost
         // an extra API call and surface a phantom question after "Stop".
@@ -289,14 +330,19 @@ export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
         // change restarting capture — where `cancelled` is still false.
         if (cancelled || myRun !== runSeq) return
 
-        if (worthSending) handleUtterance(blob)
+        // if (worthSending) handleUtterance(blob)
+        if (worthSending) {
+          transcribeChain = transcribeChain
+            .then(() => handleUtterance(blob, meta))
+            .catch(() => { /* one failed utterance must not break the chain */ })
+        }
 
         // Straight back to recording. The gap between stop and start is the only
         // window in which audio is lost, and it is a single frame.
         try { recorder.start(TIMESLICE_MS) } catch { /* already restarted */ }
       }
 
-      const handleUtterance = async (blob) => {
+      const handleUtterance = async (blob, meta) => {
         try {
           // The recorder produces webm; the server strips the codec suffix and
           // passes the container through to whichever provider is configured.
@@ -309,88 +355,54 @@ export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
           if (cancelled) return
 
           const clean = text?.trim()
-          if (!clean || clean.length < MIN_TEXT_CHARS) return
-          if (FILLER.test(clean)) return
-
-          window.electronAPI?.sendTranscript?.({ text: clean })
-          onQuestion(clean)
+          // SEGMENTATION 2026-08-30: the length floor and the filler gate moved
+          // into the aggregator, which applies the multilingual, script-aware
+          // versions from utils/utterance.js to both capture paths.
+          // if (!clean || clean.length < MIN_TEXT_CHARS) return
+          // if (FILLER.test(clean)) return
+          // window.electronAPI?.sendTranscript?.({ text: clean })
+          // onQuestion(clean)
+          aggRef?.current?.pushFragment(clean, meta)
         } catch (e) {
           console.error('[voice] transcription failed:', e.message)
         }
       }
 
       // ── Voice-activity detection ──────────────────────────────────────────
-      const ctx = new AudioContext()
-      own.ctx = ctx
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 512
-      ctx.createMediaStreamSource(stream).connect(analyser)
+      /* SEGMENTATION 2026-08-30: the analyser loop that used to live here is now
+         utils/silenceDetector.js, shared with useLiveVoice. Same maths, same
+         constants, same noise-floor asymmetry — the VAD 2026-08-30 note above
+         still describes it, and the originals are kept commented there.
 
-      const data = new Uint8Array(analyser.fftSize)
-      let speaking = false
-      let noiseFloor = 0
-      let lastTick = performance.now()
+         What changed is only what the decision drives: instead of calling
+         recorder.stop() and letting a 700ms silence stand for "the question
+         ended", it reports the segment and the aggregator decides. */
 
-      // Record from the first frame. Everything below only decides what to KEEP.
+      // Record from the first frame. The detector only decides what to KEEP.
       recorder.start(TIMESLICE_MS)
 
-      const tick = () => {
-        // A frame queued just before release() would otherwise run once more and
-        // re-arm own.raf, resurrecting the loop against a closed AudioContext.
-        if (cancelled || myRun !== runSeq) return
+      own.vad = createSilenceDetector({
+        stream,
+        levelRef,
+        log,
+        onSpeechStart: ({ at }) => {
+          if (cancelled || myRun !== runSeq) return
+          aggRef?.current?.noteSpeechStart(at)
+        },
+        onSegmentEnd: (meta) => {
+          if (cancelled || myRun !== runSeq) return
 
-        const now = performance.now()
-        const dt = now - lastTick
-        lastTick = now
+          /* The speaker has stopped, and this is the moment the aggregator's
+             hold clock can start. It matters that this fires HERE rather than
+             when the transcript arrives: on this path the text lands ~700ms
+             later, and a hold that only began then would already have run down
+             most of its budget on the upload. */
+          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
 
-        analyser.getByteTimeDomainData(data)
-
-        let sum = 0
-        for (let i = 0; i < data.length; i++) {
-          const d = data[i] - 128
-          sum += d * d
-        }
-        const rms = Math.sqrt(sum / data.length)
-        if (levelRef) levelRef.current = rms
-
-        // Track the room. Rises slowly and falls fast, so a noisy stretch lifts
-        // the bar gradually but the bar drops back as soon as the room quietens
-        // — the opposite would let one loud moment deafen us for a minute.
-        if (!speaking) {
-          const alpha = rms < noiseFloor ? 0.25 : 0.02
-          noiseFloor += (rms - noiseFloor) * alpha
-        }
-        const threshold = Math.max(FLOOR_MIN, noiseFloor * NOISE_FACTOR + NOISE_MARGIN)
-
-        if (rms > threshold) {
-          speaking = true
-          sawSpeech = true
-          speechMs += dt
-          if (own.silence) { clearTimeout(own.silence); own.silence = null }
-        } else if (speaking && !own.silence) {
-          own.silence = setTimeout(() => {
-            speaking = false
-            own.silence = null
-            if (recorder.state === 'recording') recorder.stop()
-          }, SILENCE_MS)
-        }
-
-        const age = now - segmentStart
-        // A very long answer would otherwise sit in memory unsent until the
-        // speaker finally pauses; cut it and let the next segment continue.
-        if (recorder.state === 'recording' && age > MAX_SEGMENT_MS && sawSpeech) {
-          if (own.silence) { clearTimeout(own.silence); own.silence = null }
-          speaking = false
-          recorder.stop()
-        }
-        // Nothing said for a while: recycle so silent chunks do not accumulate.
-        else if (recorder.state === 'recording' && !sawSpeech && age > IDLE_FLUSH_MS) {
-          recorder.stop()
-        }
-
-        own.raf = requestAnimationFrame(tick)
-      }
-      own.raf = requestAnimationFrame(tick)
+          pendingMeta = meta
+          if (recorder.state === 'recording') recorder.stop()
+        },
+      })
     }
 
     run()
@@ -407,5 +419,8 @@ export function useVoice({ enabled, source = 'system', onQuestion, levelRef }) {
     }
     // `source` belongs here: switching it has to re-acquire, not keep the old
     // stream running under the new label.
-  }, [enabled, source, onQuestion, levelRef])
+    // SEGMENTATION 2026-08-30: aggRef is a ref object with stable identity, so
+    // it cannot re-acquire the microphone the way a changing callback would.
+    // }, [enabled, source, onQuestion, levelRef])
+  }, [enabled, source, aggRef, levelRef])
 }

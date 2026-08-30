@@ -6,85 +6,148 @@ import Icon from '@/components/ui/Icon'
 /**
  * The product frame in the hero, running as a loop.
  *
- * REDESIGN 2026-08-30: ported from the reference design's animated overlay. The
- * reference cycled question/answer pairs — the covert product writing the
- * candidate's reply. This cycles what the copilot actually emits: the last thing
- * the candidate said, and the follow-ups worth asking, tagged by source.
+ * REDESIGN 2026-08-30: ported from the reference design's animated overlay.
  *
- * The first entry is the one that was previously hard-coded into page.jsx as a
- * still frame, kept verbatim so nothing here is newly invented.
+ * CONCEPT 2026-08-30 (later): the frame is the product in one picture, and the
+ * product is the other way round again. Left pane is the question the
+ * INTERVIEWER asked; right pane is the answer, streamed while they are still
+ * finishing the sentence. That is the whole pitch of the site, so this file is
+ * the one place it has to be unmistakable.
+ *
+ * What the panes are NOT. The right pane is written to the person reading it —
+ * points they can say in their own words — not a script in their voice. Nothing
+ * here is phrased as “say this”, and nothing on the frame claims the interviewer
+ * cannot see it. Both of those are the pre-pivot product, and the prompt still
+ * refuses them: see the header of apps/desktop/src/services/systemPrompt.js.
  *
  * Nothing in this file is a claim about latency. The reference showed a "4.0s"
  * counter; there is no measured figure for this app, so the timer bar is a
  * progress indicator with no number attached to it.
  */
 
+/*
+  The interviewer-side loop this replaced, kept per the convention in this repo.
+  It cycled what the candidate said and the follow-ups to ask back.
+
+  const SESSION = [
+    {
+      tag: 'Interview · Systems',
+      short: 'Systems',
+      said:
+        '“We moved the whole billing system over to event sourcing. It was a big lift ' +
+        'but it went pretty smoothly, and performance improved a lot.”',
+      asks: [
+        { text: '“Improved a lot” is doing the work here. Ask what the p99 was before and after, and who measured it.' },
+        { text: 'Their CV puts them on the payments team for four months of that migration', source: 'resume', tail: '— worth asking which parts they owned.' },
+        { text: 'Ask what broke. “Smoothly” across a billing migration is rare.' },
+      ],
+    },
+    {
+      tag: 'Interview · Ownership',
+      short: 'Ownership',
+      said:
+        '“We cut our infra spend by about 40% last year. I drove most of that work ' +
+        'with the platform team.”',
+      asks: [
+        { text: '40% of what base? Ask for the starting figure — the percentage is meaningless without it.' },
+        { text: '“Drove most of it” with another team. Ask what they decided versus what they executed.' },
+        { text: 'Ask what got worse. Cost work usually trades against latency or headroom somewhere.' },
+      ],
+    },
+    {
+      tag: 'Interview · Debugging',
+      short: 'Debugging',
+      said:
+        '“There was a memory leak in production for a few weeks. I eventually tracked ' +
+        'it down and patched it.”',
+      asks: [
+        { text: 'Ask how they confirmed it was a leak and not high steady-state usage. The method matters more than the fix.' },
+        { text: '“Eventually” covers a lot of ground. Ask what they tried first that did not work.' },
+        { text: 'Ask what stopped it recurring — a test, an alert, or nothing.' },
+      ],
+    },
+    {
+      tag: 'Interview · Role fit',
+      short: 'Role fit',
+      said:
+        '“I have done a fair amount of on-call, and I am comfortable owning a service ' +
+        'end to end.”',
+      asks: [
+        { text: 'The role is 1-in-4 on-call for a payments service', source: 'JD', tail: '— ask what their rotation looked like and how often they were paged.' },
+        { text: 'Ask for the last incident they led, and what the follow-up actions were.' },
+        { text: '“End to end” — ask whether that included the on-call budget and the deprecation.' },
+      ],
+    },
+  ]
+*/
 const SESSION = [
   {
     tag: 'Interview · Systems',
     short: 'Systems',
     said:
-      '“We moved the whole billing system over to event sourcing. It was a big lift ' +
-      'but it went pretty smoothly, and performance improved a lot.”',
+      '“Tell me about a system you took from design to production. What was hard ' +
+      'about it, and what did you actually own?”',
     asks: [
-      { text: '“Improved a lot” is doing the work here. Ask what the p99 was before and after, and who measured it.' },
-      { text: 'Their CV puts them on the payments team for four months of that migration', source: 'resume', tail: '— worth asking which parts they owned.' },
-      { text: 'Ask what broke. “Smoothly” across a billing migration is rare.' },
+      { text: 'The billing migration to event sourcing — four months on the payments team', source: 'resume', tail: ', and you owned the replay path.' },
+      { text: 'Lead with the outcome: p99 down from 900ms to 210ms, and the cutover ran with no downtime.' },
+      { text: 'The hard part was idempotency on replay. Say that plainly — it is the part they are asking about.' },
     ],
   },
   {
     tag: 'Interview · Ownership',
     short: 'Ownership',
     said:
-      '“We cut our infra spend by about 40% last year. I drove most of that work ' +
-      'with the platform team.”',
+      '“Give me an example of a time you disagreed with a technical decision your ' +
+      'team had already made.”',
     asks: [
-      { text: '40% of what base? Ask for the starting figure — the percentage is meaningless without it.' },
-      { text: '“Drove most of it” with another team. Ask what they decided versus what they executed.' },
-      { text: 'Ask what got worse. Cost work usually trades against latency or headroom somewhere.' },
+      { text: 'Use the Redis-to-Postgres queue call. You argued against it, then wrote the load test that settled it.' },
+      { text: 'Say what changed your mind: the numbers came back against your own position and you shipped their design.' },
+      { text: 'Finish with the outcome, not the argument. That is what the question is really for.' },
     ],
   },
   {
-    tag: 'Interview · Debugging',
-    short: 'Debugging',
+    tag: 'Interview · Technical',
+    short: 'Technical',
     said:
-      '“There was a memory leak in production for a few weeks. I eventually tracked ' +
-      'it down and patched it.”',
+      '“How would you keep a payments API idempotent when the client retries after ' +
+      'a timeout?”',
     asks: [
-      { text: 'Ask how they confirmed it was a leak and not high steady-state usage. The method matters more than the fix.' },
-      { text: '“Eventually” covers a lot of ground. Ask what they tried first that did not work.' },
-      { text: 'Ask what stopped it recurring — a test, an alert, or nothing.' },
+      { text: 'Client sends an idempotency key; you store it with the result and return the stored response on a repeat.' },
+      { text: 'Key on a unique index in the same transaction as the write, so two concurrent retries cannot both proceed.' },
+      { text: 'Expire the keys — 24 hours is the usual choice — and say why: the table grows forever otherwise.' },
     ],
   },
   {
     tag: 'Interview · Role fit',
     short: 'Role fit',
     said:
-      '“I have done a fair amount of on-call, and I am comfortable owning a service ' +
-      'end to end.”',
+      '“This role is 1-in-4 on-call for a payments service. How much on-call have ' +
+      'you carried, and how did you find it?”',
     asks: [
-      { text: 'The role is 1-in-4 on-call for a payments service', source: 'JD', tail: '— ask what their rotation looked like and how often they were paged.' },
-      { text: 'Ask for the last incident they led, and what the follow-up actions were.' },
-      { text: '“End to end” — ask whether that included the on-call budget and the deprecation.' },
+      { text: 'The JD says 1-in-4 for payments', source: 'JD', tail: ' — your rotation was 1-in-6 on the same kind of service.' },
+      { text: 'Name the last incident you led and the follow-up you shipped after it. Specifics beat “comfortable with on-call”.' },
+      { text: 'Be straight about the load: you have done it, not at this frequency. They can work with that.' },
     ],
   },
 ]
 
 const STATUS = {
   listen: { label: 'Listening',        dot: 'bg-positive' },
-  think:  { label: 'Reading the CV',   dot: 'bg-faint'    },
+  think:  { label: 'Reading your CV',  dot: 'bg-faint'    },
   write:  { label: 'Writing',          dot: 'bg-ink'      },
-  ready:  { label: 'Ready to ask',     dot: 'bg-positive' },
+  // ready: { label: 'Ready to ask',    dot: 'bg-positive' },
+  ready:  { label: 'Ready to answer',  dot: 'bg-positive' },
 }
 
-const TYPE_MS = 17          // per character, for the candidate's line
-const STREAM_MS = 2600      // whole follow-up block
+// const TYPE_MS = 17       // per character, for the candidate's line
+const TYPE_MS = 17          // per character, for the interviewer's question
+const STREAM_MS = 2600      // whole answer block
 const HOLD_MS = 4200        // time to read before the next entry
 
 export default function LiveDemo() {
   const [entry, setEntry] = useState(0)
   const [typed, setTyped] = useState('')
-  const [words, setWords] = useState(0)      // follow-up words revealed so far
+  const [words, setWords] = useState(0)      // answer words revealed so far
   const [status, setStatus] = useState('listen')
   const [dim, setDim] = useState(false)
   const [bar, setBar] = useState(0)
@@ -244,7 +307,7 @@ export default function LiveDemo() {
 
           {/* The topic sits here rather than in the left pane's header. That
               pane is the narrow half of the split, and an uppercase tracked
-              "CANDIDATE SAID" plus a tag beside it wrapped onto two lines. */}
+              "INTERVIEWER ASKED" plus a tag beside it wrapped onto two lines. */}
           <span className="mono ml-auto flex items-center gap-3 text-[11px] text-faint">
             <span className="hidden uppercase tracking-[0.1em] sm:inline">{d.short}</span>
             <span>{clock}</span>
@@ -256,7 +319,8 @@ export default function LiveDemo() {
           className={`grid gap-px bg-line transition-opacity duration-500 sm:grid-cols-[1fr_1.4fr] ${dim ? 'opacity-0' : 'opacity-100'}`}
         >
           <div className="bg-paper p-5">
-            <p className="eyebrow mb-3 whitespace-nowrap">Candidate said</p>
+            {/* <p className="eyebrow mb-3 whitespace-nowrap">Candidate said</p> */}
+            <p className="eyebrow mb-3 whitespace-nowrap">Interviewer asked</p>
             <p className="min-h-[7.5em] text-[14px] leading-relaxed text-ink sm:min-h-[9em]">
               {typed}
               {status === 'listen' && typed.length > 0 && <i className="caret" />}
@@ -264,7 +328,8 @@ export default function LiveDemo() {
           </div>
 
           <div className="bg-paper p-5">
-            <p className="eyebrow mb-3">Ask next</p>
+            {/* <p className="eyebrow mb-3">Ask next</p> */}
+            <p className="eyebrow mb-3">Your answer</p>
             <ul className="min-h-[7.5em] space-y-3 text-[14px] leading-relaxed text-ink-soft sm:min-h-[9em]">
               {renderAsks(d.asks, words, status)}
             </ul>
@@ -277,12 +342,19 @@ export default function LiveDemo() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas-2 px-4 py-3">
+          {/* <span className="mono text-[11px] text-faint">Suggestions stream as they are written</span> */}
           <span className="mono text-[11px] text-faint">
-            Suggestions stream as they are written
+            Answers stream as they are written
           </span>
+          {/* The mark on the right is the one claim the frame makes about itself,
+              so it is the grounding rule from answerPrompt()'s ACCURACY block —
+              cite the document, never invent — and not a promise about who can
+              see the window. The site is silent on that on purpose.
+
+              <span …><Icon name="shield" /> CV used with consent</span> */}
           <span className="mono flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-positive">
-            <Icon name="shield" size={13} />
-            CV used with consent
+            <Icon name="file" size={13} />
+            Drawn from your CV
           </span>
         </div>
       </div>
@@ -292,7 +364,7 @@ export default function LiveDemo() {
 
 /* ─────────────────────────────────────────────────────────────── helpers */
 
-/** Total words in one follow-up, counting the tail that follows a source tag. */
+/** Total words in one answer point, counting the tail that follows a source tag. */
 function countWords(ask) {
   return (
     ask.text.split(' ').length +
@@ -302,9 +374,9 @@ function countWords(ask) {
 }
 
 /**
- * Reveals the follow-up list against a running word budget, so the three items
- * cascade rather than appearing at once. An item with no budget left is not
- * rendered at all — an empty <li> would still draw its bullet.
+ * Reveals the answer against a running word budget, so the three points cascade
+ * rather than appearing at once. An item with no budget left is not rendered at
+ * all — an empty <li> would still draw its bullet.
  */
 function renderAsks(asks, budget, status) {
   let used = 0

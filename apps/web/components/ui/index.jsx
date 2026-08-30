@@ -106,6 +106,23 @@ const TONES = {
   positive: 'bg-positive-soft text-positive',
   critical: 'bg-critical-soft text-critical',
   warning:  'bg-warning-soft text-warning',
+  /*
+    DESI-MODE 2026-08-30: the solid flag, for a "New" pill sitting next to a
+    headline. Every tone above is a soft tint with matching text and none of them
+    can out-shout a 21px title; `accent` is spoken for by the hero badge and by
+    the highlight chips inside the Desi Mode card, and `warning` is the reference
+    design's amber, which is not this palette. Ink rather than a sixth hue
+    because the note at the top of globals.css is explicit that emphasis here is
+    ink and the accent is reserved for links and small marks.
+
+    It has to be a TONE. `<Badge className="bg-ink text-paper">` would put
+    bg-canvas-2 against bg-ink and text-ink-soft against text-paper on the same
+    element, and Tailwind v4 resolves same-property collisions by stylesheet
+    order, not by the order of your class attribute — so the winner is whichever
+    utility name sorts later, not the one you wrote last. Same trap the `inverse`
+    button variant exists to avoid; see BUTTON_VARIANTS above.
+  */
+  ink:      'bg-ink text-paper',
 }
 
 export function Badge({ tone = 'neutral', children, className = '' }) {

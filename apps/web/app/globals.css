@@ -227,6 +227,36 @@
     font-variant-numeric: tabular-nums lining-nums;
   }
 
+  /* ───────────────────────────────────── comparison table, 2026-08-30 ──────
+     The right-edge fade on /compare's feature grid, which is how that table
+     says "there is more to the right" without relying on a scrollbar the
+     platform may not draw.
+
+     A CLASS WITH A MEDIA QUERY rather than an inline style, because the fade is
+     WRONG once the table fits. At 1440px the grid is 1102px wide inside a
+     1102px box — nothing scrolls, and an unconditional mask was quietly eating
+     the last column's right edge and the container's own border along with it.
+
+     1024px is where the fits/does-not-fit line actually falls: the table is
+     min-width 940px, and Container(wide) gives it viewport − 3rem of padding,
+     so 976px at exactly this breakpoint — 36px of headroom. Below it, the grid
+     overflows and the fade is doing real work. If the table's min-width grows
+     past 976px, this breakpoint has to move with it.
+
+     -webkit- first: Safari still needs the prefixed property, and a browser
+     that understands both takes the later unprefixed one. */
+  .x-scroll-fade {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 2.5rem), transparent);
+  }
+
+  @media (min-width: 1024px) {
+    .x-scroll-fade {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+  }
+
   /* Section marker: [01] · HOW IT WORKS */
   .marker { display: flex; align-items: center; gap: 1rem; }
 

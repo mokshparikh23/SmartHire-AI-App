@@ -1,7 +1,7 @@
 {
   "name": "smarthire-desktop",
   "version": "1.0.4",
-  "description": "Interviewer copilot — listens with the candidate's consent and suggests what to ask next",
+  "description": "Answers on screen while the question is still being asked",
   "main": "electron/main.cjs",
   "type": "module",
   "author": "Smart Hire AI",
@@ -12,10 +12,12 @@
     "dev:electron": "cross-env NODE_ENV=development ELECTRON_RUN_AS_NODE= electron .",
     "build": "vite build",
     "icon": "cross-env ELECTRON_RUN_AS_NODE= electron scripts/make-icon.cjs",
+    "test:segment": "node scripts/segment-replay.mjs",
     "build:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
     "build:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
     "build:all": "npm run build && electron-builder --config electron-builder.config.cjs --mac --win",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dmg-bg": "cross-env ELECTRON_RUN_AS_NODE= electron scripts/make-dmg-background.cjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",

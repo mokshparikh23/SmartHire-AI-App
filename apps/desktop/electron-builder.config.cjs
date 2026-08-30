@@ -89,6 +89,30 @@ module.exports = {
     }
   },
 
+  /*
+    UNSIGNED-INSTALL 2026-08-30: the dmg window carries the install steps.
+
+    Without a Developer ID the first launch is blocked by a dialog whose blue
+    default button is "Move to Trash" and whose only alternative just closes it
+    — "Open Anyway" is not in that dialog at all, it is in System Settings and
+    only appears after a blocked attempt. Two things went wrong in testing that
+    this is aimed at: running the app straight out of the mounted dmg (where
+    quarantine cannot be cleared, so it looks permanently broken), and clicking
+    the blue button and deleting the download.
+
+    Coordinates must stay in step with scripts/make-dmg-background.cjs — the
+    arrow in the artwork is drawn to land between these two icons.
+  */
+  dmg: {
+    background: 'build/dmg-background.png',
+    window: { width: 600, height: 520 },
+    iconSize: 92,
+    contents: [
+      { x: 150, y: 190, type: 'file' },
+      { x: 450, y: 190, type: 'link', path: '/Applications' }
+    ]
+  },
+
   win: {
     target: [{ target: 'nsis', arch: ['x64'] }]
   },

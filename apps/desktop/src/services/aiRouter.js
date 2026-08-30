@@ -64,12 +64,17 @@ export function askAI(transcript, model, sessionId) {
  * @param {(chunk: string) => void} onChunk
  * @param {() => void} [onDone]
  * @param {string} [model]
+ * @param {string} [sessionId]
+ * @param {AbortSignal} [signal]  SEGMENTATION 2026-08-30 — supersede a stream
  */
 // export function askAIStream(transcript, onChunk, onDone, model) {
 //   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model))
 // }
-export function askAIStream(transcript, onChunk, onDone, model, sessionId) {
-  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId)
+// export function askAIStream(transcript, onChunk, onDone, model, sessionId) {
+//   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId)
+// }
+export function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
+  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId, signal)
 }
 
 /**

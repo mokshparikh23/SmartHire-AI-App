@@ -416,6 +416,12 @@
   color: rgba(255, 255, 255, 0.92);
   font-size: 12.5px; font-weight: 500;
   white-space: nowrap;
+  /* MULTILINGUAL 2026-08-30: Devanagari puts matras above the line and conjuncts
+     below it, and at the default ~1.2 the tops of ि े ौ were being clipped by
+     .ia-words' overflow-y: hidden. The arithmetic still fits: 12.5×1.5 + 10 ≈
+     29px against the 42px .ia-transcript's fixed 50px height allows, so neither
+     the bar nor main's window sizing moves. */
+  line-height: 1.5;
 }
 
 .ia-words--waiting,
@@ -446,6 +452,8 @@
      measured to be append-only so it will not rewrite itself, but it can still
      be cut short by a pause the speaker did not intend. */
   color: rgba(255, 255, 255, 0.72);
+  /* MULTILINGUAL 2026-08-30: matra clipping, same as .ia-word above. */
+  line-height: 1.5;
 }
 
 .ia-committed {

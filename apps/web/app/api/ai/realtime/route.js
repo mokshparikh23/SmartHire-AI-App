@@ -1,5 +1,5 @@
 import {
-  OPENAI_BASE, CORS, REALTIME_TRANSCRIBE_MODEL,
+  OPENAI_BASE, CORS, REALTIME_TRANSCRIBE_MODEL, TRANSCRIBE_PROMPT,
   requireProvider, requireSession, recordUsage, jsonError, upstreamError,
   friendlyUpstreamMessage,
 } from '@/lib/ai'
@@ -47,6 +47,51 @@ export const maxDuration = 60
 // client is told to fall back to the HTTP transcribe path instead.
 const UNSUPPORTED_PROVIDER = 'realtime_unsupported'
 
+/* MULTILINGUAL 2026-08-30 ─────────────────────────────────────────────────────
+   NO `language` HERE, DELIBERATELY, and do not add one. Omitting it is
+   auto-detection, and auto-detection IS the requirement: a question can be
+   English, Hindi, Gujarati or two of them inside one sentence. Pinning a
+   language would import the exact bug being removed from transcribe/route.js —
+   see the note there. This path was already correct on language; the work is
+   making sure it stays that way.
+
+   `prompt` is different. It biases vocabulary without asserting a language, and
+   a code-switched sentence is where a transcription model is weakest. But it is
+   UNVERIFIED on gpt-live-transcribe, and this model has already refused one
+   documented sibling field (turn_detection, below). A 400 here is not cosmetic:
+   useLiveVoice's giveUp() treats every non-501 error as "connect failed" and
+   drops the app to the segmented path for the rest of the session, with nothing
+   on screen to say so. Losing the vocabulary bias is small; losing the live
+   caption is the feature.
+
+   So the prompt is sent optimistically and the mint is retried ONCE without it.
+   Retrying is safe in a way the SDP exchange below is not — the mint is bound to
+   nothing the client holds. `promptAccepted` remembers the answer for this warm
+   instance, so the wasted round trip costs at most one cold start rather than
+   one per session. */
+// null = not yet observed on this instance; true/false = what it answered.
+let promptAccepted = null
+
+function transcriptionSession(withPrompt) {
+  const transcription = { model: REALTIME_TRANSCRIBE_MODEL }
+  if (withPrompt) transcription.prompt = TRANSCRIBE_PROMPT
+  return {
+    session: {
+      type: 'transcription',
+      audio: { input: { format: { type: 'audio/pcm', rate: 24000 }, transcription } },
+    },
+  }
+}
+
+async function mintSecret(apiKey, withPrompt) {
+  const res = await fetch(`${OPENAI_BASE}/realtime/client_secrets`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(transcriptionSession(withPrompt)),
+  })
+  return { res, data: await res.json().catch(() => null) }
+}
+
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS })
 }
@@ -92,22 +137,23 @@ export async function POST(request) {
   // without re-checking the model, or every session will 400 on this line.
   let secret
   try {
-    const res = await fetch(`${OPENAI_BASE}/realtime/client_secrets`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session: {
-          type: 'transcription',
-          audio: {
-            input: {
-              format: { type: 'audio/pcm', rate: 24000 },
-              transcription: { model: REALTIME_TRANSCRIBE_MODEL },
-            },
-          },
-        },
-      }),
-    })
-    const data = await res.json().catch(() => null)
+    // const res = await fetch(`${OPENAI_BASE}/realtime/client_secrets`, { ... })
+    const withPrompt = promptAccepted !== false
+    let { res, data } = await mintSecret(apiKey, withPrompt)
+
+    if (!res.ok && res.status === 400 && withPrompt) {
+      // Not necessarily the prompt — a 400 could be a malformed body from some
+      // future edit. Retrying bare is cheap either way: if the field was not the
+      // cause, the second attempt returns the same 400 and is reported normally,
+      // and the only thing we have mis-set is a bias we can live without.
+      console.warn('[realtime] transcription prompt refused, retrying without it:',
+        JSON.stringify(data?.error || data).slice(0, 200))
+      promptAccepted = false
+      ;({ res, data } = await mintSecret(apiKey, false))
+    } else if (res.ok && withPrompt) {
+      promptAccepted = true
+    }
+
     if (!res.ok) {
       return jsonError(
         friendlyUpstreamMessage(res.status, JSON.stringify(data?.error || data), 'OpenAI'),

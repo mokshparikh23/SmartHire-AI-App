@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import Icon from '../ui/Icon'
 import Kbd, { comboLabel } from './Kbd'
 
@@ -26,6 +27,8 @@ export default function Toolbar({ session, onEnd, onToggleCollapse }) {
   const setCaptureSource = useSessionStore((s) => s.setCaptureSource)
   const setScreenEnabled = useSessionStore((s) => s.setScreenEnabled)
   const toggleChat       = useSessionStore((s) => s.toggleChat)
+  // ANSWER-STYLE 2026-08-30: the pill says what comes back, not what is sent.
+  const followups        = useSettingsStore((s) => s.answerMode === 'followups')
 
   const screenDenied = screenPermission === 'denied' || screenPermission === 'restricted'
   const systemSource = captureSource === 'system'
@@ -77,15 +80,19 @@ export default function Toolbar({ session, onEnd, onToggleCollapse }) {
       </button>
 
       {/* ── Actions ── */}
+      {/* ANSWER-STYLE 2026-08-30: the button fires the same request in both
+          modes — it is the word for what comes back that changes. */}
       <button
         className="ia-pill"
         onClick={session.regenerate}
         disabled={isThinking || !hasQuestion}
+        // title={hasQuestion ? `Answer again (${comboLabel('mod enter')})` : 'No question yet'}
         title={hasQuestion
-          ? `Answer again (${comboLabel('mod enter')})`
+          ? `${followups ? 'Suggest' : 'Answer'} again (${comboLabel('mod enter')})`
           : 'No question yet'}
       >
-        Answer <Kbd combo="mod enter" />
+        {/* Answer <Kbd combo="mod enter" /> */}
+        {followups ? 'Suggest' : 'Answer'} <Kbd combo="mod enter" />
       </button>
 
       <button
@@ -159,6 +166,10 @@ function OverflowMenu({ session }) {
   const minutesRemaining = useSessionStore((s) => s.minutesRemaining)
   const isThinking       = useSessionStore((s) => s.isThinking)
   const hasQuestion      = useSessionStore((s) => !!s.currentQuestion)
+  // ANSWER-STYLE 2026-08-30: same reason as the pill above — Retry and Copy act
+  // on whatever the card is holding, and in the default mode that is a
+  // suggestion rather than an answer.
+  const followups        = useSettingsStore((s) => s.answerMode === 'followups')
 
   useEffect(() => {
     if (!open) return
@@ -209,11 +220,15 @@ function OverflowMenu({ session }) {
 
           <button onClick={() => { session.regenerate(); setOpen(false) }}
                   disabled={isThinking || !hasQuestion}>
-            <Icon name="reset" size={13} /><span>Retry answer</span>
+            {/* <span>Retry answer</span> */}
+            <Icon name="reset" size={13} />
+            <span>{followups ? 'Retry suggestion' : 'Retry answer'}</span>
             <Kbd combo="mod shift r" />
           </button>
           <button onClick={copyAnswer}>
-            <Icon name="copy" size={13} /><span>Copy answer</span>
+            {/* <span>Copy answer</span> */}
+            <Icon name="copy" size={13} />
+            <span>{followups ? 'Copy suggestion' : 'Copy answer'}</span>
             <Kbd combo="mod shift c" />
           </button>
           <button onClick={() => { window.electronAPI?.toggleOverlay?.(); setOpen(false) }}>

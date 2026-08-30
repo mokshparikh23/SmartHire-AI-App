@@ -1,7 +1,7 @@
 import { getStripe, getWebhookSecret } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase-server'
-import { grantMinutes, setSubscription } from '@/lib/metering'
-import { MINUTES_PER_CREDIT } from '@/lib/credits'
+import { setSubscription } from '@/lib/metering'
+import { fulfilCreditOrder, claimOrder } from '@/lib/fulfilment'
 
 // Signature verification needs the RAW body, so this must not run on an edge
 // runtime that might transform it.
@@ -24,43 +24,53 @@ export const dynamic = 'force-dynamic'
  * Subscription state is safe to write repeatedly — it is a set, not an
  * increment — so those events need no such guard.
  */
-async function fulfilCreditOrder(admin, order) {
-  const totalCredits = (order.credits || 0) + (order.bonus_credits || 0)
+/*
+  RAZORPAY 2026-08-30: fulfilCreditOrder() moved to lib/fulfilment.js, unchanged
+  in behaviour, because the Razorpay webhook needs exactly the same thing and a
+  second copy of the code that decides whether to grant free hours is not a copy
+  to maintain twice. The idempotency notes that stood here moved with it — they
+  describe the shared function now, and they apply to both gateways.
 
-  // The conditional update IS the lock. If a concurrent or redelivered event
-  // already flipped this row, no row comes back and nothing is granted.
-  const { data: claimed } = await admin
-    .from('credit_orders')
-    .update({ status: 'paid', paid_at: new Date().toISOString() })
-    .eq('id', order.id)
-    .eq('status', 'pending')
-    .select()
-    .maybeSingle()
+  Kept here rather than deleted, per the convention in this repo.
 
-  if (!claimed) return { granted: false, reason: 'already fulfilled' }
+  async function fulfilCreditOrder(admin, order) {
+    const totalCredits = (order.credits || 0) + (order.bonus_credits || 0)
 
-  await grantMinutes({
-    userId:  order.user_id,
-    minutes: (order.credits || 0) * MINUTES_PER_CREDIT,
-    kind:    'purchase',
-    note:    `${order.credits} credit${order.credits === 1 ? '' : 's'} (${order.pack_id})`,
-    orderId: order.id,
-  })
+    // The conditional update IS the lock. If a concurrent or redelivered event
+    // already flipped this row, no row comes back and nothing is granted.
+    const { data: claimed } = await admin
+      .from('credit_orders')
+      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .eq('id', order.id)
+      .eq('status', 'pending')
+      .select()
+      .maybeSingle()
 
-  // The bonus is a separate ledger row so a customer can see what they paid for
-  // and what they were given, rather than one opaque number.
-  if (order.bonus_credits > 0) {
+    if (!claimed) return { granted: false, reason: 'already fulfilled' }
+
     await grantMinutes({
       userId:  order.user_id,
-      minutes: order.bonus_credits * MINUTES_PER_CREDIT,
-      kind:    'purchase_bonus',
-      note:    `${order.bonus_credits} free credit${order.bonus_credits === 1 ? '' : 's'}`,
+      minutes: (order.credits || 0) * MINUTES_PER_CREDIT,
+      kind:    'purchase',
+      note:    `${order.credits} credit${order.credits === 1 ? '' : 's'} (${order.pack_id})`,
       orderId: order.id,
     })
-  }
 
-  return { granted: true, credits: totalCredits }
-}
+    // The bonus is a separate ledger row so a customer can see what they paid for
+    // and what they were given, rather than one opaque number.
+    if (order.bonus_credits > 0) {
+      await grantMinutes({
+        userId:  order.user_id,
+        minutes: order.bonus_credits * MINUTES_PER_CREDIT,
+        kind:    'purchase_bonus',
+        note:    `${order.bonus_credits} free credit${order.bonus_credits === 1 ? '' : 's'}`,
+        orderId: order.id,
+      })
+    }
+
+    return { granted: true, credits: totalCredits }
+  }
+*/
 
 async function applySubscription(admin, { userId, kind, status, periodEnd, customerId, subscriptionId }) {
   if (!userId) return
@@ -133,17 +143,12 @@ export async function POST(request) {
             .eq('id', order.id)
           await fulfilCreditOrder(admin, order)
         } else {
-          const { data: claimed } = await admin
-            .from('credit_orders')
-            .update({
-              status: 'paid',
-              paid_at: new Date().toISOString(),
-              stripe_subscription_id: session.subscription || null,
-            })
-            .eq('id', order.id)
-            .eq('status', 'pending')
-            .select()
-            .maybeSingle()
+          // Same conditional-update lock as before, now shared with the Razorpay
+          // handler. The gateway id is written in the SAME statement as the
+          // status flip so the two cannot end up half-applied.
+          const claimed = await claimOrder(admin, order.id, {
+            stripe_subscription_id: session.subscription || null,
+          })
 
           if (claimed) {
             // The checkout session does not carry the period end, so read it

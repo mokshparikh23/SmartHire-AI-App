@@ -93,16 +93,20 @@ export const metadata = {
     PIVOT 2026-08-29: was "Real-time answers during live interviews. Invisible to
     your interviewer."
 
-    CORRECTION 2026-08-30: the note that stood here said the content-protection
-    call "was deleted in 5d4fa31". It was not — setContentProtection(true) is
-    live in electron/main.cjs and is staying, deliberately. The panel is the
-    interviewer's own working surface. What changed on 2026-08-30 is the other
-    half: systemPrompt.js really is interviewer-side now, so the description
-    below is finally true of the binary and not just of this page.
+    CONCEPT 2026-08-30: the product is the candidate's again, so the first half of
+    that old string is back — real-time answers during live interviews. The second
+    half is NOT, and does not come back: this description makes no claim about who
+    can or cannot see the panel. That was a promise about window compositing, it
+    was removed once already, and the site is deliberately silent on it. See the
+    banner at the top of app/page.jsx.
+
+    The interviewer-side description this replaced:
+    'A copilot for the person running the interview. It listens with the candidate’s
+     knowledge and consent, and suggests what to ask next.'
   */
   description:
-    'A copilot for the person running the interview. It listens with the candidate’s ' +
-    'knowledge and consent, and suggests what to ask next.',
+    'Real-time answers during live interviews. It hears the question, and puts the ' +
+    'answer on screen — drawn from your own CV and tagged where each fact came from.',
 }
 
 export default function RootLayout({ children }) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import Icon from '../ui/Icon'
 import Kbd from './Kbd'
 
@@ -58,6 +59,28 @@ export default function AnswerPanel() {
     ? new Date(questionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : ''
 
+  /*
+    ANSWER-STYLE 2026-08-30: the labels follow the mode, because with 'followups'
+    shipping as the default they were describing the other product. "Answer:"
+    over a list of questions to ask is not a cosmetic wrong label — it is the
+    panel telling an interviewer to read them out, which is the exact failure the
+    pivot exists to prevent.
+
+    Source matters too. A [TYPED] or [SCREENSHOT] turn is answered even in
+    followups mode — the prompt says so in as many words — so "Ask next:" over
+    one of those would be a second wrong label swapped in for the first.
+
+    Both of these change at most once per turn, so subscribing is as cheap as the
+    booleans everything above this component subscribes to. The rule this file is
+    built on — that currentAnswer has exactly one subscriber — is untouched.
+  */
+  const followups = useSettingsStore((s) => s.answerMode === 'followups')
+  const source    = useSessionStore((s) => s.source)
+
+  const heard  = source === 'voice'
+  const qLabel = followups ? (heard ? 'Heard:'    : 'You asked:') : 'Question:'
+  const aLabel = followups ? (heard ? 'Ask next:' : 'Reply:')     : 'Answer:'
+
   return (
     <>
       <div className="ia-body" ref={bodyRef} onScroll={handleScroll}>
@@ -65,7 +88,8 @@ export default function AnswerPanel() {
           <div className="ia-qa">
             <Icon name="chat" size={15} />
             <p className="ia-question-text">
-              <span className="ia-qa-label">Question:</span>
+              {/* <span className="ia-qa-label">Question:</span> */}
+              <span className="ia-qa-label">{qLabel}</span>
               {question}
             </p>
           </div>
@@ -86,7 +110,8 @@ export default function AnswerPanel() {
           <div className="ia-qa ia-qa--answer">
             <Icon name="sparkle" size={15} />
             <p className="ia-answer">
-              <span className="ia-qa-label">Answer:</span>
+              {/* <span className="ia-qa-label">Answer:</span> */}
+              <span className="ia-qa-label">{aLabel}</span>
               {answer}
               {isThinking && <span className="ia-caret" />}
             </p>
@@ -96,14 +121,24 @@ export default function AnswerPanel() {
         ) : !question ? (
           <div className="ia-empty">
             <Icon name="mic" size={20} strokeWidth={1.4} />
-            <span>Answers appear here as questions are asked</span>
+            {/* <span>Answers appear here as questions are asked</span> */}
+            <span>
+              {followups
+                ? 'Follow-ups appear here as the candidate speaks'
+                : 'Answers appear here as questions are asked'}
+            </span>
           </div>
         ) : null}
       </div>
 
       <div className="ia-footer">
         {/* <span className="ia-meta">{words ? `${words} words` : ''}</span> */}
-        <span className="ia-meta">{answer && stamp ? `Answer · ${stamp}` : ''}</span>
+        {/* <span className="ia-meta">{answer && stamp ? `Answer · ${stamp}` : ''}</span> */}
+        {/* ANSWER-STYLE 2026-08-30: the same label as the block above it, minus
+            its colon, so the footer cannot disagree with what it is stamping. */}
+        <span className="ia-meta">
+          {answer && stamp ? `${aLabel.replace(':', '')} · ${stamp}` : ''}
+        </span>
         <span className="ia-spacer" />
 
         {/* Feedback is session-local — no table, no endpoint. Only a committed
@@ -113,7 +148,8 @@ export default function AnswerPanel() {
           data-on={feedback === 'up'}
           disabled={!activeTurnId || !answer}
           onClick={() => setFeedback(activeTurnId, 'up')}
-          title="Good answer"
+          // title="Good answer"
+          title={followups ? 'Good suggestion' : 'Good answer'}
         >
           <Icon name="thumbUp" size={13} />
         </button>
@@ -122,7 +158,8 @@ export default function AnswerPanel() {
           data-on={feedback === 'down'}
           disabled={!activeTurnId || !answer}
           onClick={() => setFeedback(activeTurnId, 'down')}
-          title="Bad answer"
+          // title="Bad answer"
+          title={followups ? 'Bad suggestion' : 'Bad answer'}
         >
           <Icon name="thumbDown" size={13} />
         </button>
@@ -136,8 +173,15 @@ export default function AnswerPanel() {
  * expand on the right. Kept in this file because it belongs to the answer card,
  * but split out so it can sit above the scrolling body rather than inside it.
  */
+// ANSWER-STYLE 2026-08-30: the default is only reached when a caller omits
+// clearTitle, and SessionPanel — the one caller — always passes it. Kept in step
+// with the panel's own vocabulary anyway, so an omission does not reintroduce
+// the wrong word.
+// export function AnswerCardHead({
+//   children, onClear, onExpand, canClear, clearCombo = 'mod del', clearTitle = 'Clear the answer',
+// }) {
 export function AnswerCardHead({
-  children, onClear, onExpand, canClear, clearCombo = 'mod del', clearTitle = 'Clear the answer',
+  children, onClear, onExpand, canClear, clearCombo = 'mod del', clearTitle = 'Clear what is showing',
 }) {
   return (
     <div className="ia-card-head">

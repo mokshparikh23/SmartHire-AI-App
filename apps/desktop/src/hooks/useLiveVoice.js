@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { openRealtimeCall } from '../services/aiRouter'
 import { useSessionStore } from '../store/sessionStore'
+import { createSilenceDetector } from '../utils/silenceDetector'
+import { createLogger } from '../utils/logger'
 import { acquire } from './useVoice'
+
+const log = createLogger('vad-live')
 
 /**
  * Live captioning: text appears while the person is still speaking.
@@ -12,7 +16,12 @@ import { acquire } from './useVoice'
  *
  * @param {boolean}  enabled
  * @param {string}   source      'system' | 'mic', same values acquire() takes
- * @param {Function} onQuestion  called ONCE per utterance, with the final text
+ * @param {object}   aggRef      ref holding the shared utterance aggregator.
+ *                               SEGMENTATION 2026-08-30: this replaced
+ *                               onQuestion. Deciding when a question has ENDED
+ *                               is no longer this file's job — it reports
+ *                               fragments and speech edges, and the aggregator
+ *                               owns the policy for both capture paths.
  * @param {Function} onPartial   called on every delta with the text so far
  * @param {Function} onUnsupported  called when this path cannot run, so the
  *                                  caller can start useVoice instead
@@ -38,52 +47,90 @@ import { acquire } from './useVoice'
    is only what that decision drives: no MediaRecorder, no blob, no upload. It
    commits the text the deltas already delivered. */
 
-const SILENCE_MS   = 700   // matches useVoice; a sentence is closed after this
-const MIN_TEXT_CHARS = 3
-const FILLER = /^(thank you|thanks|okay|ok|yes|no|yeah|hmm+|uh+|um+|mm+|\.+)$/i
+/* SEGMENTATION 2026-08-30: all six constants moved out.
+
+   The three VAD numbers now live in utils/silenceDetector.js, which is the same
+   analyser loop this file and useVoice.js each ran a private copy of. That
+   extraction is also what finally gives this path MAX_SEGMENT_MS and
+   MIN_SPEECH_MS — it never had either, so a speaker who stayed above threshold
+   never committed at all, and a cough committed 700ms later.
+
+   MIN_TEXT_CHARS and FILLER moved to utils/utterance.js, where they became
+   script-aware and multilingual. The copies below were byte-identical to
+   useVoice's and both were English-only, so "haan" and "ठीक है" each bought a
+   full metered answer. */
+// const SILENCE_MS   = 700   // matches useVoice; a sentence is closed after this
+// const MIN_TEXT_CHARS = 3
+// const FILLER = /^(thank you|thanks|okay|ok|yes|no|yeah|hmm+|uh+|um+|mm+|\.+)$/i
 
 // Same shape as useVoice's noise tracking, and for the same reason: microphone
 // and playback gain vary enormously, so the trigger is measured rather than set.
-const NOISE_FACTOR = 1.9
-const NOISE_MARGIN = 2.5
-const FLOOR_MIN    = 1.5
+// const NOISE_FACTOR = 1.9
+// const NOISE_MARGIN = 2.5
+// const FLOOR_MIN    = 1.5
 
 // A 501 from our own backend means the server is on Gemini. Not an error to
 // show anyone — just a reason to use the other path.
 const UNSUPPORTED = 'realtime_unsupported'
 
+// export function useLiveVoice({
+//   enabled, source = 'system', onQuestion, onPartial, onUnsupported, levelRef,
+// }) {
 export function useLiveVoice({
-  enabled, source = 'system', onQuestion, onPartial, onUnsupported, levelRef,
+  enabled, source = 'system', aggRef, onPartial, onUnsupported, levelRef,
 }) {
   useEffect(() => {
     if (!enabled) return
 
     let cancelled = false
-    const own = { stream: null, pc: null, ctx: null, raf: 0, silence: null }
+    // SEGMENTATION 2026-08-30: ctx/raf/silence moved into the shared detector,
+    // which owns the AudioContext and its own teardown.
+    // const own = { stream: null, pc: null, ctx: null, raf: 0, silence: null }
+    const own = { stream: null, pc: null, vad: null }
 
-    /** Text accumulated from deltas since the last commit. */
+    /** Text accumulated from deltas since the last segment closed. */
     let pending = ''
 
     const release = () => {
-      if (own.raf) { cancelAnimationFrame(own.raf); own.raf = 0 }
-      if (own.silence) { clearTimeout(own.silence); own.silence = null }
+      own.vad?.stop()
+      own.vad = null
       try { own.pc?.close() } catch { /* already closed */ }
       own.pc = null
-      own.ctx?.close().catch(() => {})
-      own.ctx = null
       own.stream?.getTracks().forEach((t) => t.stop())
       own.stream = null
       if (levelRef) levelRef.current = 0
     }
 
-    /** Hands this utterance to the answer stage and resets the caption. */
-    const commit = () => {
-      const text = pending.trim()
+    /* SEGMENTATION 2026-08-30 ─ commit() is gone, and this is the whole change.
+
+       It used to drop the filler, apply the length floor and call onQuestion —
+       i.e. it decided, right here, that a 700ms silence meant the question was
+       over. That is the reported bug: "So what is" [pause] "tell me about class"
+       was two commits and two answers.
+
+       Both jobs moved. The gates are in utils/utterance.js and the end-of-turn
+       decision is in utils/utteranceAggregator.js, shared with useVoice so the
+       two paths cannot disagree about what a question is.
+
+       const commit = () => {
+         const text = pending.trim()
+         pending = ''
+         onPartial?.('')
+         if (!text || text.length < MIN_TEXT_CHARS) return
+         if (FILLER.test(text)) return
+         onQuestion(text)
+       }  */
+
+    /** Hands the deltas gathered so far to the aggregator as ONE fragment. */
+    const pushFragment = (meta) => {
+      const text = pending
       pending = ''
-      onPartial?.('')
-      if (!text || text.length < MIN_TEXT_CHARS) return
-      if (FILLER.test(text)) return
-      onQuestion(text)
+      /* NOT onPartial('') any more. Blanking here wiped the caption at every
+         fragment boundary — which, during a hold, erases "So what is" from the
+         screen while the user is still mid-question. The aggregator drives the
+         caption through onHoldChange instead, so a held fragment stays visible
+         and the wait reads as deliberate rather than as a dropped question. */
+      aggRef?.current?.pushFragment(text, meta)
     }
 
     const giveUp = (reason, err) => {
@@ -163,53 +210,48 @@ export function useLiveVoice({
       }
 
       // ── Turn detection ──────────────────────────────────────────────────────
-      // Unchanged from useVoice in everything but what it triggers.
-      const ctx = new AudioContext()
-      own.ctx = ctx
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 512
-      ctx.createMediaStreamSource(stream).connect(analyser)
+      /* SEGMENTATION 2026-08-30: the analyser loop that used to live here was
+         byte-identical to useVoice's, and is now utils/silenceDetector.js. The
+         comment it carried about delta lag still applies and has moved to
+         onSegmentEnd below, because it is still the reason this works. */
+      own.vad = createSilenceDetector({
+        stream,
+        levelRef,
+        log,
+        onSpeechStart: ({ at }) => {
+          if (cancelled) return
+          aggRef?.current?.noteSpeechStart(at)
+        },
+        onSegmentEnd: (meta) => {
+          if (cancelled) return
 
-      const data = new Uint8Array(analyser.fftSize)
-      let speaking = false
-      let noiseFloor = 0
+          // Tell the aggregator the speaker stopped BEFORE handing over the
+          // text. On this path the two are the same instant, but the aggregator
+          // treats the edges and the content as separate inputs precisely so the
+          // segmented path — where the transcript lands ~700ms later — behaves
+          // identically.
+          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
 
-      const tick = () => {
-        if (cancelled) return
+          // An idle recycle carries no speech, and a sub-threshold blip is a
+          // cough or a keystroke. Neither is a fragment. MIN_SPEECH_MS never
+          // existed on this path before the detector was shared.
+          if (meta.reason === 'idle' || meta.tooShort) {
+            pending = ''
+            // A cough can still have produced a delta or two. Clear the caption
+            // so a stray syllable is not left painted over the committed
+            // question — the aggregator will not be told about this one, so
+            // nothing else is going to clear it.
+            onPartial?.('')
+            return
+          }
 
-        analyser.getByteTimeDomainData(data)
-        let sum = 0
-        for (let i = 0; i < data.length; i++) {
-          const d = data[i] - 128
-          sum += d * d
-        }
-        const rms = Math.sqrt(sum / data.length)
-        if (levelRef) levelRef.current = rms
-
-        if (!speaking) {
-          const alpha = rms < noiseFloor ? 0.25 : 0.02
-          noiseFloor += (rms - noiseFloor) * alpha
-        }
-        const threshold = Math.max(FLOOR_MIN, noiseFloor * NOISE_FACTOR + NOISE_MARGIN)
-
-        if (rms > threshold) {
-          speaking = true
-          if (own.silence) { clearTimeout(own.silence); own.silence = null }
-        } else if (speaking && !own.silence) {
-          own.silence = setTimeout(() => {
-            speaking = false
-            own.silence = null
-            // The deltas for the tail of a sentence land slightly after the
-            // audio does, so committing on the exact silence edge would clip the
-            // last word or two. SILENCE_MS is already longer than the observed
-            // delta lag, so by here the text has caught up.
-            commit()
-          }, SILENCE_MS)
-        }
-
-        own.raf = requestAnimationFrame(tick)
-      }
-      own.raf = requestAnimationFrame(tick)
+          // The deltas for the tail of a sentence land slightly after the audio
+          // does, so committing on the exact silence edge would clip the last
+          // word or two. silenceMs is longer than the observed delta lag, so by
+          // here the text has caught up.
+          pushFragment(meta)
+        },
+      })
     }
 
     run()
@@ -218,5 +260,10 @@ export function useLiveVoice({
       cancelled = true
       release()
     }
-  }, [enabled, source, onQuestion, onPartial, onUnsupported, levelRef])
+    // SEGMENTATION 2026-08-30: aggRef is a ref object, so its identity is stable
+    // and it cannot retear the capture. That is why the aggregator is created in
+    // useInterviewSession and passed down rather than built in here — a value
+    // that changed identity in this array would re-acquire the device.
+    // }, [enabled, source, onQuestion, onPartial, onUnsupported, levelRef])
+  }, [enabled, source, aggRef, onPartial, onUnsupported, levelRef])
 }

@@ -95,7 +95,8 @@ import { useSettingsStore } from '../store/settingsStore'
  */
 export function buildSystemPrompt() {
   // const { interviewContext } = useSettingsStore.getState()
-  const { interviewContext, answerMode } = useSettingsStore.getState()
+  // const { interviewContext, answerMode } = useSettingsStore.getState()
+  const { interviewContext, answerMode, answerStyle } = useSettingsStore.getState()
   const { company, role, resume, jobDescription, resumeConsent } = interviewContext
 
   // Falsy-safe: a résumé that was pasted before consent was given must not leak
@@ -131,7 +132,31 @@ ${jobDescription.trim()}`)
 
   const context = sections.join('\n\n')
 
-  if (answerMode !== 'followups') return answerPrompt(context)
+  /*
+    ANSWER-STYLE 2026-08-30: register is an axis, not a third mode.
+
+    What the copilot is FOR is answerMode. How it words the result is
+    answerStyle, and the two are independent — a plain follow-up and a plain
+    answer are both things a user can want, so branching this into the mode
+    switch would have needed four prompts to express two ideas.
+
+    It is computed HERE, next to `context`, for the same reason `context` is:
+    both branches below need it and neither may see a different one. Note what
+    it is NOT given. `useResume` and the sections array are already assembled
+    above and are not passed to it. The consent gate decides what the model is
+    TOLD; this decides only how the model words what it says back.
+  */
+  const style = styleBlock(answerStyle)
+
+  // if (answerMode !== 'followups') return answerPrompt(context)
+  //
+  // ANSWER-STYLE 2026-08-30: the test is inverted along with the default. With
+  // 'followups' shipping as the default, `!== 'followups'` made any value the
+  // store did not recognise — a hand-edited blob, a value from a build that has
+  // not been written yet — fall through to 'answer'. Falling back to whatever is
+  // currently the default is the rule at both ends now; setAnswerMode does the
+  // same on the way in.
+  if (answerMode === 'answer') return answerPrompt(context, style)
 
   return `You are a copilot for the person CONDUCTING this job interview.
 
@@ -167,6 +192,26 @@ Either way: short lines, readable at a glance mid-conversation. One sentence of
 reasoning, then the question. Keep a reply under about 60 words unless they
 asked for detail. They have roughly three seconds to read it.
 
+LANGUAGE
+
+The candidate may speak English, Hindi, Gujarati, Hinglish, or two of them in
+one sentence, in Latin, Devanagari or Gujarati script. Read all of them.
+
+Write every follow-up in English. The interviewer reads English, and asks the
+question in whatever language the room is using — that translation is theirs to
+make, not yours, and it is the one thing they do not need help with.
+
+Keep technical terms as the candidate said them. When you quote the candidate,
+quote the words they actually used, in the script they were transcribed in. A
+translated quote is not a quote, and this is the one place the original language
+belongs.
+
+Romanized Hindi and Gujarati are ambiguous, and one spelling is often two words.
+Where the reading changes what is worth asking, name the reading you took in
+three or four words — "taking 'kal' as tomorrow" — rather than choosing one
+silently. Do not turn the ambiguity itself into the follow-up unless the two
+readings mean genuinely different things.
+
 WHAT MAKES A GOOD FOLLOW-UP
 
 - Pin down a vague claim. "Improved a lot", "pretty smoothly", "we basically
@@ -198,7 +243,7 @@ BOUNDARIES
   or national origin. If the candidate volunteers such a detail, do not follow
   it up.
 - If nothing is worth asking — the answer was complete and specific — say
-  "nothing to add" rather than manufacturing a question.`
+  "nothing to add" rather than manufacturing a question.${style}`
 }
 
 /**
@@ -211,8 +256,15 @@ BOUNDARIES
  * The length discipline is not cosmetic. This renders into a floating panel
  * that is read mid-conversation, so a correct answer nobody has time to read is
  * a failed answer.
+ *
+ * ANSWER-STYLE 2026-08-30: `style` is the register block from styleBlock(),
+ * already carrying its own leading blank line, or '' — see that function's note
+ * on why the spacing lives there and not at the interpolation site. It defaults
+ * to '' so that calling this with one argument still produces exactly the prompt
+ * it produced before today.
  */
-function answerPrompt(context) {
+// function answerPrompt(context) {
+function answerPrompt(context, style = '') {
   return `You are a live assistant for someone in a spoken conversation. You
 read what is said out loud and answer it.
 
@@ -241,6 +293,28 @@ Short lines, readable at a glance. Lead with the answer, then at most one
 sentence supporting it. Keep a reply under about 60 words unless detail was
 asked for. They have roughly three seconds to read it.
 
+LANGUAGE
+
+What you hear may be English, Hindi, Gujarati, Hinglish, or two of them in the
+same sentence, and it may arrive in Latin, Devanagari or Gujarati script. Read
+all of them. A question is not less of a question for being asked in Hindi.
+
+Always write the answer in English, whatever was spoken. Do not mirror the
+language of the question, do not answer in Hindi or Gujarati, and do not append
+a translation of your own answer.
+
+Do not translate the question back or restate it in English before answering.
+The answer still comes first.
+
+Keep technical terms exactly as they were said — inheritance, pointer, index,
+deadlock, C#. Those are already English words inside a Hindi sentence, and
+translating them is how a question stops meaning what it meant.
+
+Romanized Hindi and Gujarati are ambiguous, and one spelling is often two words.
+When the reading changes the answer, say in three or four words which one you
+took — "reading 'kal' as tomorrow" — and answer that. Do not pick one silently,
+and do not ask which was meant unless the two readings have nothing in common.
+
 ACCURACY
 
 - Cite [resume] or [JD] inline when a claim comes from that document.
@@ -257,5 +331,81 @@ BOUNDARIES
 
 - Do not produce anything that turns on a protected characteristic: age, race,
   religion, sex, pregnancy or family plans, disability, caste, marital status,
-  or national origin.`
+  or national origin.${style}`
+}
+
+/**
+ * ANSWER-STYLE 2026-08-30 ─ the register block, appended to whichever prompt ran.
+ *
+ * Returns '' for every value but 'desi', AND THE LEADING BLANK LINE LIVES INSIDE
+ * THE RETURNED STRING. That is deliberate: it makes the interpolation site a
+ * bare `${style}` sitting flush against the last character of each template, so
+ * a plain-style prompt is byte-for-byte the prompt this file produced before
+ * today. A '\n\n' at the call site would leave two trailing newlines on every
+ * prompt in the default path — a silent change to the overwhelmingly common
+ * case, in a file where the default case is the one nobody re-reads.
+ *
+ * It goes LAST in both prompts. Last is the strongest position for something
+ * about wording, and the closing paragraph is what makes that safe: it
+ * subordinates itself to everything above it, so BOUNDARIES, SOURCING/ACCURACY
+ * and the identity statement still win. Do not move it above them to "protect"
+ * them — that trades a real gain in adherence for a protection they already have.
+ *
+ * ON WHAT IT MUST NEVER CONTAIN. The header at the top of this file lists the
+ * two instructions removed in the pivot: write in the candidate's first person,
+ * and conceal the tool. A register feature is exactly where those come back in
+ * disguise, because "sound natural" is one short step from "sound like a human
+ * and not like an AI". The closing paragraph states the opposite in so many
+ * words, so a reader who ever sees this block alone cannot re-derive the covert
+ * prompt from it.
+ *
+ * The product name does not appear in the prompt either. Naming an ethnicity to
+ * a model is an invitation to perform one, and what is wanted here is plainer
+ * English, not a character — hence the bullet forbidding accent-play and
+ * decorative Hindi, and the one keeping "plain" from sliding into "personal".
+ */
+function styleBlock(answerStyle) {
+  if (answerStyle !== 'desi') return ''
+
+  return `
+
+HOW TO WRITE IT
+
+Write the way a colleague talks across a desk, not the way a textbook is
+written. Plain, direct Indian English. Same content, ordinary words.
+
+- Prefer the short everyday word: "use" not "utilise", "so" not "hence",
+  "about" not "approximately", "help" not "facilitate", "start" not
+  "commence", "get" not "obtain", "ask" not "seek clarification on".
+- Contractions are fine — "don't", "they're", "what's". Say "you" and "they".
+- One idea per sentence, and cut the wind-up. Not "it would be worth exploring
+  whether the deployment process was automated"; just "was the deploy
+  automated, or did someone run it by hand?"
+- No consultant or textbook register: no "leverage", "synergy", "robust",
+  "holistic", "delve into", "key takeaway", "in conclusion", "it is important
+  to note that". No jargon standing in for a point.
+- Where an example makes something land faster, reach for one the reader
+  already knows from working in India — UPI, IST, a lakh, a crore, the
+  difference between a service company and a product one. An example
+  illustrates a point; it never asserts a fact about this candidate.
+- Do not perform an accent, and do not sprinkle in Hindi for flavour. This is
+  about being plain, not about playing a character. A sentence that is already
+  plain needs no changing.
+- Plain never becomes personal. Where someone is from, which college they went
+  to, which company they came from — none of that is a stand-in for ability,
+  and none of it becomes a follow-up. The boundaries above hold exactly as
+  written.
+
+THE LENGTH LIMIT DOES NOT MOVE. The word count above is a ceiling, not a
+target, and ordinary words are shorter than formal ones — so this section
+should make you shorter, never longer. Conversational does not mean chatty:
+still no greeting, no preamble, no restating the question, no sign-off, no
+"hope this helps".
+
+THIS SECTION CHANGES THE WORDS AND NOTHING ELSE. Who you are writing for, what
+counts as a good reply, what you may claim and where it came from, and the
+boundaries — all of that is set above and all of it wins wherever this section
+looks like it disagrees. You still never write in the candidate's voice, never
+produce a line for anyone to read out as their own, and never hide or deny
+what you are. Asked directly, say plainly that you are an AI assistant.`
 }

@@ -142,15 +142,38 @@ export const isUnlimited = (userId) =>
  * Pass kind: null to clear. Credits are never touched either way, so a lapsed
  * subscriber falls straight back onto whatever balance they had.
  */
+/*
+  RAZORPAY 2026-08-30: two more ids, one per gateway. A subscription is owned by
+  exactly one of them, so in practice only one pair is ever non-null on a call —
+  the other stays null and subscription_set() leaves that gateway's columns
+  alone via coalesce().
+
+  These MUST be sent on every call, including the Stripe ones. PostgREST resolves
+  an RPC by the names in the payload, and 20260830050000_razorpay.sql dropped the
+  seven-argument signature outright rather than leaving it beside the new one —
+  see the long note there about why an overload would have been a security hole.
+  Omitting them would still work today (they default to null), but naming them
+  keeps this call and that signature obviously in step.
+
+  export const setSubscription = ({
+    userId, kind, status, periodEnd, stripeCustomerId, stripeSubscriptionId, actorId,
+  }) =>
+    rpc('subscription_set', { … seven args … })
+*/
 export const setSubscription = ({
-  userId, kind, status, periodEnd, stripeCustomerId, stripeSubscriptionId, actorId,
+  userId, kind, status, periodEnd,
+  stripeCustomerId, stripeSubscriptionId,
+  razorpayCustomerId, razorpaySubscriptionId,
+  actorId,
 }) =>
   rpc('subscription_set', {
-    p_user_id:             userId,
-    p_kind:                kind || null,
-    p_status:              status || null,
-    p_period_end:          periodEnd || null,
-    p_stripe_customer:     stripeCustomerId || null,
-    p_stripe_subscription: stripeSubscriptionId || null,
-    p_actor_id:            actorId || null,
+    p_user_id:               userId,
+    p_kind:                  kind || null,
+    p_status:                status || null,
+    p_period_end:            periodEnd || null,
+    p_stripe_customer:       stripeCustomerId || null,
+    p_stripe_subscription:   stripeSubscriptionId || null,
+    p_actor_id:              actorId || null,
+    p_razorpay_customer:     razorpayCustomerId || null,
+    p_razorpay_subscription: razorpaySubscriptionId || null,
   })
