@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Regenerates apps/web/supabase-schema.sql from its two sources.
+ * Regenerates apps/web/supabase-schema.sql from its sources.
  *
  * That file is the complete, runnable schema for a fresh database — paste it
  * into the Supabase SQL editor and you get what replaying every migration
@@ -13,12 +13,29 @@
  * ALTERing its way to them), and every function, policy and grant is copied
  * verbatim out of the credit-billing migration.
  *
+ * BUGFIX 2026-08-30 ─ later migrations were not read at all ──────────────────
+ * The two sources above are everything this script used to look at, so every
+ * migration written AFTER the credit-billing one was silently absent from the
+ * generated file. interview_profiles, devices and touch_interview_profile()
+ * had already gone missing that way, which made the promise three paragraphs
+ * up ("what replaying every migration gives you") false — the same class of
+ * drift the promise exists to prevent.
+ *
+ * Later migrations are now appended verbatim, in filename order. That is safe
+ * because every one of them declares idempotently — `create table if not
+ * exists`, `create or replace function`, and `drop policy/trigger if exists`
+ * ahead of each create — so re-running is a no-op and a duplicated
+ * `create or replace` simply lets the later definition win, which is precisely
+ * what a replay does.
+ *
  *   node scripts/sync-schema.mjs           regenerate
  *   node scripts/sync-schema.mjs --check   fail if out of date (for CI)
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+// import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+// import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MIGRATION = join(root, 'supabase/migrations/20260829120000_credit_billing.sql')
@@ -41,9 +58,24 @@ if (from === -1 || to === -1 || to < from) {
   process.exit(1)
 }
 
+/* BUGFIX 2026-08-30: everything the migrations directory holds after the
+   credit-billing one. Sorted by filename, which is how the timestamp prefix
+   orders a replay — so a later migration replacing an earlier definition lands
+   in the same order the database saw it. */
+const later = readdirSync(dirname(MIGRATION))
+  .filter((f) => f.endsWith('.sql') && f > basename(MIGRATION))
+  .sort()
+  .map((f) => `-- ${'='.repeat(60)} ${f}\n` +
+              readFileSync(join(dirname(MIGRATION), f), 'utf8').trimEnd())
+
+// const expected =
+//   readFileSync(DDL, 'utf8').trimEnd() + '\n\n' +
+//   migration.slice(from, to).trimEnd() + '\n\nnotify pgrst, \'reload schema\';\n'
 const expected =
   readFileSync(DDL, 'utf8').trimEnd() + '\n\n' +
-  migration.slice(from, to).trimEnd() + '\n\nnotify pgrst, \'reload schema\';\n'
+  migration.slice(from, to).trimEnd() + '\n\n' +
+  (later.length ? later.join('\n\n') + '\n\n' : '') +
+  'notify pgrst, \'reload schema\';\n'
 
 if (process.argv.includes('--check')) {
   let actual = ''

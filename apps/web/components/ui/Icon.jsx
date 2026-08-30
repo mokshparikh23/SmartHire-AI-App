@@ -38,11 +38,43 @@ const PATHS = {
   gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" /><path d="M12 8v13" /><path d="M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5" /><path d="M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5" /></>,
   infinity: <path d="M6.5 15.5a3.5 3.5 0 1 1 0-7c3.5 0 4 7 7.5 7a3.5 3.5 0 1 0 0-7c-3.5 0-4 7-7.5 7z" />,
   inbox: <><path d="M3 13h5l1.5 3h5L16 13h5" /><path d="M5.5 4.5h13l2.5 8.5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" /></>,
+  // DEVICES 2026-08-30: the two device kinds in the sign-in list. Added rather
+  // than reusing `grid` and `chart`, which were the closest existing shapes and
+  // read as "dashboard" and "analytics" — actively misleading next to a row that
+  // says "sign out".
+  monitor: <><rect x="2.5" y="4" width="19" height="12.5" rx="2" /><path d="M8.5 20.5h7" /><path d="M12 16.5v4" /></>,
+  globe: <><circle cx="12" cy="12" r="9" /><path d="M3.2 9.5h17.6M3.2 14.5h17.6" /><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" /></>,
+
+  /* RESUME-UPLOAD 2026-08-30: the résumé dropzone and the company field.
+     The first three are copied verbatim from the desktop kit
+     (apps/desktop/src/components/ui/Icon.jsx) rather than redrawn — the two sets
+     have drifted enough already, and a second `upload` at a different stroke
+     weight is how a design system stops being one. */
+  upload:   <><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16" /></>,
+  warning:  <><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4.5" /><path d="M12 17.2h.01" /></>,
+  // Distinct from `close`, and the distinction is the point: a ✕ on a row reads
+  // as "dismiss this", a bin reads as "destroy this". The interview list has
+  // been using ✕ for a real delete.
+  trash:    <><path d="M4 6.5h16" /><path d="M9.5 6.5V4.5h5v2" /><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5" /></>,
+  // No desktop equivalent for these two.
+  search:   <><circle cx="11" cy="11" r="7" /><path d="m16.5 16.5 4.5 4.5" /></>,
+  // The placeholder in a company slot with no logo. A generic building, not an
+  // office tower: the users here are staffing firms and startups alike.
+  building: <><path d="M3 21h18" /><path d="M5 21V5.5A1.5 1.5 0 0 1 6.5 4h7A1.5 1.5 0 0 1 15 5.5V21" /><path d="M15 10h3.5A1.5 1.5 0 0 1 20 11.5V21" /><path d="M8 8h4M8 12h4M8 16h4" /></>,
 }
 
 export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '', ...rest }) {
   const path = PATHS[name]
-  if (!path) return null
+  if (!path) {
+    // PIVOT 2026-08-29: was a bare `return null`. A typo'd or renamed icon then
+    // vanished with no trace — the layout just quietly lost a glyph, which is
+    // hard to spot in review and impossible to spot in production. Still renders
+    // nothing, but says so while developing.
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`Icon: no path for "${name}". Add it to PATHS in components/ui/Icon.jsx.`)
+    }
+    return null
+  }
 
   // Solid marks read better filled; the rest are strokes.
   const filled = name === 'bolt' || name === 'sparkle' || name === 'apple' || name === 'windows'

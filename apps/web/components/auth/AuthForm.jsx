@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import Icon from '@/components/ui/Icon'
@@ -29,10 +29,21 @@ export default function AuthForm({ mode }) {
   const supabase = createClient()
   const isLogin  = mode === 'login'
 
+  // Set by /auth/device-signout when this browser was signed out from elsewhere.
+  const signedOutByDevice = useSearchParams().get('signed_out') === 'device'
+
   const [form, setForm]       = useState({ email: '', password: '', full_name: '' })
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent]       = useState(false)
+  const [pending, startTransition] = useTransition()
+
+  // Nothing on /login links to /dashboard, so the router never had a prefetch
+  // entry for it and every successful sign-in paid a cold round trip before the
+  // screen changed. Warming it here is most of why login felt slow.
+  useEffect(() => {
+    if (isLogin) router.prefetch('/dashboard')
+  }, [isLogin, router])
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -48,8 +59,44 @@ export default function AuthForm({ mode }) {
           password: form.password,
         })
         if (error) throw error
-        router.push('/dashboard')
-        router.refresh()
+
+        /*
+          DEVICES 2026-08-30: clear any revocation on this browser before
+          navigating.
+
+          Signing a browser out sets revoked_at, and the device cookie outlives a
+          sign-out — so without this, the browser you signed out could log in
+          successfully and then be bounced straight back here by DeviceGate, on
+          every attempt, permanently. `fresh=1` is the only thing that clears a
+          revocation, and it is only reachable from right here: an ambient
+          dashboard load must never clear one.
+
+          Awaited rather than fired-and-forgotten: the navigation below renders
+          DeviceGate, which reads the row. Racing them would sign the user out
+          roughly half the time.
+
+          A failure is swallowed — a device-bookkeeping problem must not block a
+          sign-in that Supabase has already accepted.
+        */
+        try {
+          await fetch('/api/devices/register?fresh=1', { method: 'POST' })
+        } catch { /* non-fatal; the sign-in itself succeeded */ }
+
+        // PIVOT 2026-08-29: was
+        //   router.push('/dashboard')
+        //   router.refresh()
+        // which fired TWO RSC requests — refresh() invalidates the router cache
+        // and refetches exactly what push() just fetched, and each one re-ran
+        // the proxy. replace() alone is right here: it also keeps the login page
+        // out of the back-button history, so "back" after signing in does not
+        // land on a form that immediately redirects.
+        //
+        // Wrapped in startTransition so `pending` stays true until the
+        // navigation COMMITS. The old code called setLoading(false) in the
+        // finally block, which re-enabled the button while the page was still
+        // moving — the button looked ready while nothing was happening.
+        startTransition(() => { router.replace('/dashboard') })
+        return
       } else {
         const { error } = await supabase.auth.signUp({
           email:    form.email,
@@ -128,8 +175,26 @@ export default function AuthForm({ mode }) {
           </p>
         )}
 
-        <Button type="submit" disabled={loading} size="lg" className="w-full">
-          {loading ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
+        {/*
+          DEVICES 2026-08-30: without this, being signed out from another machine
+          lands you on a bare login form with no idea why — which reads as the app
+          losing your session rather than as the security feature working.
+
+          Suppressed once a real error is showing: "you were signed out" above
+          "wrong password" is two explanations for one empty form.
+        */}
+        {signedOutByDevice && !error && (
+          <p className="flex items-start gap-2 rounded-xl bg-canvas-2 px-3.5 py-3 text-[13px] text-ink-soft">
+            <Icon name="shield" size={15} className="mt-px shrink-0 text-faint" />
+            You signed this browser out from another device. Sign in again to continue.
+          </p>
+        )}
+
+        {/* `pending` covers the navigation after a successful sign-in; `loading`
+            covers the auth round trip before it. Without both, the button
+            re-enables mid-transition and the form looks idle while it is moving. */}
+        <Button type="submit" disabled={loading || pending} size="lg" className="w-full">
+          {loading || pending ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
         </Button>
       </form>
 

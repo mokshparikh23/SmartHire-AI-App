@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { getProfile } from '@/lib/auth'
-import { Logo } from '@/components/ui/Icon'
+import { getProfile, getUser } from '@/lib/auth'
+import { getEntitlement } from '@/lib/entitlement'
+import Icon, { Logo } from '@/components/ui/Icon'
 import NavItem from './NavItem'
 import SignOutButton from './SignOutButton'
 
@@ -17,13 +18,50 @@ import SignOutButton from './SignOutButton'
 
 const NAV = [
   { href: '/dashboard',          label: 'Overview', icon: 'grid' },
+  // SETUP-TO-WEB 2026-08-30: interview setup moved off the desktop wizard and
+  // onto this page. Placed second — it is the thing a user opens before every
+  // interview, unlike the licence and billing pages they visit once.
+  { href: '/dashboard/interviews', label: 'Interviews', icon: 'users' },
   { href: '/dashboard/license',  label: 'License',  icon: 'key' },
   { href: '/dashboard/billing',  label: 'Billing',  icon: 'card' },
   { href: '/dashboard/usage',    label: 'Usage',    icon: 'chart' },
   { href: '/dashboard/settings', label: 'Settings', icon: 'gear' },
 ]
 
-const SHELL = 'flex w-60 shrink-0 flex-col border-r border-line bg-canvas'
+/*
+  LAYOUT FIX 2026-08-30: the sidebar used to grow with the page.
+
+  It is a flex item in the layout's `flex min-h-screen` row, so with the default
+  align-items: stretch its height became the height of the TALLEST sibling — the
+  <main> content. On a long page (Billing, Usage) that made the sidebar thousands
+  of pixels tall, which pushed the account block and sign-out far below the fold
+  and meant scrolling the whole document to reach them.
+
+  // const SHELL = 'flex w-60 shrink-0 flex-col border-r border-line bg-canvas'
+
+  Three parts to the fix, all needed together:
+    h-dvh      pins the height to the viewport instead of the content. dvh not
+               vh so mobile browser chrome collapsing does not clip the bottom.
+    self-start cancels align-items: stretch. An explicit height already wins over
+               stretch, but this states the intent and stops a future flex tweak
+               quietly reintroducing the bug.
+    sticky     keeps it in place while <main> scrolls past it.
+
+  `sticky` here relies on no ancestor having overflow hidden/auto/scroll. The
+  layout's wrapper does not, and <main> is a SIBLING rather than an ancestor, so
+  its overflow does not affect this.
+*/
+const SHELL =
+  'sticky top-0 flex h-dvh w-60 shrink-0 flex-col self-start border-r border-line bg-canvas'
+
+/*
+  min-h-0 is not decorative: a flex child's min-height defaults to auto, which
+  refuses to shrink below its content, so overflow-y-auto would never actually
+  scroll and the list would overflow the pinned shell instead. With both, a nav
+  longer than the viewport scrolls inside itself and the account block below
+  stays pinned to the bottom edge.
+*/
+const NAV_SCROLL = 'min-h-0 flex-1 overflow-y-auto px-3 py-1'
 
 function Brand() {
   return (
@@ -36,8 +74,56 @@ function Brand() {
   )
 }
 
+/**
+ * The signup-grant card, moved here from the Overview page on 2026-08-30.
+ *
+ * Sized for a 240px column, so it is stacked rather than the wide row it was on
+ * Overview: icon and title, one line of state, then a full-width button. The
+ * copy is the same, shortened where the narrower measure made it wrap badly.
+ *
+ * Rendered inside the pinned footer block rather than the scrolling nav, so it
+ * sits above the account row and stays on screen at any page length.
+ */
+function FreePlanCard({ minutes }) {
+  return (
+    <div className="mx-1 mb-3 rounded-xl border border-line bg-paper p-3">
+      <div className="flex items-center gap-2">
+        <Icon name="gift" size={15} className="shrink-0 text-positive" />
+        <h2 className="text-[13px] font-semibold text-ink">Free plan</h2>
+      </div>
+
+      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+        {minutes > 0
+          ? `${minutes} min left. Buy credits for full-length interviews.`
+          : 'Free minutes used up. Buy credits to keep going.'}
+      </p>
+
+      {/*
+        Not the shared <Button>: at this width its default padding leaves no room
+        for the label, and the arrow pushes the text off-centre. A plain link
+        styled to match is less machinery than fighting the component's sizes.
+      */}
+      <Link
+        href="/dashboard/billing"
+        className="mt-2.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-ink text-[12px] font-medium text-paper transition-colors hover:bg-ink-soft"
+      >
+        See plans
+        <Icon name="arrowRight" size={13} />
+      </Link>
+    </div>
+  )
+}
+
 export default async function Sidebar() {
-  const profile = await getProfile()
+  // getUser/getProfile/getEntitlement are all React cache()d, so asking here
+  // costs nothing beyond what the page beside this already asks.
+  const [profile, user] = await Promise.all([getProfile(), getUser()])
+
+  // A signed-out render is impossible in practice — every dashboard page calls
+  // requireUser() — but the sidebar streams inside its own Suspense boundary and
+  // must not throw on a lapsed session mid-navigation.
+  const entitlement = user ? await getEntitlement(user.id) : null
+  const showFreePlan = !!entitlement?.onFreePlan && !!entitlement?.license
 
   const initial =
     profile?.full_name?.[0]?.toUpperCase() ||
@@ -48,13 +134,15 @@ export default async function Sidebar() {
     <aside className={SHELL}>
       <Brand />
 
-      <nav className="flex-1 px-3">
+      <nav className={NAV_SCROLL}>
         <ul className="space-y-0.5">
           {NAV.map(item => <NavItem key={item.href} {...item} />)}
         </ul>
       </nav>
 
-      <div className="border-t border-line p-3">
+      <div className="shrink-0 border-t border-line p-3">
+        {showFreePlan && <FreePlanCard minutes={entitlement.minutes} />}
+
         <div className="flex items-center gap-2.5 px-2 py-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-[12px] font-medium text-paper">
             {initial}
@@ -82,13 +170,13 @@ export function SidebarSkeleton() {
     <aside className={SHELL}>
       <Brand />
 
-      <nav className="flex-1 px-3">
+      <nav className={NAV_SCROLL}>
         <ul className="space-y-0.5">
           {NAV.map(item => <NavItem key={item.href} {...item} />)}
         </ul>
       </nav>
 
-      <div className="border-t border-line p-3">
+      <div className="shrink-0 border-t border-line p-3">
         <div className="flex items-center gap-2.5 px-2 py-2">
           <span className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-canvas-2" />
           <div className="min-w-0 flex-1 space-y-1.5">

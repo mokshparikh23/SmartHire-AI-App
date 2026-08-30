@@ -1,4 +1,5 @@
 import { Skeleton, StatSkeleton, CardSkeleton } from '@/components/ui/Skeleton'
+import PageTransition from '@/components/ui/PageTransition'
 
 /*
   Two jobs.
@@ -19,21 +20,23 @@ import { Skeleton, StatSkeleton, CardSkeleton } from '@/components/ui/Skeleton'
 */
 export default function DashboardLoading() {
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Skeleton className="h-[2.08rem] w-72" />
-          <p className="mt-1.5 text-[14px] text-muted">Your balance, your key, and where the time went.</p>
+    <PageTransition>
+      <div>
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Skeleton className="h-[2.08rem] w-72" />
+            <p className="mt-1.5 text-[14px] text-muted">Your balance, your key, and where the time went.</p>
+          </div>
         </div>
-      </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
-        <StatSkeleton />
-        <StatSkeleton />
-        <StatSkeleton />
-      </div>
+        <div className="grid gap-5 sm:grid-cols-3">
+          <StatSkeleton />
+          <StatSkeleton />
+          <StatSkeleton />
+        </div>
 
-      <CardSkeleton className="mt-5" lines={3} />
-    </div>
+        <CardSkeleton className="mt-5" lines={3} />
+      </div>
+    </PageTransition>
   )
 }

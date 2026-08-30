@@ -124,6 +124,22 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# RESUME-UPLOAD 2026-08-30: candidate résumé PDFs.
+#
+# Declared here for `supabase start` only. The authoritative definition is the
+# `insert into storage.buckets` in 20260830020000_resume_files.sql, because
+# production is a paste into the SQL editor and never reads this file — so the
+# two must agree, and the migration is the one that wins.
+#
+# The policies matter more than the bucket: there is exactly one permissive
+# policy (select, own folder) and three restrictive ones that keep every browser
+# role out of writes. See the migration for why.
+[storage.buckets.resumes]
+public = false
+file_size_limit = "6MiB"
+allowed_mime_types = ["application/pdf"]
+objects_path = "./resumes"
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

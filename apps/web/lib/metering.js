@@ -41,6 +41,22 @@ export const MAX_GRANT_MINUTES = 100 * 60
  *  flat minute. */
 export const RESEARCH_COST_MINUTES = 1
 
+/** RESUME-UPLOAD 2026-08-30: résumé parsing, for the same structural reason as
+ *  research — a one-shot model call at setup time, before any session exists, so
+ *  the per-minute meter cannot reach it and it would otherwise be the only
+ *  unmetered model call in the product.
+ *
+ *  The marginal cost is about a fifth of a cent, so like research this is an
+ *  ABUSE CEILING rather than cost recovery: it is what stops a script parsing
+ *  ten thousand PDFs on a free account, and it is why no separate rate-limit
+ *  table is needed — credit_debit() already locks the wallet row.
+ *
+ *  Worth knowing before tuning: the signup bonus is 10 minutes, so at 1 a new
+ *  user setting up three interviews spends 30% of their trial before conducting
+ *  one. Set this to 0 to leave the whole path wired but free — no migration
+ *  either way, and chargeResumeParse() still records usage. */
+export const RESUME_PARSE_COST_MINUTES = 1
+
 async function rpc(fn, args) {
   const { data, error } = await createAdminClient().rpc(fn, args)
   // Throws rather than returning a falsy result: a transport failure is not a
@@ -51,6 +67,24 @@ async function rpc(fn, args) {
 
 export const licenseSnapshot = (licenseKey) =>
   rpc('license_snapshot', { p_license_key: licenseKey, p_stale_seconds: STALE_SECONDS })
+
+/**
+ * Reconciles one user's sessions on demand.
+ *
+ * BUGFIX 2026-08-30: the sweep has no cron. It rides along on license_snapshot()
+ * and session_start(), both keyed by LICENCE KEY — which the web dashboard does
+ * not hold. So the one page that renders "Live now" had no way of making it
+ * true, and a session whose client had died three minutes in went on claiming to
+ * be live indefinitely.
+ *
+ * The exception to "fails closed" at the top of this file: it takes no new
+ * money, because it only closes rows already silent past STALE_SECONDS and bills
+ * them to last_heartbeat_at — the same charge the next licence tick would take
+ * anyway, just sooner. So callers may and should swallow its errors rather than
+ * fail a read-only page over it.
+ */
+export const sweepStaleSessions = (userId) =>
+  rpc('sweep_stale_sessions', { p_user_id: userId, p_stale_seconds: STALE_SECONDS })
 
 export const startSession = ({ licenseKey, deviceId, appVersion }) =>
   rpc('session_start', {

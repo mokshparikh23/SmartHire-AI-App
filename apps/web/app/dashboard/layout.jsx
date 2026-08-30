@@ -1,5 +1,7 @@
 import { Suspense } from 'react'
 import Sidebar, { SidebarSkeleton } from '@/components/dashboard/Sidebar'
+import DeviceRegistrar from '@/components/dashboard/DeviceRegistrar'
+import DeviceGate from '@/components/dashboard/DeviceGate'
 
 /*
   PIVOT 2026-08-29: this layout used to be `async` and awaited getUser() plus a
@@ -39,6 +41,23 @@ import Sidebar, { SidebarSkeleton } from '@/components/dashboard/Sidebar'
 export default function DashboardLayout({ children }) {
   return (
     <div className="flex min-h-screen bg-paper">
+      {/*
+        DEVICES 2026-08-30. Two halves, and they cover different failures:
+
+        DeviceGate is the server-side check — if this browser's device row has
+        been revoked from elsewhere, it ends the session before the dashboard
+        renders. It is inside its own Suspense boundary for the same reason the
+        sidebar is: it does database work, and blocking the shell on it would
+        undo the streaming fix in the note below.
+
+        DeviceRegistrar is the client half, which records the browser so it can
+        be listed at all. It renders nothing.
+      */}
+      <Suspense fallback={null}>
+        <DeviceGate />
+      </Suspense>
+      <DeviceRegistrar />
+
       <Suspense fallback={<SidebarSkeleton />}>
         <Sidebar />
       </Suspense>

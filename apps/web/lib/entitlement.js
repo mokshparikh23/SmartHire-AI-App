@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from './supabase-server'
 
 /**
@@ -8,13 +9,20 @@ import { createClient } from './supabase-server'
  * it slightly differently — which is how "you have 0 credits" ends up on one
  * page while another says "unlimited".
  *
+ * SIDEBAR 2026-08-30: wrapped in React cache(), matching getProfile() and
+ * getUser() in lib/auth.js. The Free plan card moved into <Sidebar>, so this is
+ * now asked twice per request — once by the sidebar and once by the page
+ * rendering beside it. cache() keys on userId and collapses those into one pair
+ * of queries; without it, moving that card would have doubled the database work
+ * on every dashboard route.
+ *
  * `unlimited` is computed the same way the database does it in
  * wallet_is_unlimited(): an active or past-due subscription whose period has not
  * ended. past_due still counts, because Stripe retries a failed payment for days
  * and cutting someone off over a card that will probably clear is the wrong
  * trade.
  */
-export async function getEntitlement(userId) {
+export const getEntitlement = cache(async (userId) => {
   const supabase = await createClient()
 
   const [{ data: wallet }, { data: licenses }] = await Promise.all([
@@ -47,4 +55,4 @@ export async function getEntitlement(userId) {
     // hour and used most of it is a customer, not a trial user.
     onFreePlan: !unlimited && (wallet?.minutes_spent_total ?? 0) + minutes <= 10,
   }
-}
+})

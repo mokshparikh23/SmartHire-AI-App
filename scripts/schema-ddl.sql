@@ -7,11 +7,17 @@
 -- DO NOT EDIT apps/web/supabase-schema.sql BY HAND — it is generated. Table
 -- shapes live here; every function, policy and grant is copied verbatim out of
 -- supabase/migrations/20260829120000_credit_billing.sql by
--- scripts/sync-schema.mjs.
+-- scripts/sync-schema.mjs, and every migration after that one is appended
+-- verbatim in filename order.
 --
 -- That split exists because keeping the two in step by hand is exactly what
 -- failed before: grants were added to the schema file in bd5df64, never reached
 -- the migration, and re-opened role escalation until c548a01.
+--
+-- BUGFIX 2026-08-30: the appended-migrations half is new. Until then the
+-- generator read only the credit-billing migration, so interview_profiles,
+-- devices and touch_interview_profile() were missing from this file entirely —
+-- the promise at the top was false, in the same way and for the same reason.
 
 -- ---------------------------------------------------------------- profiles
 -- One row per auth user. Created automatically by the trigger at the bottom;

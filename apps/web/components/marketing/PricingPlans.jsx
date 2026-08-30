@@ -1,28 +1,40 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
-import { Card, Badge, Button } from '@/components/ui'
+import { Badge, Button } from '@/components/ui'
 
 /**
- * The two things Smart Hire AI sells, side by side.
+ * useLayoutEffect warns when it runs during server rendering, and this is a
+ * client component that Next still renders on the server for the first paint.
+ * Falling back to useEffect there keeps the console clean; the effect itself is
+ * a DOM measurement, so there is nothing for it to do on the server anyway.
+ */
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
+/**
+ * The two things Smart Hire AI sells.
  *
- * Both columns are radio lists rather than three separate cards each. Six cards
- * across a page is a wall; two cards with a choice inside each is one decision
- * ("do I want unlimited or do I want to pay per hour?") followed by a smaller
- * one, which is the order people actually decide in.
+ * REDESIGN 2026-08-30: was two cards side by side. The reference design puts the
+ * two products behind a tab switch, with the selected option's price shown large
+ * on the left and the option list on the right. That is a better shape for this
+ * catalogue: six purchasable things across two products is too many to compare
+ * at once, and the tab makes the first decision ("unlimited, or by the hour?")
+ * before the second one is even visible.
  *
- * Prices arrive already resolved and formatted from the server — the client
+ * WHAT DID NOT CHANGE, deliberately: buy(), the signed-out routing, and the fact
+ * that prices arrive already resolved and formatted from the server. The client
  * never picks a currency, because a client that could pick its currency could
- * pick the cheaper one.
+ * pick the cheaper one — see the SECURITY note in lib/pricing.js.
  */
 export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
   const router = useRouter()
 
+  const [mode, setMode] = useState('sub')     // 'sub' | 'credits'
   const [tierId, setTierId] = useState(tiers.find(t => t.featured)?.id ?? tiers[0]?.id)
   const [packId, setPackId] = useState(packs.find(p => p.featured)?.id ?? packs[0]?.id)
-  const [pending, setPending] = useState(null)   // the id being bought
+  const [pending, setPending] = useState(null)
   const [error, setError] = useState('')
 
   const tier = tiers.find(t => t.id === tierId)
@@ -38,8 +50,6 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
     //
     // No ?next= here: signup ends on an email-confirmation screen and returns
     // through /auth/callback, so a redirect target would be dropped on the way.
-    // Sending the buyer back to the pack they picked needs that callback to
-    // carry it, which it does not do yet.
     if (!signedIn) {
       router.push('/signup')
       return
@@ -63,131 +73,107 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
 
   return (
     <div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* ── Subscription ─────────────────────────────────────────────── */}
-        <Card className="flex flex-col ring-1 ring-ink">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="display text-[1.75rem] text-ink">Subscription</h3>
-              <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-                Stop counting. Every call covered, for as long as you need it.
+      <Tabs mode={mode} onChange={setMode} />
+
+      <div className="mt-10 overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_1px_2px_rgba(0,0,0,0.04),0_24px_60px_-30px_rgba(0,0,0,0.16)]">
+        {mode === 'sub' ? (
+          <Panel
+            kicker="Unlimited"
+            price={tier?.price}
+            caption={captionForTier(tier)}
+            note="Every interview covered, with nothing to count. Cancel whenever — it runs to the end of the period you already paid for."
+            meter={savingMeter(tiers, tier)}
+            features={[
+              ['check', 'Unlimited interview time'],
+              ['check', 'Follow-ups on every answer'],
+              ['check', 'Consent gate on every CV'],
+              ['check', 'Top models'],
+            ]}
+          >
+            <Options
+              name="subscription"
+              items={tiers.map(t => ({
+                id: t.id,
+                label: t.label,
+                badge: t.badge,
+                badgeTone: t.kind === 'yearly' ? 'positive' : 'warning',
+                price: t.price,
+                unit: `/ ${t.per}`,
+                note: t.perMonth
+                  ? `${t.perMonthApprox ? '≈ ' : ''}${t.perMonth} / month`
+                  : null,
+                noteTone: t.kind === 'yearly' ? 'positive' : null,
+              }))}
+              selected={tierId}
+              onSelect={setTierId}
+            />
+
+            <div className="mt-auto pt-8">
+              <Button className="w-full" onClick={() => buy(tier.id)} disabled={!!pending}>
+                {pending === tier?.id
+                  ? 'Opening checkout…'
+                  : `Go unlimited · ${tier?.price} ${tier?.per.toLowerCase() === 'week' ? 'a week' : tier?.per.toLowerCase() === 'year' ? 'a year' : 'a month'}`}
+              </Button>
+              <p className="mt-3 text-center text-[13px] text-muted">No lock-in. Cancel anytime.</p>
+            </div>
+          </Panel>
+        ) : (
+          <Panel
+            kicker="Credit pack"
+            price={pack?.price}
+            caption={`for ${pack?.totalCredits} hours · ${pack?.perCredit} an hour`}
+            note="One credit is one hour of live interview time, metered by the minute. Use 30 minutes and the other 30 stay in your account."
+            meter={hoursMeter(packs, pack)}
+            features={[
+              ['check', 'Credits never expire'],
+              ['check', 'Metered by the minute, not the session'],
+              ['check', 'Top models'],
+              ['close', 'Unlimited interviews'],
+            ]}
+          >
+            <Options
+              name="credits"
+              items={packs.map(p => ({
+                id: p.id,
+                label: `${p.credits} credits`,
+                badge: p.bonus ? `+${p.bonus} free` : null,
+                badgeTone: 'warning',
+                sub: `${p.totalCredits} hours of interviews`,
+                price: p.price,
+                note: `${p.perCredit} / credit`,
+                noteTone: p.bonus >= 6 ? 'positive' : null,
+              }))}
+              selected={packId}
+              onSelect={setPackId}
+            />
+
+            <div className="mt-auto pt-8">
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => buy(pack.id)}
+                disabled={!!pending}
+              >
+                {pending === pack?.id
+                  ? 'Opening checkout…'
+                  : `Get ${pack?.totalCredits} hours · ${pack?.price}`}
+              </Button>
+
+              {/* The single credit is deliberately outside the ladder: it exists
+                  so nobody bounces off the page for want of a small option. */}
+              <p className="mt-3 text-center text-[13px] text-muted">
+                or, just one interview?{' '}
+                <button
+                  onClick={() => buy(singlePack.id)}
+                  disabled={!!pending}
+                  className="font-medium text-ink underline underline-offset-2 transition-colors hover:text-accent disabled:opacity-40"
+                >
+                  1 credit for <span data-numeric>{singlePack.price}</span>
+                </button>
               </p>
             </div>
-            <Badge tone="accent" className="shrink-0">
-              <Icon name="sparkle" size={11} />
-              Recommended
-            </Badge>
-          </div>
-
-          <div className="mt-6 space-y-2.5">
-            {tiers.map(t => (
-              <Option
-                key={t.id}
-                name="subscription"
-                selected={tierId === t.id}
-                onSelect={() => setTierId(t.id)}
-                label={t.label}
-                badge={t.badge}
-                badgeTone={t.kind === 'yearly' ? 'positive' : 'warning'}
-                price={t.price}
-                unit={`/ ${t.per}`}
-                note={t.perMonth && (
-                  <span className={t.kind === 'yearly' ? 'text-positive' : undefined}>
-                    {t.perMonthApprox ? '≈ ' : ''}{t.perMonth} / Month
-                  </span>
-                )}
-              />
-            ))}
-          </div>
-
-          <ul className="mt-7 flex-1 space-y-2.5">
-            {['Unlimited call time', 'Unlimited mock interviews', 'Full privacy mode', 'Top models']
-              .map(f => (
-                <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-soft">
-                  <Icon name="check" size={15} className="mt-0.5 shrink-0 text-positive" />
-                  {f}
-                </li>
-              ))}
-          </ul>
-
-          <Button
-            className="mt-7 w-full"
-            onClick={() => buy(tier.id)}
-            disabled={!!pending}
-          >
-            {pending === tier?.id
-              ? 'Opening checkout…'
-              : `Go Unlimited · ${tier?.label} ${tier?.price}`}
-          </Button>
-
-          <p className="mt-3 text-center text-[13px] text-muted">No lock-in. Cancel anytime.</p>
-        </Card>
-
-        {/* ── Credits ──────────────────────────────────────────────────── */}
-        <Card className="flex flex-col bg-canvas">
-          <h3 className="display text-[1.75rem] text-ink">Credits</h3>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-            Buy a pack of call credits and use them whenever.
-          </p>
-
-          <div className="mt-6 space-y-2.5">
-            {packs.map(p => (
-              <Option
-                key={p.id}
-                name="credits"
-                selected={packId === p.id}
-                onSelect={() => setPackId(p.id)}
-                label={`${p.credits} Credits`}
-                badge={p.bonus ? `+${p.bonus} free` : null}
-                badgeTone="warning"
-                sub={`${p.totalCredits} hours of calls`}
-                price={p.price}
-                note={
-                  <span className={p.bonus >= 6 ? 'text-positive' : undefined}>
-                    {p.perCredit} / Credit
-                  </span>
-                }
-              />
-            ))}
-          </div>
-
-          <ul className="mt-7 flex-1 space-y-2.5">
-            {['Credits never expire', 'Full privacy mode', 'Top models'].map(f => (
-              <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-soft">
-                <Icon name="check" size={15} className="mt-0.5 shrink-0 text-positive" />
-                {f}
-              </li>
-            ))}
-            <li className="flex items-start gap-2.5 text-[14px] text-faint">
-              <Icon name="close" size={15} className="mt-0.5 shrink-0" />
-              Unlimited number of calls
-            </li>
-          </ul>
-
-          <Button
-            variant="secondary"
-            className="mt-7 w-full"
-            onClick={() => buy(pack.id)}
-            disabled={!!pending}
-          >
-            {pending === pack?.id
-              ? 'Opening checkout…'
-              : `Get ${pack?.totalCredits} hours · ${pack?.price}`}
-          </Button>
-
-          {/* The single credit is deliberately outside the ladder: it exists so
-              nobody bounces off the page for want of a small option. */}
-          <p className="mt-3 text-center text-[13px] text-muted">
-            or, just need 1 call?{' '}
-            <button
-              onClick={() => buy(singlePack.id)}
-              disabled={!!pending}
-              className="font-medium text-ink underline underline-offset-2 hover:text-accent disabled:opacity-40"
-            >
-              1 credit for <span data-numeric>{singlePack.price}</span>
-            </button>
-          </p>
-        </Card>
+          </Panel>
+        )}
       </div>
 
       {error && (
@@ -199,51 +185,237 @@ export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
   )
 }
 
+/* ──────────────────────────────────────────────────────────────── tabs */
+
 /**
- * One selectable row. A real <input type="radio"> underneath so the whole group
- * is keyboard- and screen-reader-navigable; the visible circle is drawn from the
- * peer state rather than by hand.
+ * The sliding indicator is positioned from the active tab's measured offset
+ * rather than a percentage, so it stays correct when the two labels are
+ * different widths — which they are, and which a 50% split would get wrong.
  */
-function Option({ name, selected, onSelect, label, badge, badgeTone, sub, price, unit, note }) {
+function Tabs({ mode, onChange }) {
+  const wrapRef = useRef(null)
+  const [glide, setGlide] = useState({ left: 0, width: 0 })
+
+  const measure = useCallback(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const active = wrap.querySelector('[data-active="true"]')
+    if (!active) return
+    setGlide({ left: active.offsetLeft, width: active.offsetWidth })
+  }, [])
+
+  // Layout effect so the indicator is in place on the first paint rather than
+  // sliding in from zero on mount.
+  useIsoLayoutEffect(measure, [measure, mode])
+
+  useEffect(() => {
+    window.addEventListener('resize', measure)
+    // Webfonts land after hydration and change the label widths under the
+    // indicator, so re-measure once they are ready.
+    document.fonts?.ready.then(measure).catch(() => {})
+    return () => window.removeEventListener('resize', measure)
+  }, [measure])
+
   return (
-    <label
-      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3.5 transition-colors ${
-        selected
-          ? 'border-ink bg-paper shadow-[0_1px_3px_rgba(0,0,0,0.06)]'
-          : 'border-line-soft bg-paper/60 hover:border-line'
-      }`}
-    >
-      <input
-        type="radio"
-        name={name}
-        checked={selected}
-        onChange={onSelect}
-        className="sr-only"
-      />
-      <span
-        aria-hidden="true"
-        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 ${
-          selected ? 'border-ink' : 'border-line'
-        }`}
+    <div className="flex justify-center">
+      <div
+        ref={wrapRef}
+        role="tablist"
+        aria-label="Billing type"
+        className="relative inline-flex gap-0.5 rounded-full border border-line bg-paper p-1.5"
       >
-        {selected && <span className="h-2 w-2 rounded-full bg-ink" />}
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] font-semibold text-ink">{label}</span>
-          {badge && <Badge tone={badgeTone}>{badge}</Badge>}
-        </span>
-        {sub && <span className="mt-0.5 block text-[13px] text-muted">{sub}</span>}
-      </span>
-
-      <span className="shrink-0 text-right">
-        <span className="block text-[16px] font-semibold text-ink" data-numeric>
-          {price}
-          {unit && <span className="ml-1 text-[13px] font-normal text-muted">{unit}</span>}
-        </span>
-        {note && <span className="mt-0.5 block text-[12px] text-faint" data-numeric>{note}</span>}
-      </span>
-    </label>
+        <span
+          aria-hidden="true"
+          className="absolute bottom-1.5 top-1.5 rounded-full bg-ink transition-all duration-[450ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
+          style={{ left: glide.left, width: glide.width }}
+        />
+        {[['sub', 'Subscription'], ['credits', 'Credits']].map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            type="button"
+            data-active={mode === key}
+            aria-selected={mode === key}
+            onClick={() => onChange(key)}
+            className={`relative z-10 rounded-full px-7 py-2.5 text-[14px] font-medium transition-colors duration-300 ${
+              mode === key ? 'text-paper' : 'text-muted hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
+}
+
+/* ─────────────────────────────────────────────────────────────── panel */
+
+function Panel({ kicker, price, caption, note, meter, features, children }) {
+  return (
+    <div className="grid lg:grid-cols-[0.86fr_1.14fr]">
+      <div className="border-b border-line bg-gradient-to-b from-canvas-2 to-paper p-8 lg:border-b-0 lg:border-r">
+        <p className="mono text-[11px] uppercase tracking-[0.19em] text-ink">{kicker}</p>
+
+        <p className="hl mt-5 text-[clamp(2.75rem,6vw,4rem)] text-ink" data-numeric>
+          {price}
+        </p>
+        <p className="mono mt-3 text-[14px] text-faint">{caption}</p>
+
+        <p className="mt-5 min-h-[4em] text-[14px] leading-relaxed text-muted">{note}</p>
+
+        {meter && (
+          <div className="mt-7">
+            <div className="mono mb-2.5 flex justify-between text-[11px] uppercase tracking-[0.08em] text-faint">
+              <span>{meter.label}</span>
+              <span className="text-ink">{meter.value}</span>
+            </div>
+            <div className="h-[7px] overflow-hidden rounded-full bg-canvas-2">
+              <div
+                className="h-full rounded-full bg-ink transition-[width] duration-[650ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
+                style={{ width: `${meter.pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <ul className="mt-8 space-y-2.5">
+          {features.map(([icon, text]) => (
+            <li
+              key={text}
+              className={`flex items-start gap-2.5 text-[14px] ${icon === 'close' ? 'text-faint' : 'text-ink-soft'}`}
+            >
+              <Icon
+                name={icon}
+                size={15}
+                className={`mt-0.5 shrink-0 ${icon === 'close' ? 'text-line' : 'text-positive'}`}
+              />
+              {text}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="flex flex-col p-8">{children}</div>
+    </div>
+  )
+}
+
+/* ───────────────────────────────────────────────────────────── options */
+
+function Options({ name, items, selected, onSelect }) {
+  return (
+    <div role="radiogroup" aria-label={name} className="space-y-2.5">
+      {items.map(item => {
+        const active = selected === item.id
+        return (
+          <label
+            key={item.id}
+            className={[
+              'relative flex cursor-pointer items-center gap-4 overflow-hidden rounded-xl border px-5 py-4',
+              'transition-all duration-300',
+              active
+                ? 'translate-x-[3px] border-ink bg-paper shadow-[0_1px_3px_rgba(0,0,0,0.06)]'
+                : 'border-line-soft bg-canvas/50 hover:border-line',
+            ].join(' ')}
+          >
+            {/* The ink rule that slides in on the selected row. */}
+            <span
+              aria-hidden="true"
+              className={`absolute inset-y-0 left-0 w-[3px] origin-top bg-ink transition-transform duration-[400ms] ${
+                active ? 'scale-y-100' : 'scale-y-0'
+              }`}
+            />
+            <input
+              type="radio"
+              name={name}
+              checked={active}
+              onChange={() => onSelect(item.id)}
+              className="sr-only"
+            />
+            <span
+              aria-hidden="true"
+              className={`flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                active ? 'border-ink' : 'border-line'
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full bg-ink transition-transform duration-300 ${
+                  active ? 'scale-100' : 'scale-0'
+                }`}
+              />
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-[15px] font-semibold text-ink">{item.label}</span>
+                {item.badge && <Badge tone={item.badgeTone}>{item.badge}</Badge>}
+              </span>
+              {item.sub && <span className="mt-0.5 block text-[13px] text-muted">{item.sub}</span>}
+            </span>
+
+            <span className="shrink-0 text-right">
+              <span className="block text-[16px] font-semibold text-ink" data-numeric>
+                {item.price}
+                {item.unit && (
+                  <span className="ml-1 text-[13px] font-normal text-muted">{item.unit}</span>
+                )}
+              </span>
+              {item.note && (
+                <span
+                  className={`mt-0.5 block text-[12px] ${item.noteTone === 'positive' ? 'text-positive' : 'text-faint'}`}
+                  data-numeric
+                >
+                  {item.note}
+                </span>
+              )}
+            </span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────── meters */
+
+/** Monthly-equivalent cost in minor units. Mirrors resolveTier() in lib/pricing. */
+function perMonthMinor(tier) {
+  if (!tier) return null
+  if (tier.kind === 'weekly') return Math.round(tier.amountMinor * 52 / 12)
+  if (tier.kind === 'yearly') return Math.round(tier.amountMinor / 12)
+  return tier.amountMinor
+}
+
+/**
+ * How much the selected tier saves against the most expensive way to buy the
+ * same access — the weekly tier, run for a month. Weekly itself is the baseline,
+ * so it shows no saving rather than a misleading 0%.
+ */
+function savingMeter(tiers, tier) {
+  const baseline = perMonthMinor(tiers.find(t => t.kind === 'weekly'))
+  const mine = perMonthMinor(tier)
+  if (!baseline || !mine || tier?.kind === 'weekly') {
+    return { label: 'Saving vs weekly', value: '—', pct: 0 }
+  }
+  const pct = Math.round(((baseline - mine) / baseline) * 100)
+  return { label: 'Saving vs weekly', value: `${pct}%`, pct }
+}
+
+/** Hours in the selected pack, against the largest pack on offer. */
+function hoursMeter(packs, pack) {
+  const max = Math.max(...packs.map(p => p.totalCredits), 1)
+  const hours = pack?.totalCredits ?? 0
+  return {
+    label: 'Interview time',
+    value: `${hours} hours`,
+    pct: Math.round((hours / max) * 100),
+  }
+}
+
+function captionForTier(tier) {
+  if (!tier) return ''
+  if (tier.kind === 'weekly') return `per week · ${tier.perMonth} a month`
+  if (tier.kind === 'yearly') return `per year · ${tier.perMonth} a month`
+  return 'per month'
 }

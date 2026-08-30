@@ -17,6 +17,19 @@ const BUTTON_VARIANTS = {
   secondary: 'bg-paper text-ink border border-line hover:border-ink/30 hover:bg-canvas',
   ghost: 'text-ink-soft hover:text-ink hover:bg-canvas-2',
   danger: 'bg-critical-soft text-critical border border-critical/20 hover:bg-critical hover:text-paper',
+  /*
+    REDESIGN 2026-08-30: primary inverted, for the ink panels (landing close-out,
+    dashboard setup card). It has to be a VARIANT, not a className override.
+
+    Callers used to write `<Button className="bg-paper text-ink …">` on top of
+    the primary variant, which put `text-paper` and `text-ink` on the same
+    element. Tailwind v4 resolves that collision by stylesheet order, not by the
+    order of the class attribute, and it emits utilities sorted by value name —
+    so `.text-paper` lands after `.text-ink` and wins. `.bg-paper` beat `.bg-ink`
+    for the same reason, which is why the button rendered as a white pill with
+    white, invisible text rather than losing both overrides visibly.
+  */
+  inverse: 'bg-paper text-ink hover:bg-canvas-2',
 }
 
 const BUTTON_SIZES = {
@@ -43,9 +56,27 @@ export function Button({
     </>
   )
 
-  if (href) return <Link href={href} className={cls} {...rest}>{body}</Link>
-  const Tag = as
-  return <Tag className={cls} {...rest}>{body}</Tag>
+  /*
+    PIVOT 2026-08-29: this used to branch on `href` alone —
+
+    // if (href) return <Link href={href} className={cls} {...rest}>{body}</Link>
+
+    — which silently ignored `as` whenever an href was present. `<Button as="a"
+    href="#">` therefore rendered a next/link, not an anchor, and a `disabled`
+    prop on it did nothing at all because Link has no disabled state.
+
+    Now `as` wins when it is set explicitly, and an external or protocol URL
+    (mailto:, tel:, http://…) also takes the plain-anchor path: next/link is for
+    in-app routes, and routing a mailto: through it is unverified behaviour.
+  */
+  const external = typeof href === 'string' && /^(https?:|mailto:|tel:|#)/.test(href)
+
+  if (href && as === 'button' && !external) {
+    return <Link href={href} className={cls} {...rest}>{body}</Link>
+  }
+
+  const Tag = href ? (as === 'button' ? 'a' : as) : as
+  return <Tag className={cls} {...(href ? { href } : null)} {...rest}>{body}</Tag>
 }
 
 export function Card({ children, className = '', as = 'div', padded = true }) {
@@ -123,13 +154,54 @@ export function EmptyState({ icon = 'inbox', title, description, action }) {
  * a credit amount typed into a box that looks different from every other box is
  * how a wrong number gets entered.
  */
-export const CONTROL =
-  'h-11 w-full rounded-xl border border-line bg-paper px-3.5 text-[14px] text-ink ' +
+/* RESUME-UPLOAD 2026-08-30: split so a caller can supply its own horizontal
+   padding. The company combobox insets a logo on the left and needs pl-10.
+   Stacking `pl-10` onto CONTROL would NOT reliably win — `px-3.5` and `pl-10`
+   are shorthand and longhand of the same property, and Tailwind v4 resolves that
+   collision by stylesheet order, not by the order of your class attribute. That
+   is the same trap the `inverse` button variant exists to avoid; see
+   BUTTON_VARIANTS above. Every existing caller is untouched. */
+export const CONTROL_PADLESS =
+  'h-11 w-full rounded-xl border border-line bg-paper text-[14px] text-ink ' +
   'outline-none transition-colors focus:border-ink/40'
+
+// export const CONTROL =
+//   'h-11 w-full rounded-xl border border-line bg-paper px-3.5 text-[14px] text-ink ' +
+//   'outline-none transition-colors focus:border-ink/40'
+export const CONTROL = `${CONTROL_PADLESS} px-3.5`
 
 /** Table header cell. Was copied verbatim into four files, now six. */
 export const TH =
   'px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint'
+
+/**
+ * Labelled form field. Was local to InterviewProfiles; the résumé editor and the
+ * company combobox need it too, which is the same "copied verbatim into four
+ * files" trigger that put CONTROL and TH here.
+ *
+ * WHY htmlFor SWITCHES THE WRAPPER. Wrapping the control in a <label> is right
+ * for a single input — the whole row becomes a click target. It is wrong for
+ * anything with its own click targets inside: a combobox's listbox lives in the
+ * field, and a click on an option inside a <label> is forwarded to the labelled
+ * input, so selecting a suggestion silently does nothing. Passing htmlFor
+ * switches to the explicit association and a plain <div> wrapper.
+ */
+export function Field({ label, hint, required, htmlFor, children }) {
+  const Wrap = htmlFor ? 'div' : 'label'
+  const Label = htmlFor ? 'label' : 'span'
+  return (
+    <Wrap className="block">
+      <Label
+        {...(htmlFor ? { htmlFor } : {})}
+        className="mb-2 block text-[13px] font-medium text-ink"
+      >
+        {label}{required && <span className="text-critical"> *</span>}
+      </Label>
+      {children}
+      {hint && <span className="mt-2 block text-[12px] text-muted">{hint}</span>}
+    </Wrap>
+  )
+}
 
 /** Page title block for dashboard and admin screens. */
 export function PageHeader({ title, lede, action }) {

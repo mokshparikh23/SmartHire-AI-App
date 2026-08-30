@@ -69,7 +69,14 @@ export const END_REASON_LABEL = {
   client_stop:     'Ended by you',
   out_of_credits:  'Out of credits',
   stale:           'Connection lost',
-  superseded:      'Started elsewhere',
+  // BUGFIX 2026-08-30: "Started elsewhere" is the most alarming label in the
+  // product — it reads as "someone else is using your account" — and the row
+  // cannot support it. end_reason 'superseded' records that a NEWER session
+  // replaced this one; nothing on the row says where the newer one came from,
+  // and in practice it was the same machine restarting after a stop that never
+  // landed. Say only what is true.
+  // superseded:      'Started elsewhere',
+  superseded:      'Replaced by a new session',
   license_revoked: 'Licence revoked',
   request_limit:   'Request limit reached',
   admin_stop:      'Ended by support',
