@@ -276,15 +276,27 @@ export default async function DashboardPage() {
                 has just paid reads that as a broken download rather than a
                 missing certificate. The landing page FAQ already says the same
                 thing; this is the moment it actually matters.
+
+                "Do not click Move to Trash" is the load-bearing sentence. That
+                dialog offers exactly two buttons — Move to Trash and Done — and
+                Move to Trash is the BLUE default. The instinctive click on the
+                highlighted button deletes the app the user just downloaded, and
+                they have to fetch 152MB again to try the real fix. Naming the
+                wrong button beats describing the right one.
               */}
-              <p className="mt-4 flex max-w-md items-start gap-2 text-[12px] leading-relaxed text-faint">
-                <Icon name="lock" size={13} className="mt-0.5 shrink-0" />
-                <span>
-                  These builds are not signed yet. The first launch is blocked with a
-                  warning that the developer cannot be verified — open System Settings,
-                  then Privacy &amp; Security, and choose Open Anyway.
-                </span>
-              </p>
+              <div className="mt-4 max-w-md rounded-xl border border-line bg-canvas px-4 py-3">
+                <p className="flex items-start gap-2 text-[12px] font-medium leading-relaxed text-ink-soft">
+                  <Icon name="lock" size={13} className="mt-0.5 shrink-0" />
+                  <span>These builds are not signed yet, so macOS blocks the first launch.</span>
+                </p>
+                <p className="mt-2 text-[12px] leading-relaxed text-muted">
+                  You will see &ldquo;Apple could not verify Smart Hire AI&rdquo;. Click{' '}
+                  <strong className="font-medium text-ink">Done</strong> — not Move to Trash,
+                  which deletes it. Then open System Settings &rsaquo; Privacy &amp; Security,
+                  scroll to Security, and choose{' '}
+                  <strong className="font-medium text-ink">Open Anyway</strong>.
+                </p>
+              </div>
             </>
           ) : (
             <>
