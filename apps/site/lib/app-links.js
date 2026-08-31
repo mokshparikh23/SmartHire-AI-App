@@ -78,7 +78,17 @@
  * 127.0.0.1, because Node is not a browser and its reason still holds. The two
  * differ on purpose — see the port note in apps/site/package.json.
  */
-const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+/**
+ * The app's origin, with no trailing slash.
+ *
+ * Exported because PricingPlans concatenates a path onto it, and appUrl('')
+ * does NOT return this — its `path = '/'` default only applies to `undefined`,
+ * so an empty string falls through to the `/${path}` branch and yields
+ * "http://localhost:3000/". Concatenating there gave
+ * "http://localhost:3000//dashboard/billing?plan=…", a double slash that Next
+ * does not route. Pass this instead.
+ */
+export const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
 
 /** An absolute URL on the product app. */
 export function appUrl(path = '/') {

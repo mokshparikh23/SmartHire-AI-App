@@ -9,7 +9,7 @@ import FaqAccordion from '@/components/FaqAccordion'
 import CloseCard from '@/components/CloseCard'
 import { PRICING_MARKS } from '@/content/pricing-marks'
 import { FAQ_BUYING } from '@/content/faqs'
-import { appUrl } from '@/lib/app-links'
+import { APP_ORIGIN } from '@/lib/app-links'
 import {
   resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency,
 } from 'smarthire-pricing'
@@ -126,7 +126,7 @@ export default async function PricingPage() {
               tiers={tiersForCurrency(currency)}
               packs={packsForCurrency(currency)}
               singlePack={single}
-              appOrigin={appUrl('')}
+              appOrigin={APP_ORIGIN}
             />
           </div>
 

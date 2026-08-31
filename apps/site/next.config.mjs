@@ -25,6 +25,34 @@ const nextConfig = {
      Nothing here may also appear in serverExternalPackages — Next throws at
      build start if a package is in both. This app has none. */
   transpilePackages: ['smarthire-ui', 'smarthire-pricing'],
+
+  /* SPLIT 2026-09-01 ─ app paths that land here go to the app.
+
+     This is the mirror of the two redirects in apps/web/next.config.mjs, and it
+     covers the mistake people actually make. Nobody mistypes /how-it-works;
+     they arrive at /dashboard or /login on THIS origin — from a bookmark made
+     before the split, from editing the port in the address bar, or from any
+     link written when there was one deployment. Without this they get a 404 on
+     a marketing site, which is a confusing place to be told your dashboard does
+     not exist.
+
+     TEMPORARY, NOT PERMANENT, AND NOT NEGOTIABLE. These paths genuinely do not
+     belong to this origin, and a 308 would have browsers cache the jump
+     forever — the same one-way door that had to be undone in apps/web on the
+     day it was introduced.
+
+     Only the paths the app really owns are listed. A blanket rule would send
+     every typo to the app and turn its 404 into this site's 404. */
+  async redirects() {
+    const app = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+    return [
+      { source: '/login',           destination: `${app}/login`,     permanent: false },
+      { source: '/signup',          destination: `${app}/signup`,    permanent: false },
+      { source: '/dashboard',       destination: `${app}/dashboard`, permanent: false },
+      { source: '/dashboard/:path*', destination: `${app}/dashboard/:path*`, permanent: false },
+      { source: '/admin/:path*',    destination: `${app}/admin/:path*`, permanent: false },
+    ]
+  },
 }
 
 export default nextConfig

@@ -180,9 +180,18 @@ export const metadata = {
 
   Page files return section content only.
 */
+/*
+  SPLIT 2026-09-01: data-scroll-behavior on <html>.
+
+  base.css sets `scroll-behavior: smooth`, and Next warns about that on every
+  client navigation — a smooth scroll during a route change animates from the
+  OLD page's scroll position, so a short page reached from a long one can settle
+  mid-content instead of at the top. Declaring the attribute tells Next the
+  smooth scroll is intentional and lets it handle route transitions itself.
+*/
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${tight.variable} ${mono.variable}`}>
+    <html lang="en" data-scroll-behavior="smooth" className={`${tight.variable} ${mono.variable}`}>
       <head>
         {/*
           SPLIT 2026-09-01: `.reveal { opacity: 0 }` means everything below the
