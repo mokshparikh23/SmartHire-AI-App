@@ -9,17 +9,41 @@
   question and is answered as a billing one ("your plan covers the AI cost"), so
   it sits with the buying set.
 
-  ── WHY THE HOME PAGE GETS NO ACCORDION ───────────────────────────────────────
-
-  Every answer in this file is checked against the shipped build, so inventing
-  three home-only questions is off the table. Rendering the same Q&A on two
-  routes is worse than that: it duplicates content for a crawler, and it breaks
-  Google's rule that a marked-up FAQ question must be visible on the page
-  carrying the markup. One item, one page. The landing page links out instead.
-
   A dedicated /faq route is the obvious later move once there are more than
-  nine. Deferred, not forgotten.
+  nine. Deferred, not forgotten — see the revised note below for what the home
+  page shows in the meantime.
 */
+
+/*
+  SPLIT 2026-09-01 (revised) ─ THE HOME PAGE GETS A SHORT FAQ AFTER ALL.
+
+  The first version of this file argued the landing page should have none:
+  every answer here is checked against the shipped build, so there are no
+  home-only questions to invent, and repeating three of them duplicates content
+  and breaks Google's rule that a marked-up FAQ question must be visible on the
+  page carrying the markup.
+
+  The first half of that still holds — nothing below is invented for the home
+  page, HOME_FAQ only re-presents four of the nine. The second half is handled
+  by scope rather than by omission: if FAQPage JSON-LD is ever added, it goes on
+  /how-it-works and /pricing ONLY, never on the home page. There is no such
+  markup yet; this is the note that stops it being added in three places.
+
+  What the omission actually cost was worse than the duplication: a landing page
+  that answers none of the four questions every visitor arrives with reads as
+  incomplete, which is how it was reported.
+
+  SELECTED BY QUESTION TEXT, NOT BY SLICING. The four are a choice — what it is,
+  whether it is free to try, what an hour costs, and where the words go — one
+  from each thing a first-time reader is deciding. A .slice() would hide that
+  behind array order and change silently when a question is added.
+*/
+export const HOME_FAQ_QUESTIONS = [
+  'Does it answer as me?',
+  'Is there a free trial?',
+  'What exactly is a credit?',
+  'Where does the transcript go?',
+]
 
 /*
   PIVOT 2026-08-29: three of the four below are no longer true.
@@ -63,3 +87,17 @@ export const FAQ_BUYING = [
   ['Can I cancel?', 'A subscription stops at the end of the period you have already paid for. Credits are not a subscription at all: you buy them once and spend them whenever you have a call.'],
   ['Do I need my own API key?', 'No. Your plan covers the AI cost. There is nothing to sign up for and nothing to paste into the app — the desktop app ships no API credential of any kind.'],
 ]
+
+/**
+ * The four on the landing page, in the order named in HOME_FAQ_QUESTIONS.
+ *
+ * Resolved from the two arrays above rather than being a third copy of the
+ * text, so an answer edited on /pricing is the same answer on the home page.
+ * Throws if a question is renamed without updating the list — a silent drop
+ * would leave the home FAQ quietly one item shorter.
+ */
+export const HOME_FAQ = HOME_FAQ_QUESTIONS.map((q) => {
+  const found = [...FAQ_PRODUCT, ...FAQ_BUYING].find(([question]) => question === q)
+  if (!found) throw new Error(`HOME_FAQ: no question matching "${q}" — was it reworded?`)
+  return found
+})

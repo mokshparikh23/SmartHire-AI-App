@@ -8,9 +8,13 @@ import Ticker from '@/components/Ticker'
 import LiveDemo from '@/components/LiveDemo'
 import CloseCard from '@/components/CloseCard'
 import LegacyHash from '@/components/LegacyHash'
+import FaqAccordion from '@/components/FaqAccordion'
+import { PlatformMark, PlatformMarkDefs } from '@/components/PlatformMarks'
 import { TABS } from '@/content/desi-mode'
 import { STEPS } from '@/content/steps'
 import { homeFeatures } from '@/content/features'
+import { MEETING_PLATFORMS } from '@/content/platforms'
+import { HOME_FAQ } from '@/content/faqs'
 import { SIGNUP } from '@/lib/app-links'
 import { resolveCurrency, singlePackForCurrency } from 'smarthire-pricing'
 
@@ -34,6 +38,21 @@ import { resolveCurrency, singlePackForCurrency } from 'smarthire-pricing'
 
   — so nothing on this page is duplicate content, and nothing here is the last
   word on anything.
+
+  REVISED 2026-09-01: two sections were added back after the first cut of this
+  page read as incomplete, and both are deliberate exceptions to the rule above.
+
+    the WORKS WITH band, which also renders on /features. A logo strip is proof,
+    not prose — eight brand names, no paragraph for a crawler to see twice — and
+    "does it work with the thing my interview is on" is answered before anything
+    else is read.
+
+    a four-item FAQ, resolved out of the same arrays /how-it-works and /pricing
+    use, so no answer is copied. If FAQPage JSON-LD is ever added it belongs on
+    those two pages and not on this one.
+
+  Both are unnumbered. The numbered sections are the argument; these two are
+  evidence, like the ticker.
 
   AND THE TEASERS CARRY NO ids. That is not an oversight: LegacyHash maps the
   seven retired anchors (/#how, /#features, /#pricing …) to the routes that now
@@ -326,6 +345,86 @@ export default async function HomePage() {
         </Container>
       </Reveal>
 
+      {/* ═══════════════════════════════════ works with (proof band) ══ */}
+      {/*
+        REVISED 2026-09-01: this is on BOTH the home page and /features, and it
+        is the one deliberate exception to "no section renders on two routes".
+
+        A logo strip is proof, not prose. There is no paragraph here for a
+        crawler to see twice — eight brand names and eight marks — so the
+        duplicate-content argument that keeps the other sections to one route
+        each does not apply, while the reason to have it on the landing page
+        does: "will it work with the thing my interview is on" is a question
+        people answer before they read anything else, and a home page that does
+        not answer it sends them looking.
+
+        UNNUMBERED, deliberately. The numbered sections are the argument;
+        this is evidence, like <Ticker /> above it. Numbering it would push
+        pricing to 05 and imply it is a step in a sequence.
+      */}
+      <Reveal as="section" className="border-b border-line-soft py-24 sm:py-32">
+        <Container wide>
+          <SectionMark
+            label="Works with"
+            title="Whatever the interview is running on."
+            lede="It sits above the window rather than inside it, so it does not matter whether the interview is a call, a shared editor or an assessment portal."
+            center
+          />
+        </Container>
+
+        {/* Outside the Container on purpose: a row that slides has to run off
+            both edges of the SCREEN to read as continuous. Same placement as
+            <Ticker /> above, for the same reason. */}
+        <div>
+          {/* Mounted once per document. Teams and Webex are gradient logos and
+              their paint servers must exist exactly once — see the note in
+              PlatformMarks.jsx. /features mounts its own copy; they are
+              different documents, so that is correct rather than duplicate. */}
+          <PlatformMarkDefs />
+
+          <div
+            className="mark-strip ticker relative mt-16 overflow-hidden"
+            style={{
+              maskImage:
+                'linear-gradient(90deg, transparent, #000 6rem, #000 calc(100% - 6rem), transparent)',
+              WebkitMaskImage:
+                'linear-gradient(90deg, transparent, #000 6rem, #000 calc(100% - 6rem), transparent)',
+            }}
+          >
+            {/* Rendered TWICE: the keyframe translates by exactly -50%, so the
+                second copy occupies the viewport at the moment the first wraps.
+                Drop it and the loop visibly jumps. The duplicate is aria-hidden
+                so the list is announced once. */}
+            <div className="ticker-row marks">
+              {[...MEETING_PLATFORMS, ...MEETING_PLATFORMS].map((p, i) => (
+                <div
+                  key={i}
+                  aria-hidden={i >= MEETING_PLATFORMS.length}
+                  className="mx-3 flex shrink-0 items-center gap-5 rounded-2xl border border-line bg-paper py-6 pl-6 pr-9"
+                >
+                  <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-canvas-2 text-ink-soft">
+                    <PlatformMark name={p.key} size={48} />
+                  </span>
+                  <span className="whitespace-nowrap">
+                    <span className="block text-[17px] font-semibold text-ink">{p.name}</span>
+                    <span className="mono mt-1.5 flex items-center gap-1.5 text-[12px] text-faint">
+                      <span className="h-1.5 w-1.5 rounded-full bg-positive" />
+                      Supported
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <Container wide>
+          <p className="mt-10 text-center text-[15px] text-muted">
+            Not listed? If it runs in a window on macOS or Windows, it works.
+          </p>
+        </Container>
+      </Reveal>
+
       {/* ════════════════════════════════════════ 04 pricing (teaser) ══ */}
       {/* A price and a sentence. <PricingPlans/> renders on /pricing and
           nowhere else — it is the thing being decided on, and it should be in
@@ -348,6 +447,42 @@ export default async function HomePage() {
               every interview for the period.
             </p>
             <Button href="/pricing" size="lg" iconRight="arrowRight">See the plans</Button>
+          </div>
+        </Container>
+      </Reveal>
+
+      {/* ═════════════════════════════════════════════ faq ════════════ */}
+      {/*
+        REVISED 2026-09-01: four of the nine, chosen in content/faqs.js.
+
+        The first cut of this page had no FAQ at all, on the grounds that
+        repeating a question duplicates content. What that actually cost was a
+        landing page answering none of the four things every visitor arrives
+        wanting to know, which reads as an incomplete site — and is how it was
+        reported.
+
+        NOTHING HERE IS INVENTED FOR THIS PAGE. HOME_FAQ resolves four entries
+        out of FAQ_PRODUCT and FAQ_BUYING by question text, so an answer edited
+        on /pricing is the same answer here. If FAQPage JSON-LD is ever added it
+        goes on those two pages only, never on this one.
+
+        Unnumbered, like the proof band — it answers the argument rather than
+        being part of it.
+      */}
+      <Reveal as="section" className="border-b border-line-soft py-24 sm:py-32">
+        <Container>
+          <SectionMark label="Questions" title="Before you ask." />
+          <div className="mt-14">
+            <FaqAccordion items={HOME_FAQ} />
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-[14px]">
+            <Link href="/how-it-works#faq" className="text-muted transition-colors hover:text-ink">
+              More about what it does &rarr;
+            </Link>
+            <Link href="/pricing#faq" className="text-muted transition-colors hover:text-ink">
+              More about billing &rarr;
+            </Link>
           </div>
         </Container>
       </Reveal>
