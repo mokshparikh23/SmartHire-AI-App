@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * Window concerns for the floating panel. No audio, no AI — those belong to
@@ -40,7 +40,7 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
 // export function usePanelHotkeys({ onType, onStop, onCopy, onRetry, … }) {
 // PREMIUM-UX 2026-08-31: onFocus (⌘⇧F) and onEscape added.
 export function usePanelHotkeys({
-  onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape,
+  onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive,
   onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
 }) {
   useEffect(() => {
@@ -104,6 +104,8 @@ export function usePanelHotkeys({
       // key, and stopping a runaway answer is exactly as useful mid-typing.
       else if (key === '.')         { e.preventDefault(); onStopGenerating?.() }
       else if (key === 'backspace') { if (!typing) { e.preventDefault(); onClearAnswer?.() } }
+      // PREMIUM-UX 2026-08-31: ⌘↓ jumps back to the live pair from a pinned turn.
+      else if (key === 'arrowdown') { if (!typing) { e.preventDefault(); onGoLive?.() } }
       else if (key === 'arrowleft') { if (!typing) { e.preventDefault(); onPrev?.() } }
       else if (key === 'arrowright'){ if (!typing) { e.preventDefault(); onNext?.() } }
     }
@@ -111,9 +113,32 @@ export function usePanelHotkeys({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
     // onType, onStop, onCopy, onRetry,
-    onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape,
+    onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive,
     onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
   ])
+}
+
+/* PREMIUM-UX 2026-08-31 ─ "still waiting on the server" is its own state ──────
+   Between sending a request and the first token there was one indistinguishable
+   "thinking" state, whether the answer was 400ms away or the server had stopped
+   responding entirely. Four seconds is well past a normal time-to-first-token
+   and well short of the 30s deadline in aiBackend.js, so it is the window where
+   telling the user "this is slower than usual" is both true and useful.
+
+   One timer and one boolean: this costs a single extra render per stalled
+   request, and none at all on a healthy one. */
+const STALL_HINT_MS = 4000
+
+export function useStallWatch(active) {
+  const [slow, setSlow] = useState(false)
+
+  useEffect(() => {
+    if (!active) { setSlow(false); return }
+    const id = setTimeout(() => setSlow(true), STALL_HINT_MS)
+    return () => { clearTimeout(id); setSlow(false) }
+  }, [active])
+
+  return slow
 }
 
 /* PREMIUM-UX 2026-08-31 ─ the overlay is keyboard-driven and could not scroll ──

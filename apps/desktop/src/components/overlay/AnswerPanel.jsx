@@ -24,9 +24,25 @@ import Markdown from './Markdown'
  */
 // Copy and Retry are no longer props — they moved into the toolbar's ⋮ menu,
 // which reads currentAnswer at click time rather than subscribing to it.
-export default function AnswerPanel() {
-  const answer        = useSessionStore((s) => s.currentAnswer)
-  const question      = useSessionStore((s) => s.currentQuestion)
+// PREMIUM-UX 2026-08-31: onRetry backs the "no answer came back" branch;
+// readerPinnedRef is mirrored out so generate() can decide whether a new
+// question may take the card. Props rather than store reads, so this leaf keeps
+// its single-subscription discipline.
+// export default function AnswerPanel() {
+export default function AnswerPanel({ onRetry, readerPinnedRef }) {
+  /* PREMIUM-UX 2026-08-31 ─ pinned reading, and why it is CHEAPER ─────────────
+     While a past turn is pinned, the live stream is irrelevant to this leaf.
+     Selecting '' in that case means zustand's equality check bails out and a
+     streamed token re-renders NOTHING at all — strictly cheaper than before,
+     where every token re-rendered this component whatever was on screen. */
+  const pinned        = useSessionStore((s) =>
+    (s.pinnedTurnId ? s.turns.find((t) => t.id === s.pinnedTurnId) : null) ?? null)
+  // const answer     = useSessionStore((s) => s.currentAnswer)
+  // const question   = useSessionStore((s) => s.currentQuestion)
+  const liveAnswer    = useSessionStore((s) => (s.pinnedTurnId ? '' : s.currentAnswer))
+  const liveQuestion  = useSessionStore((s) => (s.pinnedTurnId ? '' : s.currentQuestion))
+  const answer        = pinned ? pinned.a : liveAnswer
+  const question      = pinned ? pinned.q : liveQuestion
   const questionAt    = useSessionStore((s) => s.questionAt)
   const isThinking    = useSessionStore((s) => s.isThinking)
   const error         = useSessionStore((s) => s.error)
@@ -56,6 +72,10 @@ export default function AnswerPanel() {
        on every wheel tick, and this component is the one leaf that re-renders
        per streamed token. A setState here would put a render on both paths. */
     el.dataset.atEnd = String(atEnd)
+    /* PREMIUM-UX 2026-08-31: mirrored out so generate() can decide whether a new
+       question may take the card. A ref, written here rather than lifted into
+       state, for the same reason as everything else on this path. */
+    if (readerPinnedRef) readerPinnedRef.current = atEnd
   }
 
   useLayoutEffect(() => {
@@ -88,8 +108,12 @@ export default function AnswerPanel() {
 
   // REDESIGN 2026-08-29: "Answer · HH:MM" replaces the word count. questionAt
   // covers the turn still streaming; selectTurn repoints it at turns[].ts.
-  const stamp = questionAt
-    ? new Date(questionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // PREMIUM-UX 2026-08-31: the footer stamps whatever is SHOWING, so a pinned
+  // turn carries its own time rather than the live one's.
+  // const stamp = questionAt ? … : ''
+  const shownAt = pinned ? pinned.ts : questionAt
+  const stamp = shownAt
+    ? new Date(shownAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : ''
 
   /*
@@ -109,6 +133,12 @@ export default function AnswerPanel() {
   */
   const followups = useSettingsStore((s) => s.answerMode === 'followups')
   const source    = useSessionStore((s) => s.source)
+
+  /* PREMIUM-UX 2026-08-31: a pinned turn shows ITS state, not the live one's —
+     otherwise the spinner for a question streaming underneath would appear over
+     a finished answer the reader is still on. */
+  const shownError    = pinned ? (pinned.error ?? null) : error
+  const shownThinking = pinned ? false : isThinking
 
   const heard  = source === 'voice'
   const qLabel = followups ? (heard ? 'Heard:'    : 'You asked:') : 'Question:'
@@ -157,7 +187,7 @@ export default function AnswerPanel() {
             <div className="ia-answer">
               <span className="ia-qa-label">{aLabel}</span>
               <Markdown text={answer} />
-              {isThinking && <span className="ia-caret" />}
+              {shownThinking && <span className="ia-caret" />}
             </div>
           </div>
         ) : blockedReason ? (
@@ -169,10 +199,28 @@ export default function AnswerPanel() {
               Top up credits
             </button>
           </div>
-        ) : error ? (
-          <p className="ia-error">{error}</p>
-        ) : isThinking ? (
+        ) : shownError ? (
+          <p className="ia-error">{shownError}</p>
+        ) : shownThinking ? (
           <span className="ia-dots"><i /><i /><i /></span>
+        ) : question ? (
+          /* PREMIUM-UX 2026-08-31 ─ the branch that did not exist ──────────────
+             A question with no answer, no error and nothing in flight used to
+             fall through EVERY branch to null: the question header, a completely
+             blank body, and nothing at all to press. It is reachable whenever a
+             stream ends having produced no content, and it looks exactly like
+             the app deciding not to answer.
+
+             sessionStore.setAnswerDone now sets an error for the common cause,
+             so this is the backstop — plus, unlike a bare error line, it carries
+             the way out. */
+          <div className="ia-empty ia-empty--result">
+            <Icon name="warning" size={18} strokeWidth={1.4} />
+            <span>No answer came back.</span>
+            <button className="ia-pill" onClick={onRetry}>
+              Try again <Kbd combo="mod shift r" />
+            </button>
+          </div>
         ) : !question ? (
           <div className="ia-empty">
             <Icon name="mic" size={20} strokeWidth={1.4} />
@@ -240,12 +288,32 @@ export default function AnswerPanel() {
 // export function AnswerCardHead({ children, onClear, onExpand, canClear, … }) {
 export function AnswerCardHead({
   children, onClear, onExpand, expanded, canClear,
+  // PREMIUM-UX 2026-08-31: the way back to the live pair while a past turn is
+  // pinned. See the pinnedTurnId note in the store.
+  pinned, liveThinking, onGoLive,
   clearCombo = 'mod del', clearTitle = 'Clear what is showing',
 }) {
   return (
     <div className="ia-card-head">
       {children}
       <span className="ia-spacer" />
+
+      {/* PREMIUM-UX 2026-08-31: the ONLY new pixel in the default path — it
+          appears solely when a past turn is pinned, which never happens to a
+          reader following along at the live edge. Amber while the live answer is
+          still streaming, green once it is complete. */}
+      {pinned && (
+        <button
+          className="ia-live-chip"
+          data-streaming={!!liveThinking}
+          onClick={onGoLive}
+          title={`Jump to the newest answer (${comboLabel('mod down')})`}
+        >
+          <span className="ia-live-dot" />
+          {liveThinking ? 'Answering…' : 'New answer'}
+          <Kbd combo="mod down" />
+        </button>
+      )}
       <button className="ia-pill" onClick={onClear} disabled={!canClear} title={clearTitle}>
         Clear <Kbd combo={clearCombo} />
       </button>

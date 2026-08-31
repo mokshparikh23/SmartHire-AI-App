@@ -3,6 +3,9 @@ import { useSettingsStore } from '../store/settingsStore'
 import { CHAT_MODELS } from '../services/aiRouter'
 import Icon from '../components/ui/Icon'
 import Kbd from '../components/overlay/Kbd'
+// PREMIUM-UX 2026-08-31: so a server-side session kill can explain itself here,
+// after the panel that raised it is gone.
+import Notices from '../components/overlay/Notices'
 import '../styles/overlay.css'   // pulls in glass.css, and the shared .ia-btn / .ia-menu
 
 /**
@@ -181,6 +184,13 @@ export default function Launcher({ session, licenseData, onLogout }) {
       </div>
 
       <div className="ia-lbody">
+        {/* PREMIUM-UX 2026-08-31: when the SERVER ends a session — credits gone,
+            request limit, licence revoked — the panel is torn down and this
+            screen comes back. It had no idea why, so a paid interview simply
+            vanished. Notices live in sessionStore and stopSession does not clear
+            them, so the explanation pushed as the session died is still here. */}
+        <Notices />
+
         <div className="ia-lsection">
           <h2>Interview</h2>
           <span className="ia-spacer" />

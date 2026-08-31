@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { usePanelOpacity, usePanelHotkeys } from '../../hooks/useOverlay'
+// PREMIUM-UX 2026-08-31: useStallWatch distinguishes "in flight" from "the
+// server has gone quiet"; Notices is the error surface the next question cannot
+// wipe.
+import { usePanelOpacity, usePanelHotkeys, useStallWatch } from '../../hooks/useOverlay'
+import Notices from './Notices'
 import Toolbar from './Toolbar'
 import TranscriptBar from './TranscriptBar'
 import AnswerPanel, { AnswerCardHead } from './AnswerPanel'
@@ -36,6 +40,11 @@ export default function SessionPanel({ session }) {
   const isThinking   = useSessionStore((s) => s.isThinking)
   const turns        = useSessionStore((s) => s.turns)
   const activeTurnId = useSessionStore((s) => s.activeTurnId)
+  // PREMIUM-UX 2026-08-31: which pair the card is SHOWING. Changes at most once
+  // per turn, so subscribing here costs nothing on the streaming path.
+  const pinnedTurnId = useSessionStore((s) => s.pinnedTurnId)
+  const goLive       = useSessionStore((s) => s.goLive)
+  const captureState = useSessionStore((s) => s.captureState)
   const selectTurn   = useSessionStore((s) => s.selectTurn)
   const chatMode     = useSessionStore((s) => s.chatMode)
   // Count, not the array — the head only needs to know whether Clear is live,
@@ -196,6 +205,7 @@ export default function SessionPanel({ session }) {
       s.chatMode ? session.stopChat?.() : session.stopGenerating?.()
     },
     onFocus: toggleFocus,
+    onGoLive: goLive,
     /* PREMIUM-UX 2026-08-31: the Esc precedence chain. Most-recently-opened
        first, and it deliberately ends at "do nothing" — Esc must never be a
        route to ending a paid session, however deep the chain gets. */
@@ -203,6 +213,7 @@ export default function SessionPanel({ session }) {
       if (typing)     { setTyping(false); return }
       if (drawerOpen) { setDrawerOpen(false); return }
       if (focused)    { exitFocus(); return }
+      if (pinnedTurnId) { goLive(); return }
       if (arming)     { armedRef.current = false; setArming(false); return }
       // Nothing to back out of.
     },
@@ -222,13 +233,41 @@ export default function SessionPanel({ session }) {
     onNext:            () => stepTurn(1),
   })
 
-  const state = isThinking ? 'thinking' : micEnabled ? 'listening' : 'paused'
+  /* PREMIUM-UX 2026-08-31 ─ a state machine, rather than one ternary ──────────
+     The line this replaces was the ENTIRE visual state machine, and it drove
+     nothing but the colour of three 2.5px bars. Idle and listening rendered
+     identically, and there was no state at all for the two that matter most:
+
+       deaf — micEnabled says the user WANTS capture on. It is set by a toolbar
+         click and by nothing else, and knew nothing about whether acquire()
+         actually succeeded. So the chip sat green over dead capture in three
+         separate failure paths, which is as misleading as this panel gets.
+
+       slow — a request in flight with nothing back yet looked exactly like one
+         that had stopped responding.
+
+     Order is by severity: a broken thing outranks a busy thing, which outranks
+     an idle one. */
+  // const state = isThinking ? 'thinking' : micEnabled ? 'listening' : 'paused'
+  const slow = useStallWatch(isThinking && !hasAnswer)
+
+  const state =
+    !micEnabled                  ? 'paused'
+    : captureState === 'failed'  ? 'deaf'
+    : slow                       ? 'slow'
+    : isThinking && hasAnswer    ? 'writing'
+    : isThinking                 ? 'thinking'
+    :                              'listening'
 
   return (
     // PREMIUM-UX 2026-08-31: data-focus lets the CSS loosen the answer's
     // line-height when focus mode has bought the room for it.
     // <div className="ia-stage" ref={stageRef}>
     <div className="ia-stage" ref={stageRef} data-focus={focused}>
+      {/* PREMIUM-UX 2026-08-31: above the toolbar and flex-shrink:0, so a notice
+          never steals height from the answer and never covers a control. */}
+      <Notices />
+
       <div className="ia-glass ia-bar ia-bar--toolbar">
         <Toolbar
           session={session}
@@ -252,6 +291,10 @@ export default function SessionPanel({ session }) {
             state={state}
             levelRef={session.levelRef}
             partialRef={session.partialRef}
+            // PREMIUM-UX 2026-08-31: heldRef drives the "waiting for the rest…"
+            // state, and onAnswerNow releases what is held on demand.
+            heldRef={session.heldRef}
+            onAnswerNow={() => session.flushHeld?.()}
             onSubmit={submitTyped}
             onCancelTyping={() => setTyping(false)}
             // LIVE CAPTION 2026-08-30: the live caption lives in a ref, so
@@ -304,6 +347,10 @@ export default function SessionPanel({ session }) {
               // onExpand={() => setDrawerOpen((v) => !v)}
               onExpand={toggleFocus}
               expanded={focused}
+              // PREMIUM-UX 2026-08-31: the way back to the live pair.
+              pinned={!!pinnedTurnId}
+              liveThinking={isThinking}
+              onGoLive={goLive}
             >
               {!chatMode && (
                 <TurnPager
@@ -327,7 +374,7 @@ export default function SessionPanel({ session }) {
 
             {chatMode
               ? <ChatPanel onSend={session.sendChat} />
-              : <AnswerPanel />}
+              : <AnswerPanel onRetry={session.regenerate} readerPinnedRef={session.readerPinnedRef} />}
           </div>
         </>
       )}

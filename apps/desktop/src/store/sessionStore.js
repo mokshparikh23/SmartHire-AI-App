@@ -109,12 +109,41 @@ export const useSessionStore = create((set, get) => ({
   selfSpeech: [],      // [{ id, text, at }] — drained by the next setQuestion
   currentSaid: [],     // what was drained onto the turn currently showing
 
+  /* PREMIUM-UX 2026-08-31 ─ errors that survive the next question ─────────────
+     Every failure in this app was rendered as a red box INSIDE the answer body:
+     it occupied the space an answer should be, and it was silently wiped by the
+     next setQuestion or clearAnswer. "Your microphone is dead" therefore
+     disappeared without trace the moment anyone said anything — which, when the
+     microphone is dead, is the one thing that still happens.
+
+     A separate slice, rendered in its own bar above the toolbar. setQuestion and
+     clearAnswer DO NOT TOUCH IT. That is the entire point.
+
+     De-duped on text, because a retry loop would otherwise stack forty
+     identical toasts over a panel that is 720px wide. */
+  notices: [],         // [{ id, kind, text, action, sticky, at }]
+
   // Committed log
   // SELF-VOICE 2026-08-31: turns[] gains `said` — what the candidate had said
   // before that question, so recentHistory can replay it alongside the pair.
   // turns: [],        // [{ id, q, a, ts, source, error, feedback }]
   turns: [],           // [{ id, q, a, said, ts, source, error, feedback }]
   activeTurnId: null,  // null = showing the live stream, not a past turn
+
+  /* PREMIUM-UX 2026-08-31 ─ what the card is SHOWING, vs what is LIVE ─────────
+     These were one thing, and that is why reading was so fragile: selectTurn
+     overwrote currentQuestion/currentAnswer with a stored turn, so paging back
+     destroyed the live stream, and a new question always yanked the card to the
+     new pair whether or not anybody was mid-sentence.
+
+     The rule has to stay NARROW or it breaks the product. "Answers appear while
+     the question is still being asked" is the whole value proposition, so a new
+     question ALWAYS supersedes and ALWAYS starts streaming immediately. What
+     changes is only which pair the card DISPLAYS.
+
+     null = show the live pair. Non-null = show that committed turn instead, and
+     let the live one stream underneath it. */
+  pinnedTurnId: null,
 
   // ── Actions ───────────────────────────────────────────────────────────────
   // SESSION GATE 2026-08-29: takes the /api/session/start payload, so the id the
@@ -155,6 +184,11 @@ export const useSessionStore = create((set, get) => ({
       // SELF-VOICE 2026-08-31: last interview's words are not this one's context.
       selfSpeech: [],
       currentSaid: [],
+      // PREMIUM-UX 2026-08-31: a fresh session starts with a clear surface.
+      // Note stopSession deliberately does NOT clear these — a notice explaining
+      // WHY a session ended has to outlive the session that raised it.
+      notices: [],
+      pinnedTurnId: null,
       turns: [],
       activeTurnId: null,
     })
@@ -168,6 +202,7 @@ export const useSessionStore = create((set, get) => ({
       isRunning: false, timerInterval: null, isThinking: false,
       answerPending: false,   // PIPELINE 2026-08-31
       selfSpeech: [], currentSaid: [],   // SELF-VOICE 2026-08-31
+      pinnedTurnId: null,                // PREMIUM-UX 2026-08-31
       sessionId: null, chatStreaming: false,
     })
   },
@@ -178,11 +213,22 @@ export const useSessionStore = create((set, get) => ({
    * minutesRemaining is still the credit balance underneath, so the UI has to
    * branch on this flag rather than on the number being large.
    */
+  /* PREMIUM-UX 2026-08-31 ─ the heartbeat must not un-block the panel ─────────
+     `blockedReason: beat.stop ? … : null` meant every non-stopping tick CLEARED
+     it — so a genuine out-of-credits state, with its "Top up credits" button,
+     silently vanished within heartbeatSeconds (20 by default) and the user was
+     left with an app that had simply stopped answering and offered no reason.
+
+     The heartbeat is authoritative about STOPPING and about nothing else. What
+     clears the block is the thing that proves it is over: a request that
+     succeeds (see setAnswerDone) or a fresh session. */
+  // applyHeartbeat: (beat) =>
+  //   set({ …, blockedReason: beat?.stop ? (beat.reason || 'stopped') : null }),
   applyHeartbeat: (beat) =>
     set({
       minutesRemaining: beat?.minutesRemaining ?? null,
       unlimited: beat?.metered === false,
-      blockedReason: beat?.stop ? (beat.reason || 'stopped') : null,
+      ...(beat?.stop ? { blockedReason: beat.reason || 'stopped' } : {}),
     }),
 
   // PIPELINE 2026-08-31: opts.keepAnswer leaves the previous answer on screen
@@ -201,6 +247,36 @@ export const useSessionStore = create((set, get) => ({
       const next = [...s.selfSpeech, { id: s.selfSpeech.length, text: clean, at: Date.now() }]
       return { selfSpeech: next.slice(-MAX_SELF_LINES) }
     }),
+
+  /* PREMIUM-UX 2026-08-31 ─ notices ──────────────────────────────────────────
+     `kind` is 'error' | 'warn' | 'info'. `action` is an optional
+     { label, href } — an href rather than a function so the notice stays plain
+     data, which is what lets it survive stopSession and be rendered by the
+     LAUNCHER after the panel is gone (see the session-kill path). */
+  pushNotice: (notice) =>
+    set((s) => {
+      const text = (notice?.text || '').trim()
+      if (!text) return {}
+      // De-dupe on text: a retrying request must not stack identical toasts.
+      if (s.notices.some((n) => n.text === text)) return {}
+      const MAX_NOTICES = 3
+      return {
+        notices: [...s.notices, {
+          id: `${Date.now()}-${s.notices.length}`,
+          kind: notice.kind || 'error',
+          text,
+          action: notice.action || null,
+          sticky: !!notice.sticky,
+          at: Date.now(),
+        }].slice(-MAX_NOTICES),
+      }
+    }),
+
+  dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
+
+  /** Clears every notice raised by one subsystem, when its condition resolves. */
+  clearNotices: (predicate) =>
+    set((s) => ({ notices: typeof predicate === 'function' ? s.notices.filter((n) => !predicate(n)) : [] })),
 
   /** Hands over everything pending and empties the ring. */
   drainSelfSpeech: () => {
@@ -226,6 +302,13 @@ export const useSessionStore = create((set, get) => ({
       source,
       error: null,
       activeTurnId: null,   // a new question always returns us to the live view
+      /* PREMIUM-UX 2026-08-31 ─ do not take an answer off a reader mid-sentence ─
+         The new question still supersedes and still starts streaming — only the
+         DISPLAY holds. opts.pinTo is the turn commitInterrupted just wrote, and
+         the caller passes it only when the reader had deliberately scrolled away
+         from the live edge. A reader at the bottom is following along and gets
+         the new pair immediately, which is the common case and unchanged. */
+      ...(opts.pinTo ? { pinnedTurnId: opts.pinTo } : {}),
     }),
 
   /* PIPELINE 2026-08-31 ─ the other half of not splitting a long question ─────
@@ -332,7 +415,17 @@ export const useSessionStore = create((set, get) => ({
       feedback: null,      // REDESIGN 2026-08-29: 'up' | 'down' from the card footer
     }
     // set({ isThinking: false, turns: [...turns, turn], activeTurnId: turn.id })
-    set({ isThinking: false, answerPending: false, error: failed, turns: [...turns, turn], activeTurnId: turn.id })
+    /* PREMIUM-UX 2026-08-31: an answer that actually arrived is proof the block
+       is over — a top-up landing mid-session has no other way to clear it now
+       that the heartbeat no longer does. Only on a genuine answer, so a failed
+       request cannot un-block the panel. */
+    const unblocked = currentAnswer && !failed ? { blockedReason: null } : {}
+    // set({ isThinking: false, answerPending: false, error: failed, turns: […], activeTurnId: turn.id })
+    set({
+      isThinking: false, answerPending: false, error: failed,
+      turns: [...turns, turn], activeTurnId: turn.id,
+      ...unblocked,
+    })
   },
 
   /**
@@ -355,21 +448,23 @@ export const useSessionStore = create((set, get) => ({
   setError: (msg) => set({ error: msg, isThinking: false, answerPending: false }),
 
   /** Repoint the fast path at a stored turn. Cheap — no refetch. */
+  /* PREMIUM-UX 2026-08-31 ─ paging must not destroy the live stream ───────────
+     This overwrote currentQuestion, currentAnswer and isThinking with the stored
+     turn — so pressing ⌘← while an answer was streaming replaced it outright,
+     and there was no way back to the live one except paging forward to a turn
+     that no longer held it.
+
+     It now only says WHICH pair to display. The live pair is untouched and keeps
+     streaming underneath, which is what makes going live again free. */
+  // selectTurn: (id) => { set({ currentQuestion: turn.q, currentAnswer: turn.a, … }) },
   selectTurn: (id) => {
     const turn = get().turns.find((t) => t.id === id)
     if (!turn) return
-    set({
-      currentQuestion: turn.q,
-      currentAnswer: turn.a,
-      questionAt: turn.ts,   // REDESIGN 2026-08-29: card footer follows the turn
-      source: turn.source,
-      error: turn.error ?? null,
-      isThinking: false,
-      answerPending: false,   // PIPELINE 2026-08-31
-      currentSaid: turn.said || [],   // SELF-VOICE 2026-08-31
-      activeTurnId: id,
-    })
+    set({ pinnedTurnId: id, activeTurnId: id })
   },
+
+  /** Back to the live pair. */
+  goLive: () => set({ pinnedTurnId: null }),
 
   /* REDESIGN 2026-08-29 ─ capture toggles in the new toolbar ───────────────── */
   /* PIPELINE 2026-08-31: toggling the source or re-enabling capture is the user
@@ -383,7 +478,19 @@ export const useSessionStore = create((set, get) => ({
   /** PIPELINE 2026-08-31: 'live' once acquire() returns, 'failed' with a reason
    *  at every site that gives up. Deliberately NOT cleared by setQuestion or
    *  clearAnswer — that is the whole point of it being its own field. */
-  setCaptureState: (s, err = null) => set({ captureState: s, captureError: err }),
+  setCaptureState: (state, err = null) => {
+    set({ captureState: state, captureError: err })
+    /* PREMIUM-UX 2026-08-31: dead capture is the failure most worth surfacing —
+       the panel otherwise reads "listening" over a microphone that is not
+       running, and the user finds out only when nothing is ever answered. It is
+       sticky because it stays true until something is done about it, and it is
+       cleared the moment capture comes back. */
+    if (state === 'failed' && err) {
+      get().pushNotice({ kind: 'error', sticky: true, text: err })
+    } else if (state === 'live') {
+      get().clearNotices((n) => n.kind === 'error' && n.sticky)
+    }
+  },
   setScreenEnabled:   (v) => set({ screenEnabled: v }),
   setScreenPermission: (p) => set({
     screenPermission: p,

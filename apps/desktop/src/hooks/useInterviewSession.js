@@ -145,6 +145,12 @@ export function useInterviewSession() {
   // tokens. This actually stops it — see askAIStream's `signal`.
   const abortRef = useRef(null)
 
+  /* PREMIUM-UX 2026-08-31: true while the reader is at the live edge of the
+     answer. AnswerPanel writes it from its scroll handler; generate() reads it
+     to decide whether a new question may take the card. A ref for the same
+     reason levelRef and partialRef are — it changes on every wheel tick. */
+  const readerPinnedRef = useRef(true)
+
   // Stream deltas arrive one microtask apart, so an uncoalesced stream is one
   // React render per delta. Flushing on a frame caps that at ~60/s.
   const flush = useCallback(() => {
@@ -165,6 +171,16 @@ export function useInterviewSession() {
     if (e?.status === 402) {
       store.setError(e.message || 'You have run out of credits.')
       useSessionStore.setState({ blockedReason: e.code || 'out_of_credits' })
+      /* PREMIUM-UX 2026-08-31: also a STICKY notice. blockedReason alone was not
+         enough — applyHeartbeat used to null it on every tick, so a genuine
+         out-of-credits call to action silently vanished within twenty seconds
+         and the user was left with an app that had simply stopped answering. */
+      store.pushNotice({
+        kind: 'warn',
+        sticky: true,
+        text: e.message || 'You have run out of credits.',
+        action: { label: 'Top up', href: '/dashboard/billing' },
+      })
       return
     }
     store.setError(e?.message || 'The request failed.')
@@ -297,11 +313,23 @@ export function useInterviewSession() {
          it — so this gives no duplication and the right order for free.
 
          Drained after commitInterrupted, before setQuestion stores it. */
+      /* PREMIUM-UX 2026-08-31 ─ do not take the answer off a reader ────────────
+         If the candidate has deliberately scrolled up to re-read, hold the card
+         on the turn commitInterrupted just wrote. The new question still
+         supersedes and still streams — only the DISPLAY waits, and a badge in
+         the card head offers the way forward.
+
+         readerPinnedRef is true when they are at the live edge, which is the
+         common case and behaves exactly as before. */
+      const atEdge = readerPinnedRef.current !== false
+      const lastTurn = useSessionStore.getState().turns.slice(-1)[0]
+      const pinTo = !atEdge && lastTurn ? lastTurn.id : null
+
       const said = store.drainSelfSpeech()
       // keepAnswer: the previous answer stays readable until the first token of
       // the new one lands, instead of the card blanking to three dots.
       // store.setQuestion(q, source, { keepAnswer: true })
-      store.setQuestion(q, source, { keepAnswer: true, said })
+      store.setQuestion(q, source, { keepAnswer: true, said, pinTo })
     }
 
     // Remember which utterance the card is showing, so the NEXT emit can decide
@@ -829,6 +857,34 @@ export function useInterviewSession() {
       // session_settle() return the figures it already wrote.
       if (useSessionStore.getState().isRunning) {
         useSessionStore.setState({ blockedReason: reason || null })
+        /* PREMIUM-UX 2026-08-31 ─ a paid interview used to just disappear ──────
+           A server-side stop tore the panel down and MainApp swapped back to the
+           launcher, whose own error state reads nothing from this store. The
+           candidate's interview vanished mid-question with no explanation at
+           all — no line, no reason, nothing to act on.
+
+           A notice is plain data and stopSession deliberately does not clear it,
+           so one pushed here survives the panel being unmounted and is rendered
+           by the launcher on the other side. */
+        const explain = {
+          out_of_credits: {
+            text: 'Your credits ran out, so the session ended.',
+            action: { label: 'Top up', href: '/dashboard/billing' },
+          },
+          request_limit: {
+            text: 'This session reached its request limit and ended.',
+            action: { label: 'See plans', href: '/dashboard/billing' },
+          },
+          expired: { text: 'The session expired on the server. Nothing was lost — start again.' },
+          license_revoked: { text: 'This licence was signed out from the dashboard.' },
+        }[reason]
+
+        // No notice for a stop the user asked for — they know why it ended.
+        if (explain) {
+          useSessionStore.getState().pushNotice({
+            kind: 'warn', sticky: true, text: explain.text, action: explain.action || null,
+          })
+        }
         endLocally()
       }
     })
@@ -1032,7 +1088,8 @@ export function useInterviewSession() {
     // PIPELINE 2026-08-31: heldRef is handed down so the transcript bar can show
     // that a hold is deliberate; the rest are the cancellation controls that had
     // no way out of this hook.
-    levelRef, partialRef, heldRef, live: !liveFailed, discardHeld, flushHeld,
+    levelRef, partialRef, heldRef, readerPinnedRef,
+    live: !liveFailed, discardHeld, flushHeld,
     start, stop, askManual, regenerate, askAboutScreen, sendChat,
     stopGenerating, stopChat, clearAnswer, clearChat,
   }

@@ -20,6 +20,10 @@ const GLYPH = {
   del:    '⌫',                     // ⌫
   left:   '←',                     // ←
   right:  '→',                     // →
+  // PREMIUM-UX 2026-08-31: ⌘↓ is "go to the newest answer" while a past turn is
+  // pinned. Without a glyph, `down` would render as the literal word DOWN.
+  down:   '↓',                     // ↓
+  up:     '↑',                     // ↑
   esc:    'Esc',
 }
 
