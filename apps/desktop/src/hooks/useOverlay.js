@@ -168,13 +168,7 @@ export const HOTKEYS = [
   { group: 'Managing', combo: 'mod right',      label: 'Next turn' },
 
   { group: 'Window', combo: 'mod shift h', label: 'Hide and show the panel' },
-  // PLACEMENT 2026-09-01: this no longer advances a hidden index — it opens the
-  // six-zone picker, and the label has to say so or the sheet teaches the old
-  // behaviour. The "then 1–6" is here rather than as its own row because those
-  // keys exist only while the picker is open; a bare `1` chip in a list of
-  // always-live chords would read as a global binding.
-  // { group: 'Window', combo: 'mod shift m', label: 'Move to the next corner' },
-  { group: 'Window', combo: 'mod shift m', label: 'Choose where the panel sits (then 1–6)' },
+  { group: 'Window', combo: 'mod shift m', label: 'Move to the next corner' },
   { group: 'Window', combo: 'esc',         label: 'Back out of whatever is open', bare: true },
 
   { group: 'Session', combo: 'mod shift x', label: 'End the session (press twice)', destructive: true },

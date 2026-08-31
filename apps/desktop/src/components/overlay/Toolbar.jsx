@@ -3,7 +3,6 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import Icon from '../ui/Icon'
 import Kbd, { comboLabel } from './Kbd'
-import MovePicker from './MovePicker'
 
 /**
  * REDESIGN 2026-08-29: the top bar.
@@ -19,17 +18,10 @@ import MovePicker from './MovePicker'
 // PREMIUM-UX 2026-08-31: `endArming` added. SessionPanel owns the two-step
 // state so the ⌘⇧X chord and this pill cannot get out of step with each other.
 // export default function Toolbar({ session, onEnd, onToggleCollapse }) {
-// PLACEMENT 2026-09-01: `moveOpen` / `onMoveOpenChange` are lifted to
-// SessionPanel rather than held here, because ⌘⇧M is a GLOBAL shortcut — main
-// hears it and sends overlay:movePicker, so the panel is where that arrives, and
-// the Escape chain that closes the picker lives there too.
 // PREMIUM-UX 2026-08-31: onHelp opens the shortcut sheet from the ⋮ menu, for
 // anyone who never discovers that `?` does it.
-// export default function Toolbar({
-//   session, onEnd, endArming, onToggleCollapse, moveOpen, onMoveOpenChange,
-// }) {
 export default function Toolbar({
-  session, onEnd, endArming, onToggleCollapse, moveOpen, onMoveOpenChange, onHelp,
+  session, onEnd, endArming, onToggleCollapse, onHelp,
 }) {
   const isThinking       = useSessionStore((s) => s.isThinking)
   const hasQuestion      = useSessionStore((s) => !!s.currentQuestion)
@@ -147,8 +139,11 @@ export default function Toolbar({
         Screenshot <Kbd combo="mod shift enter" />
       </button>
 
+      {/* TOOLBAR-FIT 2026-09-01: --chat so the narrowest container query can hide
+          this one specifically. ⌘⇧J still opens it — see the note in overlay.css. */}
+      {/* <button className="ia-pill" data-active={chatMode} …> */}
       <button
-        className="ia-pill"
+        className="ia-pill ia-pill--chat"
         data-active={chatMode}
         onClick={toggleChat}
         title={`Chat (${comboLabel('mod shift j')})`}
@@ -163,11 +158,6 @@ export default function Toolbar({
       <span className="ia-btn ia-btn--move ia-btn--ghost" title="Drag to move">
         <Icon name="move" size={14} />
       </span>
-
-      {/* PLACEMENT 2026-09-01: the picker needs its own trigger. The handle above
-          cannot double as one — .ia-btn--move is -webkit-app-region: drag, and a
-          drag region swallows the click before it ever becomes an onClick. */}
-      <MoveButton open={moveOpen} onOpenChange={onMoveOpenChange} />
 
       <button
         className="ia-btn ia-btn--ghost"
@@ -184,7 +174,7 @@ export default function Toolbar({
           rather than after. */}
       <SessionMeter />
 
-      <OverflowMenu session={session} onMove={() => onMoveOpenChange?.(true)} onHelp={onHelp} />
+      <OverflowMenu session={session} onHelp={onHelp} />
 
       {/* BUGFIX 2026-08-30: onClick={onEnd} handed React's SyntheticEvent to
           stop(), whose first parameter is the END REASON — and preload passes
@@ -219,52 +209,6 @@ export default function Toolbar({
  * not need to be one click away: the timer, the credit balance, and Retry/Copy,
  * which the old footer carried before the feedback row took its place.
  */
-/**
- * PLACEMENT 2026-09-01 ─ the picker's trigger and anchor.
- *
- * Its own component only so the popover has an .ia-menu-wrap to position
- * against, the same way OverflowMenu below anchors the ⋮ menu. The open state
- * belongs to SessionPanel — see the note on Toolbar's signature.
- */
-function MoveButton({ open, onOpenChange }) {
-  const wrapRef = useRef(null)
-
-  /* The ref is on the WRAP, which contains the trigger AND the popover — the
-     same shape as OverflowMenu below, and for the same reason. Testing against
-     the popover alone would count a click on the trigger as "outside": mousedown
-     would close the picker, and the click behind it would land on a button React
-     had already re-rendered with open:false, reopening it. The picker would
-     flicker and the button would feel dead. */
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e) => {
-      if (!wrapRef.current?.contains(e.target)) onOpenChange?.(false)
-    }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [open, onOpenChange])
-
-  return (
-    <span className="ia-menu-wrap" ref={wrapRef}>
-      <button
-        className="ia-btn ia-btn--ghost"
-        data-active={!!open}
-        onClick={() => onOpenChange?.(!open)}
-        title={`Move window (${comboLabel('mod shift m')})`}
-      >
-        {/* Not `move` — that is the drag handle immediately to the left, and two
-            identical glyphs side by side would read as one control that had
-            grown a second half. `grid` is the picker's own six cells. */}
-        <Icon name="grid" size={14} />
-      </button>
-
-      {open && <MovePicker onClose={() => onOpenChange?.(false)} />}
-    </span>
-  )
-}
-
-// PLACEMENT 2026-09-01: `onMove` added — the picker is also reachable from here,
-// for anyone who never finds the chord.
 /* PREMIUM-UX 2026-08-31 ─ elapsed and balance, in the toolbar ─────────────────
    Subscribes to three values that change at most once a second and once a
    heartbeat, never per token — so this re-renders on its own and never drags
@@ -300,8 +244,8 @@ function SessionMeter() {
 // SessionMeter above and are kept here too, since the menu has room to spell
 // them out.
 // function OverflowMenu({ session }) {
-// function OverflowMenu({ session, onMove }) {
-function OverflowMenu({ session, onMove, onHelp }) {
+// function OverflowMenu({ session }) {
+function OverflowMenu({ session, onHelp }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -374,13 +318,6 @@ function OverflowMenu({ session, onMove, onHelp }) {
             <Icon name="copy" size={13} />
             <span>{followups ? 'Copy suggestion' : 'Copy answer'}</span>
             <Kbd combo="mod shift c" />
-          </button>
-          {/* PLACEMENT 2026-09-01: beside Hide, because the two are the same
-              kind of thing — the panel is in the way, and this is the answer
-              that does not cost you sight of it. */}
-          <button onClick={() => { onMove?.(); setOpen(false) }}>
-            <Icon name="grid" size={13} /><span>Move window</span>
-            <Kbd combo="mod shift m" />
           </button>
           <button onClick={() => { window.electronAPI?.toggleOverlay?.(); setOpen(false) }}>
             <Icon name="eyeOff" size={13} /><span>Hide window</span>

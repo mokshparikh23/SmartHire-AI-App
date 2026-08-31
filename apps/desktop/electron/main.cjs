@@ -275,69 +275,6 @@ function panelBounds(reference) {
   }
 }
 
-/* PLACEMENT 2026-09-01 ─ named places to park the panel ──────────────────────
-   moveToNextCorner() (bottom of this file) has been the only way to reposition
-   the panel without dragging it, and it is blind: one accelerator that advances
-   an index nobody can see. There is no way to ask for "top right", the labels
-   exist nowhere, and `cornerIndex` never resyncs with where the window actually
-   is — so the first press after a drag lands somewhere arbitrary and the second
-   is needed to correct it. Mid-interview that is two visible jumps of an
-   always-on-top window over the interviewer's face.
-
-   Six zones, ids matching the picker grid in components/overlay/MovePicker.jsx
-   (three columns over two rows). The arithmetic is lifted verbatim from the
-   `spots` array below so nothing about the existing positions changes.
-
-   x/y are FUNCTIONS of the work area and the window's CURRENT size, not
-   constants. Focus mode makes the panel 880px tall (FOCUS_HEIGHT) while it is
-   open, so a bottom row computed against PANEL.height would hang the toolbar
-   off the bottom of the display — which is precisely the control the user needs
-   to get it back.
-
-   PAD is the gap kept from the work-area edge. The work area already excludes
-   the dock and the menu bar; this is breathing room inside it. */
-const ZONE_PAD = 20
-
-const ZONES = [
-  { id: 'tl', label: 'Top Left',      x: (a)    => a.x + ZONE_PAD,
-                                      y: (a)    => a.y + ZONE_PAD },
-  { id: 'tc', label: 'Top Center',    x: (a, w) => a.x + Math.round((a.width - w) / 2),
-                                      y: (a)    => a.y + ZONE_PAD },
-  { id: 'tr', label: 'Top Right',     x: (a, w) => a.x + a.width - w - ZONE_PAD,
-                                      y: (a)    => a.y + ZONE_PAD },
-  { id: 'bl', label: 'Bottom Left',   x: (a)    => a.x + ZONE_PAD,
-                                      y: (a, h) => a.y + a.height - h - ZONE_PAD },
-  { id: 'bc', label: 'Bottom Center', x: (a, w) => a.x + Math.round((a.width - w) / 2),
-                                      y: (a, h) => a.y + a.height - h - ZONE_PAD },
-  { id: 'br', label: 'Bottom Right',  x: (a, w) => a.x + a.width - w - ZONE_PAD,
-                                      y: (a, h) => a.y + a.height - h - ZONE_PAD },
-]
-
-/**
- * PLACEMENT 2026-09-01: where the panel would sit in `zoneId`, on the display it
- * is currently on.
- *
- * getDisplayMatching(bounds), never getPrimaryDisplay() — the comment on
- * moveToNextCorner() records what the other choice cost: a window dragged to a
- * second monitor teleported back to the primary one.
- *
- * Both axes are clamped to the work area AFTER the zone arithmetic, so a window
- * taller or wider than the display it is on comes to rest on screen rather than
- * at a negative offset. On a normal display the clamp is a no-op.
- */
-function zoneBounds(zoneId, bounds) {
-  const zone = ZONES.find((z) => z.id === zoneId)
-  if (!zone) return null
-
-  const area = screen.getDisplayMatching(bounds).workArea
-  const { width: w, height: h } = bounds
-
-  return {
-    x: Math.round(Math.max(area.x, Math.min(zone.x(area, w), area.x + area.width  - w))),
-    y: Math.round(Math.max(area.y, Math.min(zone.y(area, h), area.y + area.height - h))),
-  }
-}
-
 /** Guards against restoring onto a display that has since been unplugged. */
 function clampToVisible(bounds) {
   const area = screen.getDisplayMatching(bounds).workArea
@@ -516,29 +453,21 @@ function registerShortcuts() {
     if (!mainWindow) return
     mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
   })
-  /* PLACEMENT 2026-09-01 ─ ⌘⇧M opens the picker instead of guessing ───────────
-     // globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
+  /* PLACEMENT 2026-09-01 ─ REVERTED. A six-zone picker popover hung off this
+     accelerator during a session (ZONES/zoneBounds here, window:moveToZone,
+     components/overlay/MovePicker.jsx). It did not work well enough to keep and
+     was removed at the user's request; the whole of it is in commits bfc08a3 /
+     f2e8a8b / 4a8a847 if any of it is ever wanted back.
 
-     CommandOrControl is left exactly as it was: Electron resolves it to ⌘ on
-     macOS and Ctrl on Windows, so this one registration covers both platforms
-     and no isMac branch belongs here.
+     Two things are worth knowing before anyone rebuilds it. The picker had to
+     call mainWindow.focus() to receive arrow keys at all, because every panel
+     shortcut is renderer-scoped — that focus steal, mid-interview, is the part
+     to solve first. And it added a button to a toolbar that was ALREADY
+     overflowing at PANEL.width (see the TOOLBAR-FIT note in overlay.css), so it
+     made a live layout bug worse.
 
-     WHY focus() — and it is not incidental. Every panel shortcut in this app is
-     RENDERER-scoped: usePanelHotkeys binds a keydown listener on `window`
-     (src/hooks/useOverlay.js), which the page only receives when this window has
-     focus. Arrow-key zone picking cannot work otherwise, and the app already
-     assumes it holds focus while in use — ⌘↵, ⌘⇧C and the rest are dead when it
-     does not. Taking focus here is therefore the existing contract, not a new
-     cost this feature introduces.
-
-     The launcher has no panel to draw a popover in, so outside a session this
-     keeps the old blind cycle rather than doing nothing. */
-  globalShortcut.register('CommandOrControl+Shift+M', () => {
-    if (!mainWindow) return
-    if (!sessionMode) return moveToNextCorner()
-    mainWindow.focus()
-    mainWindow.webContents.send('overlay:movePicker')
-  })
+     Back to the blind cycle this always was. */
+  globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
 }
 
 ipcMain.handle('license:validate', async (_, licenseKey, opts) => {
@@ -666,33 +595,6 @@ ipcMain.handle('overlay:setFocus', (_, focus) => {
   mainWindow.setBounds({ ...bounds, y, height }, true)
   return true
 })
-/**
- * PLACEMENT 2026-09-01: park the panel in one of the six named zones.
- *
- * Deliberately built on overlay:setCollapsed / overlay:setFocus rather than on
- * moveToNextCorner. Those two already resize a window enterSessionMode() made
- * non-resizable, which is the one risk this handler would otherwise carry alone
- * — and they animate. setPosition() in moveToNextCorner is the only un-animated
- * move left in this file, and an always-on-top window that teleports across the
- * interviewer's video is exactly what the animation is for.
- *
- * Unlike those two this does NOT require sessionMode. The zones are useful on
- * the launcher as well, and zoneBounds() reads the window's real size, so a
- * 460x560 launcher parks correctly with no special case.
- */
-ipcMain.handle('window:moveToZone', (_, zoneId) => {
-  if (!mainWindow) return false
-
-  const bounds = mainWindow.getBounds()
-  const spot = zoneBounds(zoneId, bounds)
-  // An unknown id is a renderer bug, not a reason to move the window somewhere
-  // arbitrary. Say so and leave it where it is.
-  if (!spot) return false
-
-  mainWindow.setBounds({ ...bounds, ...spot }, true)
-  return true
-})
-
 ipcMain.handle('window:hide',    () => { if (mainWindow) mainWindow.hide() })
 ipcMain.handle('window:toggle',  () => {
   if (!mainWindow) return
@@ -1138,42 +1040,30 @@ ipcMain.handle('parse-pdf', async (_, filePath) => {
   }
 })
 
-/* PLACEMENT 2026-09-01 ─ demoted to the no-session fallback ───────────────────
-   During a session ⌘⇧M now opens the picker (registerShortcuts, above). This
-   still runs on the launcher, where there is no panel to anchor a popover to.
-
-   The five hand-written spots are replaced by an order through the shared ZONES
-   table, so there is one definition of "top right" in this file rather than two
-   that can drift. The positions are unchanged — the arithmetic in ZONES was
-   lifted from here — with one exception noted below.
-
-   const spots = [
-     // Home first, so the cycle can always return the panel to centre.
-     { x: area.x + Math.round((area.width - w) / 2), y: area.y + Math.round(area.height * 0.12) },
-     { x: area.x + area.width - w - pad, y: area.y + pad },
-     { x: area.x + pad,                  y: area.y + pad },
-     { x: area.x + pad,                  y: area.y + area.height - h - pad },
-     { x: area.x + area.width - w - pad, y: area.y + area.height - h - pad },
-   ]
-
-   The exception is the first entry, "home": centred horizontally at 12% down,
-   which is panelBounds()'s opening position and not a zone anyone can name. It
-   maps to 'tc' — the same column, pinned to the top pad instead of 12%. Nothing
-   else reads cornerIndex, so the cycle simply has six stops now instead of five.
-
-   setPosition -> setBounds(..., true) for the animation, matching every other
-   move in this file. */
+/* PLACEMENT 2026-09-01: this briefly ran through a shared six-zone table so the
+   picker and the cycle could not drift. The picker is gone, so the table is too,
+   and this is the body it had before — verbatim, including the un-animated
+   setPosition. */
 let cornerIndex = 0
-const CORNER_CYCLE = ['tc', 'tr', 'tl', 'bl', 'br', 'bc']
-
 function moveToNextCorner() {
   if (!mainWindow) return
   const bounds = mainWindow.getBounds()
+  // getDisplayMatching, not getPrimaryDisplay: the old version assumed the
+  // origin was (0,0), so on a second monitor this teleported the window to the
+  // primary one. Work-area offsets also account for the dock and menu bar.
+  const area = screen.getDisplayMatching(bounds).workArea
+  const { width: w, height: h } = bounds
+  const pad = 20
 
-  cornerIndex = (cornerIndex + 1) % CORNER_CYCLE.length
-  const spot = zoneBounds(CORNER_CYCLE[cornerIndex], bounds)
-  if (!spot) return
-
-  // mainWindow.setPosition(spots[cornerIndex].x, spots[cornerIndex].y)
-  mainWindow.setBounds({ ...bounds, ...spot }, true)
+  const spots = [
+    // Home first, so the cycle can always return the panel to centre.
+    { x: area.x + Math.round((area.width - w) / 2), y: area.y + Math.round(area.height * 0.12) },
+    { x: area.x + area.width - w - pad, y: area.y + pad },
+    { x: area.x + pad,                  y: area.y + pad },
+    { x: area.x + pad,                  y: area.y + area.height - h - pad },
+    { x: area.x + area.width - w - pad, y: area.y + area.height - h - pad },
+  ]
+  cornerIndex = (cornerIndex + 1) % spots.length
+  mainWindow.setPosition(spots[cornerIndex].x, spots[cornerIndex].y)
 }
+

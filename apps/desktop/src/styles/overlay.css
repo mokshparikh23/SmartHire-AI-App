@@ -163,6 +163,73 @@
   align-items: center;
   gap: 8px;
   padding: 0 10px;
+
+  /* TOOLBAR-FIT 2026-09-01: see the block below. inline-size only, so the 52px
+     height is unaffected. */
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* TOOLBAR-FIT 2026-09-01 ─ the End button was being cut in half ───────────────
+   Every control in this bar is `flex-shrink: 0` with `white-space: nowrap`, and
+   .ia-bar around it is `overflow: hidden`. So nothing gave: the row grew past
+   the panel and the LAST child — End, the one irreversible action — was clipped
+   to a red sliver with no label.
+
+   This is NOT a resize bug. Adding the row up at the default PANEL.width of 720
+   already overflows; the chord chips are what tip it over. It shipped that way.
+
+   Two tiers, and the order is the priority order. The chips go first because
+   every one of them is repeated in its own button's `title`, so the shortcut
+   stays discoverable on hover — this costs nothing but the glance. The action
+   pills shrink second. The right-hand group never shrinks and never hides:
+   "how much time is left" and "get me out" must not depend on how wide somebody
+   dragged the window.
+
+   Breakpoints are on the CONTAINER, not the viewport — this panel is a floating
+   window whose width has nothing to do with the display's. */
+@container (max-width: 900px) {
+  .ia-toolbar .ia-pill .ia-kbd { display: none; }
+  /* The 7px gap was between the label and the chip that is now gone. */
+  .ia-toolbar .ia-pill { gap: 0; }
+}
+
+@container (max-width: 660px) {
+  /* Floor rather than zero: a pill squeezed to nothing is a button you cannot
+     name or hit. Below this the three action pills clip; End, the meter and the
+     icon buttons keep their own flex-shrink: 0 and stay whole. */
+  .ia-toolbar .ia-pill:not(.ia-pill--danger) {
+    flex-shrink: 1;
+    min-width: 40px;
+    overflow: hidden;
+  }
+}
+
+/* PANEL_MIN.width is 420, and at that size shrinking is not enough — measured,
+   the row still needs ~100px more than it has. Something has to go, so it is the
+   one control that is duplicated elsewhere: Chat, which ⌘⇧J still opens.
+
+   Chosen over hiding Screenshot or Answer, which have no other entry point in
+   the bar, and over shrinking End, which is the control this whole block exists
+   to protect. Widening the window brings it straight back.
+
+   PLACEMENT 2026-09-01: the ⊞ move-picker trigger was hidden here too and has
+   since been removed from the toolbar altogether, which gives this row back
+   about 28px of its own accord.
+   .ia-toolbar .ia-menu-wrap--move, */
+@container (max-width: 520px) {
+  .ia-toolbar .ia-pill--chat { display: none; }
+}
+
+/* The floor of the range. PANEL_MIN.width is 420 and measurement says the row
+   still needs ~46px more than it has there, so one more affordance goes: the
+   drag handle. It costs nothing — .ia-bar sets `-webkit-app-region: drag` on
+   itself ("the bar background is the drag surface"), so the whole toolbar is
+   still draggable with the glyph gone; only the hint that it is disappears.
+   The two remaining pills drop to a 34px floor in the same breath. */
+@container (max-width: 470px) {
+  .ia-toolbar .ia-btn--move { display: none; }
+  .ia-toolbar .ia-pill:not(.ia-pill--danger) { min-width: 34px; }
 }
 
 /* Circular capture toggles (screen, mic) with the reference's live dot. */
@@ -410,94 +477,6 @@
 .ia-menu-sep {
   height: 1px; margin: 4px 6px;
   background: rgba(255, 255, 255, 0.08);
-}
-
-/* ── Move picker ──────────────────────────────────────────────────────────────
-   PLACEMENT 2026-09-01. Deliberately the same surface as .ia-menu above — same
-   radius, border, background and shadow — because it opens from the button
-   immediately beside the ⋮ that opens that one. Two popovers a few pixels apart
-   with different chrome would read as two different applications.
-
-   The grid mirrors the six zones in electron/main.cjs: three columns over two
-   rows, laid out the way the display is, so the cell you click is in the corner
-   the panel will go to. That spatial correspondence is the entire affordance —
-   without it this is six buttons with words on them. */
-.ia-move {
-  -webkit-app-region: no-drag;
-  position: absolute;
-  top: 36px; right: 0;
-  z-index: 20;
-  width: 268px;
-  padding: 9px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(22, 23, 26, 0.98);
-  box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.8);
-}
-/* tabIndex={-1} makes this focusable so Escape does not arrive with an INPUT as
-   its target; the focus ring itself is noise on a popover that is already the
-   only lit thing on screen. */
-.ia-move:focus { outline: none; }
-
-.ia-move-head {
-  padding: 1px 3px 8px;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 11px; font-weight: 650;
-  letter-spacing: 0.02em; text-transform: uppercase;
-}
-
-.ia-move-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-}
-
-.ia-move-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  height: 54px;
-  padding: 6px 7px;
-  border-radius: 8px;
-  /* Dashed, like the reference's drop zones — it reads as "a place something
-     can go" rather than as a button that does something to the thing under it. */
-  border: 1px dashed rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.62);
-  font-family: inherit;
-  text-align: left;
-}
-.ia-move-zone:hover { background: rgba(255, 255, 255, 0.07); }
-
-/* Hover and keyboard selection are the SAME state on purpose. The mouse sets
-   `selected` on enter, so moving the pointer and pressing Enter cannot disagree
-   about which zone is armed. */
-.ia-move-zone[data-selected='true'] {
-  border-style: solid;
-  border-color: rgba(251, 191, 36, 0.55);
-  background: rgba(251, 191, 36, 0.12);
-  color: #fff;
-}
-
-.ia-move-zone-num {
-  font-size: 10.5px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.35);
-}
-.ia-move-zone[data-selected='true'] .ia-move-zone-num { color: #fcd34d; }
-
-.ia-move-zone-label {
-  font-size: 11px; font-weight: 600; line-height: 1.25;
-}
-
-.ia-move-hint {
-  display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
-  padding: 9px 3px 1px;
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 10.5px; font-weight: 600;
 }
 
 /* ── Turn pager ───────────────────────────────────────────────────────────── */
