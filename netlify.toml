@@ -1,9 +1,31 @@
-# Build runs from the repo root so npm workspaces hoist correctly.
-# Do not set `base = "apps/web"` — that installs inside the workspace and
-# breaks the shared root node_modules.
-[build]
-  command = "npm run build:web"
-  publish = "apps/web/.next"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+# SPLIT 2026-09-01 ─ THIS FILE IS COMMENTED OUT ON PURPOSE. READ BEFORE RESTORING.
+#
+# It described ONE site, and there are two now:
+#
+#     apps/site  ->  <domain>          the marketing site
+#     apps/web   ->  app.<domain>      auth, dashboard, admin, /api
+#
+# A repo-root netlify.toml cannot describe both. Worse, netlify.toml OVERRIDES
+# the per-site settings in Netlify's dashboard — so a second Netlify site
+# created from this repo would silently run `npm run build:web` and publish
+# `apps/web/.next`, whatever its own dashboard said. The failure is a marketing
+# domain quietly serving the app.
+#
+# And the one per-site escape hatch is exactly what the original note below
+# forbids: `base = "apps/web"` installs inside the workspace and breaks the
+# shared root node_modules.
+#
+# Both apps deploy from Vercel — see "Deploying" in the README. If Netlify is
+# ever needed again it can serve exactly one of them, and this file has to name
+# which. Left here rather than deleted so the constraint is discoverable from
+# the place someone would look.
+#
+# # Build runs from the repo root so npm workspaces hoist correctly.
+# # Do not set `base = "apps/web"` — that installs inside the workspace and
+# # breaks the shared root node_modules.
+# [build]
+#   command = "npm run build:web"
+#   publish = "apps/web/.next"
+#
+# [[plugins]]
+#   package = "@netlify/plugin-nextjs"

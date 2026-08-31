@@ -1,11 +1,24 @@
 # SmartHire AI
 
-One repo, two apps, one `node_modules`. Managed with npm workspaces.
+One repo, three apps and two shared packages, one `node_modules`. Managed with
+npm workspaces.
 
 ```
-apps/desktop    Electron + Vite + React 18 interview assistant
-apps/web        Next.js + Supabase licensing backend and admin dashboard
+apps/desktop      Electron + Vite + React 18 interview assistant
+apps/site         Next.js marketing site — the root domain
+apps/web          Next.js + Supabase licensing backend and admin dashboard —
+                  the app. subdomain, and the only thing apps/desktop talks to
+packages/ui       The design system both Next apps render with, plus base.css
+packages/pricing  What we sell and for how much. Zero dependencies, so
+                  apps/desktop could consume it without pulling in a React
 ```
+
+**The split, in one paragraph.** `apps/site` and `apps/web` were one deployment
+until 2026-09-01, which meant a copy tweak on the landing page redeployed the
+licensing and payments backend. They are separate now: marketing on the root
+domain, the product on `app.`. Nothing about the desktop app changed — every
+endpoint and every page it opens still lives in `apps/web`, on the same Vercel
+project and the same hostname.
 
 ## Setup
 
@@ -20,7 +33,12 @@ Then create the two env files (neither is committed):
 ```bash
 cp apps/desktop/.env.example apps/desktop/.env
 cp apps/web/.env.local.example apps/web/.env.local
+cp apps/site/.env.local.example apps/site/.env.local
 ```
+
+`apps/site`'s is three lines and holds no credentials — that deployment has no
+Supabase keys, no AI key and no payment secrets, because it asks nobody whether
+they are signed in and starts no checkout.
 
 `apps/web/.env.local` needs real Supabase values or `npm run build:web` fails at
 the prerender step — the compile itself succeeds, so a build that dies on
@@ -32,10 +50,13 @@ All run from the repo root.
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Web and desktop together |
+| `npm run dev` | All three apps |
+| `npm run dev:front` | Site + web only, which is the usual loop |
+| `npm run dev:site` | Marketing site on :3001 |
 | `npm run dev:web` | Next.js dev server on :3000 |
 | `npm run dev:desktop` | Vite on :5173 + Electron |
 | `npm run build` | Desktop renderer bundle |
+| `npm run build:site` | Marketing site production build |
 | `npm run build:web` | Next.js production build |
 | `npm run build:mac` / `build:win` / `build:all` | Packaged desktop installers |
 
@@ -112,13 +133,42 @@ Two deliberate choices worth knowing before you change it:
 `file://` (origin `null`). `EventSource` sends no credentials, and the caller
 already holds the license key, so this exposes nothing new.
 
-## Deploying the web app
+## Deploying
 
-The build must run from the repo root so workspaces resolve. `netlify.toml` at
-the root already does this. On Vercel, leave **Root Directory** empty (repo
-root) and set the build command to `npm run build:web` with output
-`apps/web/.next` — pointing Root Directory at `apps/web` will fail to install
-the hoisted dependencies.
+Two Vercel projects from one repo. Both leave **Root Directory** empty (the repo
+root) — pointing it at `apps/*` fails to install the hoisted dependencies.
+
+| | project `web` | project `site` |
+| --- | --- | --- |
+| Build command | `npm run build:web` | `npm run build:site` |
+| Output | `apps/web/.next` | `apps/site/.next` |
+| Domains | the existing `*.vercel.app`, plus `app.<domain>` | `<domain>` and `www` |
+
+**The `web` project must never be renamed, deleted, transferred or repurposed.**
+Its `*.vercel.app` hostname is baked into every packaged desktop build and there
+is no auto-updater to re-point them. That exact mistake was made once already —
+the note above `WEB_URL` in `apps/desktop/electron/main.cjs` is the account of
+it. The marketing site gets a NEW project; do not give it this one.
+
+Set an **Ignored Build Step** on both, or every push redeploys both projects and
+a marketing typo becomes a production deploy of the payment system:
+
+```sh
+git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" "$VERCEL_GIT_COMMIT_SHA" -- apps/web packages package.json package-lock.json || exit 1
+```
+
+(Vercel treats exit 0 as *skip*, which is why `git diff --quiet` has the right
+polarity. The `|| exit 1` covers a shallow clone with no previous SHA.)
+
+`NEXT_PUBLIC_APP_URL` on the site project must be present **at build time**, not
+only at runtime: `/features` and `/how-it-works` are statically prerendered and
+bake it into their HTML, while `/` and `/pricing` read it per request. Set it
+only at runtime and two of five pages ship pointing at localhost while the other
+three look fine, with nothing erroring.
+
+Do not add a redirect from the old `*.vercel.app` host to `app.<domain>`. Both
+serving 200 costs nothing, and every installed desktop build polls that host
+every ten seconds.
 
 ## Version note
 
