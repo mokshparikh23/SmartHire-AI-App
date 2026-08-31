@@ -6,6 +6,8 @@ import {
 } from '@/lib/credits'
 import {
   resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency, formatMoney,
+  // SPLIT 2026-09-01: for validating ?plan= and deciding which tab it belongs to.
+  PACK_BY_ID, SUBSCRIPTION_TIERS,
 } from '@/lib/pricing'
 import PricingPlans from '@/components/marketing/PricingPlans'
 import Icon from '@/components/ui/Icon'
@@ -28,11 +30,37 @@ export default async function BillingPage({ searchParams }) {
   //
   // const supabase = await createClient()
   // const { data: { user } } = await supabase.auth.getUser()
-  const user = await requireUser()
-  const supabase = await getSupabase()
+  /*
+    SPLIT 2026-09-01: ?plan=<packId> — the one thing that crosses the origin
+    boundary from the marketing site.
 
+    smarthire.ai has no session cookie for this host and no /api/checkout to
+    call, so its Buy buttons do not fetch anything: they navigate here with the
+    chosen pack in the URL, and this page — which does hold the session — takes
+    it from there. A pack ID is all that travels. Never a currency, never an
+    amount: resolveCurrency() below reads THIS request's geo headers, exactly as
+    /api/checkout does, so the two still cannot disagree. See the SECURITY note
+    in lib/pricing.js.
+
+    Validated against PACK_BY_ID and dropped silently when unknown — a stale
+    link or a mistyped ID should fall back to the normal page, not to an error.
+
+    NOTHING IS SUBMITTED. The plan is only preselected; the buyer still clicks.
+    Creating a credit_orders row and a Stripe session on a GET would be
+    reachable by any link prefetcher, email scanner or chat unfurl that happens
+    to carry a session.
+
+    Read BEFORE requireUser() so the redirect can carry the destination — see
+    the `next` note on requireUser() in lib/auth.js.
+  */
   const params = await searchParams
   const checkout = params?.checkout
+  const plan = PACK_BY_ID[params?.plan] ? params.plan : null
+
+  const user = await requireUser({
+    next: plan ? `/dashboard/billing?plan=${encodeURIComponent(plan)}` : '/dashboard/billing',
+  })
+  const supabase = await getSupabase()
 
   const currency = resolveCurrency(await headers())
 
@@ -125,11 +153,18 @@ export default async function BillingPage({ searchParams }) {
             Subscribe for unlimited interview time, or buy credits and keep whatever you do not use.
           </p>
           <div className="mt-6">
+            {/* SPLIT 2026-09-01: initialPlanId / initialMode seed the selection
+                from ?plan=. Both are null on a normal visit, and the component
+                falls back to its own `featured` defaults exactly as before. */}
             <PricingPlans
               tiers={tiersForCurrency(currency)}
               packs={packsForCurrency(currency)}
               singlePack={singlePackForCurrency(currency)}
               signedIn
+              initialPlanId={plan}
+              initialMode={
+                plan ? (SUBSCRIPTION_TIERS.some(t => t.id === plan) ? 'sub' : 'credits') : null
+              }
             />
           </div>
         </div>

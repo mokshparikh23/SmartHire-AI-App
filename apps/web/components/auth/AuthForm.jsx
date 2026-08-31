@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { safeNext } from '@/lib/next-url'
 import Icon, { Spinner } from '@/components/ui/Icon'
 import { Button } from '@/components/ui'
 
@@ -87,8 +88,26 @@ export default function AuthForm({ mode }) {
   const supabase = createClient()
   const isLogin  = mode === 'login'
 
+  const searchParams = useSearchParams()
+
   // Set by /auth/device-signout when this browser was signed out from elsewhere.
-  const signedOutByDevice = useSearchParams().get('signed_out') === 'device'
+  const signedOutByDevice = searchParams.get('signed_out') === 'device'
+
+  /*
+    SPLIT 2026-09-01: where to go after this form succeeds.
+
+    Set by proxy.js when it bounces a signed-out visitor off a protected page —
+    which, since the marketing site moved to its own origin, is most often
+    /dashboard/billing?plan=<packId> after someone clicked Buy on smarthire.ai.
+    Absent for anyone who just navigated to /login themselves, and then the
+    landing stays /dashboard exactly as before.
+
+    Re-validated here even though proxy.js already validated it on the way in:
+    the value arrives in a URL the browser controls, and nothing downstream
+    should have to know which hop it came from. See lib/next-url.js.
+  */
+  const next = safeNext(searchParams.get('next'))
+  const destination = next ?? '/dashboard'
 
   const [form, setForm]       = useState({ email: '', password: '', full_name: '' })
   const [error, setError]     = useState('')
@@ -120,11 +139,34 @@ export default function AuthForm({ mode }) {
   // Nothing on /login links to /dashboard, so the router never had a prefetch
   // entry for it and every successful sign-in paid a cold round trip before the
   // screen changed. Warming it here is most of why login felt slow.
+  //
+  // SPLIT 2026-09-01: warms the actual destination, which is no longer always
+  // /dashboard. A buyer arriving from the marketing site is headed for
+  // /dashboard/billing, and prefetching the page they are NOT going to would
+  // have handed the whole saving back.
+  // if (isLogin) router.prefetch('/dashboard')
   useEffect(() => {
-    if (isLogin) router.prefetch('/dashboard')
-  }, [isLogin, router])
+    if (isLogin) router.prefetch(destination)
+  }, [isLogin, router, destination])
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  /**
+   * Where Supabase sends the browser back — for the OAuth round trip and for the
+   * link inside the confirmation email. Both land on /auth/callback, which
+   * exchanges the code and then honours ?next=.
+   *
+   * Built from window.location.origin rather than an env var so it is correct on
+   * localhost, on a preview deploy and in production without configuration. Only
+   * ever called from an event handler, so `window` is available.
+   */
+  const callbackUrl = (target) => {
+    const base = `${window.location.origin}/auth/callback`
+    return target ? `${base}?next=${encodeURIComponent(target)}` : base
+  }
+
+  /** An in-app auth route with the current ?next= reattached, if there is one. */
+  const withNext = (path) => (next ? `${path}?next=${encodeURIComponent(next)}` : path)
 
   // `loading` is the request; `pending` is the navigation it triggers. Both mean
   // the same thing to the person waiting, so they are read as one flag.
@@ -193,13 +235,45 @@ export default function AuthForm({ mode }) {
         // navigation COMMITS. The old code called setLoading(false) in the
         // finally block, which re-enabled the button while the page was still
         // moving — the button looked ready while nothing was happening.
-        startTransition(() => { router.replace('/dashboard') })
+        //
+        // SPLIT 2026-09-01: `destination`, not a literal — see the note where it
+        // is derived. Still replace() rather than push(), for the reason above.
+        // startTransition(() => { router.replace('/dashboard') })
+        startTransition(() => { router.replace(destination) })
         return
       } else {
+        /*
+          SPLIT 2026-09-01: signup carries the destination too, through the
+          confirmation email.
+
+          PricingPlans.jsx has carried this note since it was written:
+
+              "No ?next= here: signup ends on an email-confirmation screen and
+               returns through /auth/callback, so a redirect target would be
+               dropped on the way."
+
+          That was true of the TARGET and not of the MECHANISM. /auth/callback
+          has always read ?next= — nothing in the repo ever set one. The hop
+          that was losing it is the confirmation link, and the confirmation link
+          is exactly what emailRedirectTo writes. So the target survives after
+          all, and a new customer who clicked a plan on the marketing site lands
+          on that plan rather than on a bare dashboard after confirming.
+
+          THIS FAILS SILENTLY IF THE URL IS NOT ALLOW-LISTED. Supabase matches
+          emailRedirectTo against Auth -> URL Configuration -> Redirect URLs and,
+          on a miss, quietly substitutes the project Site URL instead of
+          erroring. The plan is dropped again and nothing anywhere says so, so
+          both origins must be listed before this is relied on.
+
+          // options: { data: { full_name: form.full_name } },
+        */
         const { error } = await supabase.auth.signUp({
           email:    form.email,
           password: form.password,
-          options:  { data: { full_name: form.full_name } },
+          options:  {
+            data: { full_name: form.full_name },
+            emailRedirectTo: callbackUrl(next),
+          },
         })
         if (error) throw error
         setSent(true)
@@ -222,8 +296,11 @@ export default function AuthForm({ mode }) {
           We sent a confirmation link to <span className="font-medium text-ink">{form.email}</span>.
           Open it to activate your account.
         </p>
+        {/* SPLIT 2026-09-01: keeps ?next= — someone who signed up from a plan
+            link and comes back through here should still land on that plan.
+            href="/login" */}
         <Link
-          href="/login"
+          href={withNext('/login')}
           className="mt-8 inline-flex items-center gap-1.5 text-[14px] font-medium text-ink hover:text-accent"
         >
           Back to sign in
@@ -240,7 +317,11 @@ export default function AuthForm({ mode }) {
       </h1>
       <p className="mt-2.5 text-[14px] text-muted">
         {isLogin ? 'New here? ' : 'Already have an account? '}
-        <Link href={isLogin ? '/signup' : '/login'} className="font-medium text-ink underline underline-offset-4 hover:text-accent">
+        {/* SPLIT 2026-09-01: ?next= survives the toggle between the two forms —
+            without it, "Create an account" silently discarded the plan the
+            visitor arrived with.
+            href={isLogin ? '/signup' : '/login'} */}
+        <Link href={withNext(isLogin ? '/signup' : '/login')} className="font-medium text-ink underline underline-offset-4 hover:text-accent">
           {isLogin ? 'Create an account' : 'Sign in'}
         </Link>
       </p>
@@ -387,9 +468,12 @@ export default function AuthForm({ mode }) {
         onClick={async () => {
           setError('')
           setOauth(true)
+          // SPLIT 2026-09-01: carries ?next= through the Google round trip, the
+          // same way the password and signup paths do. Was:
+          // options: { redirectTo: `${window.location.origin}/auth/callback` },
           const { error } = await createClient().auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: `${window.location.origin}/auth/callback` },
+            options: { redirectTo: callbackUrl(next) },
           })
           // Reached only when the redirect never happened. On success this page
           // is already being torn down, so there is nothing to hand back.

@@ -32,12 +32,48 @@ import { Badge, Button } from '@/components/ui'
  * never picks a currency, because a client that could pick its currency could
  * pick the cheaper one — see the SECURITY note in lib/pricing.js.
  */
-export default function PricingPlans({ tiers, packs, singlePack, signedIn }) {
+/*
+  SPLIT 2026-09-01: initialPlanId / initialMode.
+
+  The marketing site is on another origin now and cannot start a checkout — it
+  navigates to /dashboard/billing?plan=<packId> instead, and that page passes
+  the pack down through these two props so the buyer arrives on the option they
+  clicked rather than on the default one.
+
+  Both default to null and every existing call site omits them, so the featured
+  fallbacks below are unchanged for anyone who reaches this page normally.
+
+  SEEDED INTO useState, NOT SYNCED WITH useEffect. These are the INITIAL
+  selection; the moment the buyer touches a radio the component owns it. An
+  effect that wrote the prop back on every render would fight them.
+*/
+export default function PricingPlans({
+  tiers, packs, singlePack, signedIn,
+  initialPlanId = null, initialMode = null,
+}) {
   const router = useRouter()
 
-  const [mode, setMode] = useState('sub')     // 'sub' | 'credits'
-  const [tierId, setTierId] = useState(tiers.find(t => t.featured)?.id ?? tiers[0]?.id)
-  const [packId, setPackId] = useState(packs.find(p => p.featured)?.id ?? packs[0]?.id)
+  // const [mode, setMode] = useState('sub')
+  const [mode, setMode] = useState(initialMode === 'credits' ? 'credits' : 'sub')
+
+  // const [tierId, setTierId] = useState(tiers.find(t => t.featured)?.id ?? tiers[0]?.id)
+  const [tierId, setTierId] = useState(
+    (tiers.some(t => t.id === initialPlanId) ? initialPlanId : null)
+      ?? tiers.find(t => t.featured)?.id ?? tiers[0]?.id
+  )
+
+  /*
+    Note credit_1 cannot match here: the single credit lives in `singlePack`,
+    outside the `packs` ladder, exactly as lib/pricing.js intends. So
+    ?plan=credit_1 opens the Credits tab on the featured pack with the single
+    credit still offered on the line underneath — which is the right landing for
+    it, and better than preselecting the deliberately-worst per-hour rate.
+  */
+  // const [packId, setPackId] = useState(packs.find(p => p.featured)?.id ?? packs[0]?.id)
+  const [packId, setPackId] = useState(
+    (packs.some(p => p.id === initialPlanId) ? initialPlanId : null)
+      ?? packs.find(p => p.featured)?.id ?? packs[0]?.id
+  )
   const [pending, setPending] = useState(null)
   const [error, setError] = useState('')
 

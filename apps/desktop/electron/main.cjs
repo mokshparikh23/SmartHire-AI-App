@@ -8,8 +8,33 @@ const path = require('path')
 const Store = require('electron-store')
 const fs = require('fs')
 
-// Resolved from the app directory rather than cwd, so it works whether the app
-// is launched from here or from the monorepo root.
+/*
+  Resolved from the app directory rather than cwd, so it works whether the app
+  is launched from here or from the monorepo root.
+
+  SPLIT 2026-09-01: `.env.local` is now loaded too, and FIRST.
+
+  The line below read only `.env`. The working tree had a `.env.local` holding
+  WEB_URL=http://127.0.0.1:3000 — written by someone following the Next.js
+  naming habit from apps/web next door — and dotenv never looked at it. So local
+  desktop development was silently pointed at PRODUCTION: production Supabase,
+  production licences, real AI spend, real session minutes deducted from a real
+  account. It fails invisibly, because talking to production works.
+
+  It also disabled a fix that was made deliberately: the CSP `connect-src`
+  branch further down only adds `backendOrigin` when WEB_URL is non-https, so
+  with the default https:// URL in force that branch never fired and the
+  2026-08-30 "renderer could not reach a local backend" repair was inert.
+
+  ORDER MATTERS AND IS THE OPPOSITE OF WHAT IT LOOKS LIKE. dotenv does not
+  overwrite a variable that is already set, so the file loaded FIRST wins.
+  `.env.local` is loaded first precisely so it overrides `.env`, which is the
+  precedence every other tool in this repo uses. Both names are already in the
+  root .gitignore, so neither can be committed by accident.
+
+  // require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+*/
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') })
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
 const isDev = process.env.NODE_ENV === 'development'

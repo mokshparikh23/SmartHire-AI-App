@@ -29,10 +29,34 @@ export function getWebhookSecret() {
   return secret
 }
 
-/** Where Stripe sends the customer back. Falls back to the request's own origin
- *  so local development works without configuring anything. */
+/**
+ * Where Stripe sends the customer back. Falls back to the request's own origin
+ * so local development works without configuring anything.
+ *
+ * SPLIT 2026-09-01 ─ READ THIS BEFORE SETTING EITHER VARIABLE.
+ *
+ * This builds `${base}/dashboard/billing?checkout=success`, which only exists on
+ * the APP origin. Once marketing moved to smarthire.ai and the app to
+ * app.smarthire.ai, a variable named NEXT_PUBLIC_SITE_URL reads like it wants
+ * the marketing root — and setting it to the marketing root sends every paying
+ * customer to a 404 the instant their card clears.
+ *
+ * That failure is as bad as it looks and worse to find: it is invisible in
+ * every test that does not involve a real payment, it happens AFTER the money
+ * moves, and to the customer it is indistinguishable from a failed charge.
+ *
+ * So the variable is renamed to say what it means. NEXT_PUBLIC_SITE_URL is
+ * still read, second, so a deployment part-way through the migration keeps
+ * working — remove it from the app project once the new name is set everywhere.
+ *
+ * LEAVE BOTH UNSET ON PREVIEW DEPLOYS. The request-origin fallback below is
+ * what keeps a preview self-contained; a hardcoded production value here sends
+ * a preview checkout back to production.
+ *
+ * // const configured = process.env.NEXT_PUBLIC_SITE_URL
+ */
 export function siteUrl(request) {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
   if (configured) return configured.replace(/\/$/, '')
   try {
     return new URL(request.url).origin

@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase-server'
+import { safeNext } from '@/lib/next-url'
 
 /**
  * The one authoritative auth gate for every server render.
@@ -37,10 +38,37 @@ export const getUser = cache(async () => {
  * on a lapsed session and — with no error boundary — hit Next's default error
  * screen. `redirect()` throws through RedirectBoundary, not the error boundary,
  * so this produces a clean navigation instead.
+ *
+ * SPLIT 2026-09-01 ─ the optional `next`.
+ *
+ * proxy.js now carries the destination through /login (see loginWithNext there),
+ * which covers the realistic signed-out paths: no cookie at all, and a cookie
+ * whose session has lapsed. This function fires in the narrower case where the
+ * optimistic cookie check PASSED and the authoritative network call disagreed,
+ * or on a crafted RSC request that skipped the proxy — and there it still lost
+ * the destination.
+ *
+ * It is passed in rather than discovered because Next does not expose the
+ * request path to a Server Component. The way to get it is to have proxy.js
+ * stamp a header onto the forwarded request — but that means rebuilding the
+ * `supabaseResponse` that the Supabase cookie setter writes rotated tokens
+ * onto, and proxy.js's own comment is explicit that this response object is the
+ * only reason it still constructs a client at all. Breaking token rotation to
+ * improve an edge-case redirect is the wrong trade, so the one page that
+ * actually receives a cross-origin deep link passes its own target instead.
+ *
+ * @param {{ next?: string }} [options]
  */
-export async function requireUser() {
+export async function requireUser({ next } = {}) {
   const user = await getUser()
-  if (!user) redirect('/login')
+  if (!user) {
+    // Re-validated here rather than trusted from the caller: on the billing
+    // page this string is built from a search param that started on another
+    // origin. See lib/next-url.js.
+    const to = safeNext(next)
+    // redirect('/login')
+    redirect(to ? `/login?next=${encodeURIComponent(to)}` : '/login')
+  }
   return user
 }
 

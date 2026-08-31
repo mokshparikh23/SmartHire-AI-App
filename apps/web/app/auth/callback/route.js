@@ -2,11 +2,32 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { reactivateDevice, DEVICE_COOKIE } from '@/lib/devices'
+import { safeNext } from '@/lib/next-url'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code  = searchParams.get('code')
-  const next  = searchParams.get('next') ?? '/dashboard'
+
+  /*
+    SPLIT 2026-09-01: `next` is validated now.
+
+    This route has always read the parameter, and until today nothing in the
+    repo ever set one — a grep found a single hit, and it was the comment in
+    PricingPlans.jsx saying the parameter was deliberately unused. So the
+    unchecked read below was unreachable rather than safe.
+
+    The marketing site changes that: it deep-links to /dashboard/billing?plan=…
+    on this origin, that target rides through /login?next= and through the
+    signup confirmation email, and it arrives back here. A value that reaches
+    this route now started life on a page we do not serve.
+
+    `${origin}${next}` does not pin the host on its own — `next=@evil.com`
+    builds https://app.smarthire.ai@evil.com, where our own hostname is merely
+    the userinfo. safeNext() is the whitelist; see the note in lib/next-url.js.
+
+    // const next = searchParams.get('next') ?? '/dashboard'
+  */
+  const next = safeNext(searchParams.get('next')) ?? '/dashboard'
 
   if (code) {
     const cookieStore = await cookies()
