@@ -97,12 +97,17 @@ export default function MovePicker({ onClose }) {
   // chain would never run.
   useEffect(() => { wrapRef.current?.focus() }, [])
 
-  // Click anywhere else closes, same shape as the ⋮ menu in Toolbar.jsx.
-  useEffect(() => {
-    const onDown = (e) => { if (!wrapRef.current?.contains(e.target)) onClose?.() }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [onClose])
+  /* Closing on an outside click is MoveButton's job, not this component's, and
+     the reason is a race worth recording.
+
+     The obvious version lives here and tests `!popover.contains(e.target)`. But
+     the trigger button is not inside the popover, so clicking the trigger while
+     the picker is open counts as "outside": mousedown closes it, and the click
+     that follows lands on a button React has already re-rendered with open:false
+     — which reopens it. The picker would flicker and the button would feel dead.
+
+     OverflowMenu avoids this by hanging its ref on the WRAP, which contains both
+     the trigger and the menu. MoveButton does the same. */
 
   useEffect(() => {
     const onKeyDown = (e) => {

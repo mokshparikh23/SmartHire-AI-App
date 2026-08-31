@@ -227,8 +227,25 @@ export default function Toolbar({
  * belongs to SessionPanel — see the note on Toolbar's signature.
  */
 function MoveButton({ open, onOpenChange }) {
+  const wrapRef = useRef(null)
+
+  /* The ref is on the WRAP, which contains the trigger AND the popover — the
+     same shape as OverflowMenu below, and for the same reason. Testing against
+     the popover alone would count a click on the trigger as "outside": mousedown
+     would close the picker, and the click behind it would land on a button React
+     had already re-rendered with open:false, reopening it. The picker would
+     flicker and the button would feel dead. */
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      if (!wrapRef.current?.contains(e.target)) onOpenChange?.(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open, onOpenChange])
+
   return (
-    <span className="ia-menu-wrap">
+    <span className="ia-menu-wrap" ref={wrapRef}>
       <button
         className="ia-btn ia-btn--ghost"
         data-active={!!open}
