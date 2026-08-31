@@ -241,7 +241,32 @@ export async function POST(request) {
         // Cleared rather than left as an expired row, so wallet_is_unlimited()
         // has one fewer thing to reason about. Credits are untouched: the
         // account drops back onto whatever balance it had.
-        await setSubscription({ userId, kind: null })
+        /*
+          ADMIN SPLIT 2026-09-01 ─ the customer id is passed on the CANCEL path
+          too, and it is not decoration.
+
+          subscription_set() now writes a public.subscription_events row and
+          derives its `source` column from what the call carries: an actor id
+          means an admin did it, a gateway id means that gateway did it, and
+          neither means 'system'. This call used to carry neither, so every
+          genuine Stripe cancellation would have been recorded as 'system' —
+          indistinguishable from a sweep, for the one event an audit trail most
+          needs to attribute.
+
+          It is a no-op for the wallet itself: stripe_customer_id is written as
+          `coalesce(p_stripe_customer, stripe_customer_id)`, so passing the value
+          already stored sets it to itself. stripe_subscription_id is still
+          cleared, because p_kind is null.
+
+          // await setSubscription({ userId, kind: null })
+        */
+        await setSubscription({
+          userId,
+          kind: null,
+          stripeCustomerId: typeof subscription.customer === 'string'
+            ? subscription.customer
+            : subscription.customer?.id || null,
+        })
         break
       }
 

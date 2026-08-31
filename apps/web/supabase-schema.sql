@@ -944,7 +944,7 @@ create trigger on_auth_user_created
 --
 -- Interview setup moves out of the desktop app and onto the web.
 --
--- Until now company/role/résumé/JD lived only in the desktop's zustand store,
+-- Until now company/role/resume/JD lived only in the desktop's zustand store,
 -- persisted to localStorage under 'ia-settings' — invisible to the account,
 -- lost on reinstall, and re-entered through a three-step wizard before every
 -- interview. This table is the server-side home for it, one row per candidate
@@ -953,14 +953,14 @@ create trigger on_auth_user_created
 --
 -- WHY THE CONSENT FLAG LIVES HERE
 --
--- resume_consent records that the candidate agreed to their résumé being used
--- by the copilot. It travels WITH the résumé, in the same row, because the two
--- are only ever meaningful together: a résumé whose consent state has been
--- separated from it is a résumé nobody can safely use.
+-- resume_consent records that the candidate agreed to their resume being used
+-- by the copilot. It travels WITH the resume, in the same row, because the two
+-- are only ever meaningful together: a resume whose consent state has been
+-- separated from it is a resume nobody can safely use.
 --
 -- This column is not the enforcement point. buildSystemPrompt() in
 -- apps/desktop/src/services/systemPrompt.js is — it omits the RESUME section
--- entirely when the flag is false, so an unconsented résumé cannot reach the
+-- entirely when the flag is false, so an unconsented resume cannot reach the
 -- model even if a UI or an API caller ignores this column. Storing the flag
 -- here just means the question is asked once, when the profile is created,
 -- instead of before every session.
@@ -999,7 +999,7 @@ create policy "read own interview profiles"
 
 -- with check on insert, using+with check on update: `using` decides which rows
 -- may be touched, `with check` decides what they may be turned INTO. Without
--- the latter on update, a user could re-assign user_id and hand a row — résumé
+-- the latter on update, a user could re-assign user_id and hand a row — resume
 -- included — to another account.
 create policy "insert own interview profiles"
   on public.interview_profiles for insert
@@ -1168,7 +1168,7 @@ revoke all on public.devices from anon;
 -- A dropped PDF is now parsed into a structured, editable record, and THE
 -- ORIGINAL FILE IS KEPT. That second half is the part worth reading twice.
 --
--- Until today the most sensitive thing this table held was résumé text the
+-- Until today the most sensitive thing this table held was resume text the
 -- interviewer had pasted in themselves. Now it holds the candidate's actual
 -- document, at rest, in our storage — belonging to a person who is not a user
 -- of this product, did not create this account, and cannot delete their own
@@ -1183,7 +1183,7 @@ revoke all on public.devices from anon;
 --   * deleting a row queues the file for actual deletion, rather than leaving
 --     unreachable bytes in a bucket forever.
 --
--- WHAT THIS DOES NOT DO: it does not touch the enforcement point. The résumé
+-- WHAT THIS DOES NOT DO: it does not touch the enforcement point. The resume
 -- still reaches the model only through buildSystemPrompt() in
 -- apps/desktop/src/services/systemPrompt.js, which still omits the RESUME
 -- section entirely when the flag is false. Structured parsing changes how the
@@ -1200,7 +1200,7 @@ alter table public.interview_profiles
   -- policies each re-deriving ownership through a join back to this one —
   -- tripling the surface 20260830000000 worked to keep at a single table, and
   -- join-based policies are the ones that get subtly wrong. Order is also
-  -- semantic in a résumé; a JSON array preserves it without a position column.
+  -- semantic in a resume; a JSON array preserves it without a position column.
   add column if not exists resume_parsed      jsonb,
 
   -- Storage pointer: 'resumes' bucket, path {user_id}/{profile_id}/{uuid}.pdf.
@@ -1225,7 +1225,7 @@ alter table public.interview_profiles
   add column if not exists company_domain     text;
 
 comment on column public.interview_profiles.resume_parsed is
-  'Structured résumé: {personal, introduction, education[], jobs[], other[]}. Flattened into resume on save; shape lives in apps/web/lib/resume.js.';
+  'Structured resume: {personal, introduction, education[], jobs[], other[]}. Flattened into resume on save; shape lives in apps/web/lib/resume.js.';
 comment on column public.interview_profiles.resume_file_path is
   'Object path in the private `resumes` bucket. First path segment is the owner and is what the storage policies key on.';
 
@@ -1244,7 +1244,7 @@ alter table public.interview_profiles
 
   -- normalizeParsed() in apps/web/lib/resume.js is the real shape check. These
   -- two are the floor under it: whatever bug ships in that file, a row can never
-  -- hold a bare string or a quarter-megabyte of model output. A résumé is
+  -- hold a bare string or a quarter-megabyte of model output. A resume is
   -- attacker-supplied text going into a model, so "the model returned 5 MB of X"
   -- is a real case and not a hypothetical one.
   add constraint interview_profiles_resume_parsed_object
@@ -1306,7 +1306,7 @@ grant update (
 ) on public.interview_profiles to authenticated;
 
 -- select and delete are unchanged and deliberately still granted. DELETE in
--- particular: a user must be able to remove a candidate's résumé from their
+-- particular: a user must be able to remove a candidate's resume from their
 -- account even when our API route is down. That is a privacy right, not a
 -- convenience — and the tombstone trigger below means a direct client delete
 -- still gets the bytes reclaimed.
@@ -1325,7 +1325,7 @@ begin
   -- RESUME-UPLOAD 2026-08-30: CONSENT BELONGS TO A DOCUMENT, NOT TO A PROFILE.
   --
   -- InterviewProfiles.jsx already refuses to carry a tick across a cleared
-  -- résumé, on the grounds that "the flag is meaningless without the text it
+  -- resume, on the grounds that "the flag is meaningless without the text it
   -- governs". This is the same rule applied to the file: if the stored PDF
   -- changed, nobody has been asked about the NEW one, so the old answer is not
   -- an answer to the question being asked.
@@ -1348,7 +1348,7 @@ end;
 $$;
 
 -- ============================================================ storage bucket
--- Private: a résumé is the most sensitive thing this product stores, and a
+-- Private: a resume is the most sensitive thing this product stores, and a
 -- public bucket means a guessable URL is the only thing between it and the web.
 --
 -- The bucket's own limit (6 MiB) sits ABOVE the route's (4 MB). Two ceilings on
@@ -1732,8 +1732,8 @@ notify pgrst, 'reload schema';
 --
 -- So this is a REGISTER switch and nothing more. 'desi' changes word choice,
 -- sentence length and the kind of example reached for. It does not change what
--- a follow-up may claim, what the résumé is allowed to contribute, or whether
--- the résumé is used at all — that gate is still resume_consent, still enforced
+-- a follow-up may claim, what the resume is allowed to contribute, or whether
+-- the resume is used at all — that gate is still resume_consent, still enforced
 -- in buildSystemPrompt() on the desktop, and this column is nowhere near it.
 -- styleBlock() in apps/desktop/src/services/systemPrompt.js is the only consumer,
 -- and its doc comment is where the boundary is written down.
@@ -1744,7 +1744,7 @@ notify pgrst, 'reload schema';
 -- interviewer's. One account interviews a Bengaluru SDE2 on Monday and a
 -- Singapore PM on Tuesday, and an account-level setting would silently carry
 -- Monday's register into Tuesday's room. It lives in the same row as the
--- company, the role and the résumé for the same reason those do: it is the
+-- company, the role and the resume for the same reason those do: it is the
 -- context of one interview, created once on the web and picked in the desktop
 -- launcher.
 --
@@ -2011,5 +2011,726 @@ end $$;
 comment on column public.credit_orders.gateway is
   'Which payment gateway owns this order: stripe (USD) or razorpay (INR). Set at '
   'checkout from the currency resolved from geo headers, never from the client.';
+
+-- ============================================================ 20260901000000_resume_always_used.sql
+-- OWN-CV 2026-09-01
+--
+-- A resume on an interview is a resume in the prompt. The tick is gone.
+--
+-- WHAT WAS THERE. 20260830020000 taught touch_interview_profile() to clear
+-- resume_consent whenever resume_file_path changed, on the rule that "consent
+-- belongs to a document, not to a profile": a new file had not been agreed to,
+-- so the old answer was not an answer to the question being asked. That rule was
+-- right for the product it was written for — an interviewer running a copilot
+-- against a CV belonging to the person across the table.
+--
+-- WHY IT GOES. That product no longer exists here. The reader IS the candidate,
+-- the document is their own, and they uploaded it to their own interview for one
+-- purpose. Asking them to confirm afterwards was not a protection; it was a
+-- second step that people missed, and missing it cost them the thing they came
+-- for — the resume sat in the row, every answer came out generic, and nothing on
+-- screen said why. This trigger made that worse than a plain unticked box:
+-- replacing a resume silently un-ticked it again, so the users most likely to be
+-- caught were the ones who had already been through the flow once.
+--
+-- Removing a resume is still how you stop it being used, and that path deletes
+-- the stored file rather than leaving it on the account behind a false flag.
+-- That is strictly more removal than unticking ever was.
+--
+-- WHY THE COLUMN SURVIVES. resume_consent stays, NOT NULL, and is written true
+-- whenever a resume exists (apps/web/lib/resume.js toRow, and
+-- apps/web/app/api/resume/parse). A desktop build older than this change still
+-- gates buildSystemPrompt() on the flag, and those installs update on their own
+-- schedule; a column left false would silently drop the resume for exactly the
+-- users who can no longer see the box they would have looked for. Writing true
+-- turns that old gate into a no-op instead of a trap. Dropping the column is a
+-- later migration, once no build in the wild reads it.
+
+-- ============================================================ trigger
+-- Restated in full rather than patched, because `create or replace function`
+-- replaces the whole body — the two lines above the removed block are load-
+-- bearing and have to be carried across verbatim.
+create or replace function public.touch_interview_profile()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  -- Belt and braces with the update policy's `with check`: even a future
+  -- service-role caller cannot silently re-owner a row through this path.
+  new.user_id = old.user_id;
+
+  -- OWN-CV 2026-09-01: what stood here, and why it is not here any more, is the
+  -- whole subject of the header above.
+  --
+  --   if new.resume_file_path is distinct from old.resume_file_path then
+  --     new.resume_consent = false;
+  --   end if;
+  --
+  -- Note the ordering this frees up: /api/resume/parse writes resume_file_path
+  -- and resume_consent in ONE update, so with the reset in place a route that
+  -- set the flag true would have had it cleared inside its own statement.
+
+  return new;
+end;
+$$;
+
+-- The trigger itself is unchanged and is deliberately not re-created: it binds
+-- to the function by name, so replacing the function is the whole change.
+
+-- ============================================================ backfill
+-- Every interview that already has a resume now counts as using it. Without
+-- this, the change reaches new uploads only — an account whose resume was
+-- attached last week would keep running generic sessions until they happened to
+-- re-save the row, which is the exact failure being fixed.
+--
+-- THE TRIGGER IS OFF FOR THIS STATEMENT, and that is the point of the two ALTERs
+-- rather than laziness about the reset above: touch_interview_profile() sets
+-- updated_at = now() on every update, so a bare backfill would stamp every
+-- affected row as edited today. "Updated" is shown to the user next to each
+-- interview; a migration must not claim they touched something they did not.
+alter table public.interview_profiles disable trigger interview_profiles_touch;
+
+update public.interview_profiles
+   set resume_consent = true
+ where resume_consent = false
+   and resume is not null
+   and btrim(resume) <> '';
+
+alter table public.interview_profiles enable trigger interview_profiles_touch;
+
+-- The converse is NOT backfilled. A row with no resume and consent true is not
+-- a state this app can produce — toRow() writes Boolean(resume) — and hunting
+-- for one would only risk clearing a flag some future writer set for a reason
+-- this migration cannot see.
+
+-- ============================================================ schema cache
+-- Nothing about the table's shape changed, so PostgREST has nothing to reload.
+-- Said explicitly because every other migration in this directory ends with a
+-- notify and its absence here should read as deliberate.
+
+-- ============================================================ 20260901010000_account_deletion.sql
+-- DELETE-ACCOUNT 2026-09-01
+--
+-- Self-serve account deletion, and the one thing that must survive it.
+--
+-- Deletion is immediate and irreversible. app/api/account/delete calls
+-- auth.admin.deleteUser(); profiles.id cascades off auth.users, and every other
+-- user-scoped table in this schema cascades off profiles(id). One statement, one
+-- transaction, nothing half-deleted.
+--
+-- WHAT MUST NOT GO WITH IT. A payment is not the user's data to erase — it is a
+-- record we are required to keep and required to be able to PRODUCE. The
+-- practical version of that requirement: someone writes in eighteen months
+-- asking what a charge on their card was for, and "we deleted your account" is
+-- not an answer.
+--
+-- So the delete route copies the account's orders here FIRST, and only then
+-- destroys the account. This table has NO foreign key to anything, and that
+-- absence IS the design: it is the one thing in this schema that outlives
+-- profiles.
+--
+-- WHY NOT `credit_orders.user_id` NULLABLE WITH ON DELETE SET NULL. It was the
+-- other candidate and it loses on two counts. credit_orders carries
+-- `grant select … to authenticated` plus a `auth.uid() = user_id` policy, so
+-- orphaned rows would live in a table the browser queries on every billing-page
+-- load, guarded by a policy rather than by the absence of a grant. And a receipt
+-- needs an EMAIL and a NAME, which credit_orders does not have and should not
+-- grow — that is PII on a hot table two webhooks write to, needed only after the
+-- account is gone.
+--
+-- WHY EVERY ROW AND NOT JUST status='paid'. `refunded` is a tax event as much as
+-- `paid` is. And a `pending` row is the only trace of an IN-FLIGHT payment: if a
+-- Razorpay payment link is still open when the account goes, the webhook finds
+-- no order and breaks, and without this the money arrives attached to nothing.
+--
+-- WHY IDENTITY IS DENORMALISED ONTO EVERY ROW rather than into a header table.
+-- One row has to be a complete receipt on its own. A join to a second table is a
+-- join that can fail, and an archive whose identity half has been purged out
+-- from under it is not an archive.
+
+-- ============================================================ billing_archive
+create table if not exists public.billing_archive (
+  id uuid primary key default gen_random_uuid(),
+
+  -- ── who ──────────────────────────────────────────────────────────────────
+  -- NO foreign key, deliberately. The row it would point at is gone by design.
+  deleted_user_id uuid not null,
+
+  -- Taken from auth.users at the moment of deletion (getUser().email), not from
+  -- profiles.email. They are the same today because nothing in the app updates
+  -- profiles.email — ProfileForm renders it disabled — but an address changed
+  -- through the Supabase dashboard would leave profiles stale, and the receipt
+  -- must carry the address the person actually uses.
+  email     text,
+  -- Self-declared: profiles.full_name is user-writable free text. Kept because a
+  -- receipt with a name is more useful than one without, and labelled here so
+  -- nobody later mistakes it for a verified legal name.
+  full_name text,
+
+  -- ── the order, copied verbatim from public.credit_orders ─────────────────
+  order_id          uuid not null,
+  gateway           text not null,
+  kind              text not null,
+  pack_id           text,
+  credits           integer not null default 0,
+  bonus_credits     integer not null default 0,
+  subscription_kind text,
+  -- Same type and same units as credit_orders.amount_minor: an integer in minor
+  -- units, paise or cents. Never widened and never converted — a stray /100
+  -- anywhere on this path is how a receipt comes out a hundredth of the amount
+  -- actually charged.
+  amount_minor      integer not null,
+  currency          text not null,
+  status            text not null,
+  ordered_at        timestamptz not null,   -- credit_orders.created_at
+  paid_at           timestamptz,
+
+  -- ── gateway handles ──────────────────────────────────────────────────────
+  -- How an operator finds the transaction in the Stripe or Razorpay dashboard,
+  -- which is where a legally usable receipt actually comes from — ours is the
+  -- index, theirs is the document.
+  --
+  -- The two customer ids live on credit_wallets rather than on the order, so the
+  -- delete route reads the wallet BEFORE anything clears it and stamps them onto
+  -- every row. They are also the only way to find a mandate that was not
+  -- cancelled cleanly, after the wallet that held its id has ceased to exist.
+  stripe_checkout_session_id text,
+  stripe_payment_intent_id   text,
+  stripe_subscription_id     text,
+  stripe_customer_id         text,
+  razorpay_payment_link_id   text,
+  razorpay_payment_id        text,
+  razorpay_subscription_id   text,
+  razorpay_customer_id       text,
+
+  archived_at timestamptz not null default now(),
+
+  -- IDEMPOTENCY. The delete route is retryable end to end, and a retry that ran
+  -- after a gateway timeout must not double the archive. The route upserts on
+  -- this constraint with ignoreDuplicates.
+  constraint billing_archive_one_row_per_order unique (order_id)
+);
+
+comment on table public.billing_archive is
+  'Append-only. Orders belonging to accounts that have been deleted. No FK to '
+  'profiles by design - these rows outlive the account. Written only by '
+  'app/api/account/delete; removed only by purge_expired_billing_archive().';
+
+-- ============================================================ indexes
+-- Support answers exactly two questions: "here is my card statement, what was
+-- this charge" starting from an EMAIL, and the same starting from a GATEWAY
+-- PAYMENT ID. Those are the lookups, so those are the indexes.
+--
+-- lower(email) rather than a plain btree: people write their address back to you
+-- in whatever case their mail client used, and this table has no citext.
+create index if not exists billing_archive_email_idx
+  on public.billing_archive (lower(email)) where email is not null;
+
+create index if not exists billing_archive_user_idx
+  on public.billing_archive (deleted_user_id);
+
+-- Partial, because a row is one gateway or the other and never both.
+create index if not exists billing_archive_stripe_pi_idx
+  on public.billing_archive (stripe_payment_intent_id) where stripe_payment_intent_id is not null;
+create index if not exists billing_archive_stripe_sub_idx
+  on public.billing_archive (stripe_subscription_id) where stripe_subscription_id is not null;
+create index if not exists billing_archive_rzp_payment_idx
+  on public.billing_archive (razorpay_payment_id) where razorpay_payment_id is not null;
+create index if not exists billing_archive_rzp_sub_idx
+  on public.billing_archive (razorpay_subscription_id) where razorpay_subscription_id is not null;
+
+-- The purge scans this.
+create index if not exists billing_archive_retention_idx
+  on public.billing_archive (coalesce(paid_at, ordered_at));
+
+-- ============================================================ RLS and grants
+-- The storage_orphans idiom, verbatim: RLS on, ZERO policies, grants revoked.
+-- Nothing in a browser reads or writes this, and with no permissive policy
+-- nothing can — even if a future migration or a dashboard copy-paste re-grants
+-- select by accident.
+alter table public.billing_archive enable row level security;
+revoke all on public.billing_archive from anon, authenticated;
+
+-- SELECT and INSERT only, and that is not tidiness. The route writes rows and
+-- reads them back to prove they landed; nothing needs to change or drop one.
+-- Deletion is reachable through exactly one door — the security definer purge
+-- below, which runs as the owner and therefore needs no grant of its own.
+grant select, insert on public.billing_archive to service_role;
+
+-- ============================================================ retention
+-- Eight years, because that is the longest of the retention clocks these rows
+-- sit under and a receipt is worthless the day after it is discarded. Kept as a
+-- function with no caller, exactly like purge_expired_resume_files: the policy
+-- is written down and executable, and turning it on is a scheduling decision
+-- rather than a code change.
+create or replace function public.purge_expired_billing_archive(p_years integer default 8)
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare v_count integer;
+begin
+  with expired as (
+    delete from public.billing_archive
+     where coalesce(paid_at, ordered_at) < now() - make_interval(years => p_years)
+    returning 1
+  )
+  select count(*) into v_count from expired;
+  return v_count;
+end;
+$$;
+
+-- Revoked BY EXACT SIGNATURE. A revoke naming a signature that does not exist
+-- silently does nothing and leaves the function world-callable, which is why the
+-- argument type is spelled out rather than guessed.
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'public.purge_expired_billing_archive(integer)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;
+
+-- ============================================================ schema cache
+-- PostgREST answers from a cached copy of the schema, so without this the first
+-- insert fails with "Could not find the 'order_id' column of 'billing_archive'
+-- in the schema cache" — which reads like the migration failed when it
+-- succeeded.
+notify pgrst, 'reload schema';
+
+-- ============================================================ 20260901035900_admin_split_audit.sql
+-- ADMIN SPLIT 2026-09-01
+--
+-- Three things, all of them consequences of /admin moving to its own origin and
+-- its own deployment (apps/admin), and getting a security pass on the way out.
+--
+--   1. subscription_events   the audit trail p_actor_id was declared for in
+--                            20260829120000 and has never been written to.
+--   2. subscription_set      rewritten to write that row. SIGNATURE UNCHANGED,
+--                            so lib/metering.js does not move. The two payment
+--                            webhooks each gain ONE argument on their cancel
+--                            call — see the note on subscription_events.source
+--                            for why that is required rather than tidy.
+--   3. role safety           profile_set_role(), plus triggers that make
+--                            "zero admins" unreachable from any writer at all —
+--                            including the account-deletion cascade.
+--
+-- WHY THIS IS ITS OWN MIGRATION AND NOT AN EDIT. 20260830050000_razorpay.sql
+-- says it outright: "a migration that has already run somewhere is not a file
+-- you get to change." Both places that declare p_actor_id and drop it on the
+-- floor stay exactly as they are.
+--
+-- ORDER-INDEPENDENT ON PURPOSE. Everything below is `create table if not
+-- exists` / `drop … if exists` + `create` / `create or replace`, with no ALTER
+-- that assumes a prior state. This tree gets edited in parallel and a sibling
+-- migration landing either side of this one must produce the same database.
+-- (20260901010000_account_deletion.sql appeared while this was being written,
+-- which is exactly the scenario.)
+
+
+-- ======================================================== subscription_events
+-- One row per subscription write, renewals included.
+--
+-- NOT a mirror of credit_wallets. That table holds the CURRENT state; this holds
+-- the HISTORY, and they answer different questions — "is this account unlimited
+-- right now" versus "who gave it to them, and when".
+--
+-- WHY NOT credit_ledger, which already has an actor_id and would have been free.
+-- Three reasons, any one of them sufficient. Its `kind` check constraint has no
+-- subscription member. Its rows carry `check (balance_after >= 0)`, which a
+-- subscription has no value for. And its documented invariant is that
+-- `sum(minutes) per user` reconciles against `credit_wallets.minutes_balance` —
+-- a subscription moves no minutes, so zero-minute rows would pollute the one
+-- table whose whole job is that reconciliation.
+create table if not exists public.subscription_events (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+
+  -- The state AFTER the write. A null kind means the subscription was cleared.
+  kind        text,
+  status      text,
+  period_end  timestamptz,
+
+  -- WHO. Null means no human did it — a gateway webhook, or a system sweep.
+  -- This is the column the whole migration exists for.
+  actor_id    uuid references public.profiles(id) on delete set null,
+
+  -- DERIVED INSIDE THE FUNCTION, not passed in. A p_source parameter would mean
+  -- changing the signature, and a signature change is the one thing the razorpay
+  -- migration's long note says to avoid — see the block above subscription_set.
+  -- An actor id is only ever set by app/api/admin/subscription, so its presence
+  -- IS the admin signal; otherwise the gateway ids on the call say which
+  -- gateway it was.
+  --
+  -- THE CANCEL PATH ONLY WORKS BECAUSE THE TWO WEBHOOKS WERE CHANGED WITH THIS
+  -- MIGRATION. Both used to cancel with a bare
+  --     setSubscription({ userId, kind: null })
+  -- carrying no actor and no gateway id, so every genuine gateway cancellation
+  -- would have derived as 'system' — indistinguishable from a sweep, and the
+  -- one event an audit trail most needs to attribute. They now pass their
+  -- customer id on that path too (a no-op for the wallet, since the column is
+  -- coalesced onto its own value). If a future caller cancels without one, this
+  -- lands as 'system' again and the column quietly starts lying.
+  --
+  -- 'system' is left in the constraint for the genuinely unattributed case: a
+  -- sweep, or a manual psql call.
+  source      text not null check (source in ('admin', 'stripe', 'razorpay', 'system')),
+
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists subscription_events_user_idx
+  on public.subscription_events (user_id, created_at desc);
+
+create index if not exists subscription_events_actor_idx
+  on public.subscription_events (actor_id, created_at desc)
+  where actor_id is not null;
+
+-- The storage_orphans / billing_archive idiom: RLS on, ZERO policies, grants
+-- revoked. service_role bypasses RLS, so apps/admin reads this and nobody else
+-- can — not even the subject of the row. An audit log its subject can read is
+-- one they can shop for.
+--
+-- SELECT and INSERT only. The function below writes; apps/admin reads. Nothing
+-- updates or deletes an audit row, so nothing is granted the ability to.
+alter table public.subscription_events enable row level security;
+revoke all on public.subscription_events from anon, authenticated;
+grant select, insert on public.subscription_events to service_role;
+
+comment on table public.subscription_events is
+  'Append-only history of every subscription write. actor_id is the admin who '
+  'did it, or null for a gateway webhook. Read by apps/admin only - RLS is on '
+  'with no policies, so service_role is the only reader.';
+
+
+-- ============================================================ subscription_set
+-- CREATE OR REPLACE, AND DELIBERATELY NOT A DROP.
+--
+-- 20260830050000_razorpay.sql:93 does `drop function … (uuid,text,text,
+-- timestamptz,text,text,uuid)` — the SEVEN-argument signature — and its long
+-- note explains why: that migration CHANGED the signature to nine arguments, so
+-- `create or replace` would have left the old one standing beside the new one.
+-- An orphaned overload is a real security hole (PostgREST resolves by named
+-- arguments, so calls go ambiguous; and the new function is named in no revoke
+-- block, so it keeps Postgres's default EXECUTE grant to PUBLIC — a
+-- "give myself an unlimited subscription" endpoint for anyone holding the anon
+-- key, which ships in the web bundle).
+--
+-- None of that applies here, because THIS migration does not change the
+-- signature. The nine arguments below are byte-identical to the ones in place;
+-- only the body changes. `create or replace` therefore replaces rather than
+-- overloads, and it PRESERVES the existing grants — where a drop would revoke
+-- them and open a window, mid-migration, in which both payment webhooks 500
+-- because the function they call does not exist.
+--
+-- THE SIGNATURE BELOW IS FROZEN. Changing any argument type or order turns this
+-- statement from a replace into an overload, silently. If it ever has to change,
+-- copy what the razorpay migration did: drop the old signature explicitly by
+-- name, and re-run the revoke/grant block against the new one.
+--
+-- The revoke/grant block at the foot of this file is a no-op after a successful
+-- replace. It stays anyway: it is the check that catches exactly the drift above.
+-- Verify with `\df+ public.subscription_set` — one nine-argument function, and
+-- the access privileges column reads service_role only.
+create or replace function public.subscription_set(
+  p_user_id       uuid,
+  p_kind          text,
+  p_status        text,
+  p_period_end    timestamptz,
+  p_stripe_customer     text default null,
+  p_stripe_subscription text default null,
+  p_actor_id      uuid default null,
+  p_razorpay_customer     text default null,
+  p_razorpay_subscription text default null
+) returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_kind   text;
+  v_status text;
+  v_end    timestamptz;
+  v_source text;
+begin
+  if p_kind is not null and p_kind not in ('weekly', 'monthly', 'yearly') then
+    return json_build_object('ok', false, 'code', 'bad_kind', 'reason', 'Unknown subscription kind');
+  end if;
+  if p_kind is not null and (p_status is null or p_period_end is null) then
+    return json_build_object('ok', false, 'code', 'bad_shape',
+                             'reason', 'A subscription needs a status and a period end');
+  end if;
+
+  -- ADMIN SPLIT 2026-09-01: an actor id that does not resolve to a profile is a
+  -- caller bug. Letting the new FK raise below would abort a subscription write
+  -- that is otherwise entirely correct, so fail before touching the wallet
+  -- rather than after — and fail in the {ok,code,reason} shape every other
+  -- guard in this function already uses.
+  if p_actor_id is not null
+     and not exists (select 1 from public.profiles where id = p_actor_id) then
+    return json_build_object('ok', false, 'code', 'bad_actor', 'reason', 'Unknown actor');
+  end if;
+
+  insert into public.credit_wallets (user_id) values (p_user_id) on conflict (user_id) do nothing;
+
+  -- Hoisted into variables so the wallet update, the audit row and the return
+  -- value cannot disagree about what was written. The three `case when p_kind is
+  -- null` expressions were previously repeated inline.
+  v_kind   := p_kind;
+  v_status := case when p_kind is null then null else p_status end;
+  v_end    := case when p_kind is null then null else p_period_end end;
+
+  update public.credit_wallets
+     set subscription_kind       = v_kind,
+         subscription_status     = v_status,
+         subscription_period_end = v_end,
+         stripe_customer_id      = coalesce(p_stripe_customer, stripe_customer_id),
+         stripe_subscription_id  = case when p_kind is null then null
+                                        else coalesce(p_stripe_subscription, stripe_subscription_id) end,
+
+         -- Same shape as the Stripe pair above, and the same reasoning: the
+         -- customer id is sticky because it outlives any one subscription, and
+         -- the subscription id is cleared when the subscription is, so a
+         -- cancelled account does not keep pointing at a dead Razorpay object.
+         razorpay_customer_id     = coalesce(p_razorpay_customer, razorpay_customer_id),
+         razorpay_subscription_id = case when p_kind is null then null
+                                         else coalesce(p_razorpay_subscription, razorpay_subscription_id) end,
+
+         updated_at              = now()
+   where user_id = p_user_id;
+
+  -- ADMIN SPLIT 2026-09-01: the audit row, written INSIDE the function rather
+  -- than by the calling route. That is deliberate — the admin route, the Stripe
+  -- webhook and the Razorpay webhook are then all covered by construction, and a
+  -- fourth caller added later cannot forget to write one.
+  v_source := case
+                when p_actor_id is not null then 'admin'
+                when p_razorpay_customer is not null
+                  or p_razorpay_subscription is not null then 'razorpay'
+                when p_stripe_customer is not null
+                  or p_stripe_subscription is not null then 'stripe'
+                else 'system'
+              end;
+
+  insert into public.subscription_events
+    (user_id, kind, status, period_end, actor_id, source)
+  values
+    (p_user_id, v_kind, v_status, v_end, p_actor_id, v_source);
+
+  return json_build_object('ok', true,
+    'subscriptionKind',   v_kind,
+    'subscriptionStatus', v_status,
+    'periodEnd',          v_end,
+    'unlimited',          public.wallet_is_unlimited(p_user_id));
+end $$;
+
+
+-- ============================================================ profile_set_role
+-- The ONLY way a role changes from application code, from here on.
+--
+-- app/api/admin/users/role used to run
+--     admin.from('profiles').update({ role }).eq('id', userId)
+-- with the service-role client — which bypasses RLS — and had no guard of any
+-- kind. The page it is called from renders "Remove admin" on every row,
+-- INCLUDING THE CALLER'S OWN. One click and one confirm() and a sole admin has
+-- locked every admin out of the product, recoverable only from the SQL editor.
+--
+-- Two distinct rules, and they need two distinct homes:
+--
+--   self-demotion   needs to know WHO is acting. auth.uid() is null under
+--                   service_role, so only a function that is TOLD the actor can
+--                   enforce it. That is here.
+--   last admin      must hold against every writer, including a future route, a
+--                   script, or a dashboard copy-paste. That is the trigger
+--                   below, not here — this only produces the nicer message.
+create or replace function public.profile_set_role(
+  p_user_id  uuid,
+  p_role     text,
+  p_actor_id uuid
+) returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old    text;
+  v_others integer;
+begin
+  if p_role not in ('user', 'admin') then
+    return json_build_object('ok', false, 'code', 'bad_role', 'reason', 'Unknown role');
+  end if;
+
+  -- Serialize concurrent role changes. Without this the guard below is a
+  -- read-then-write race, and it is not a theoretical one: two admins demoting
+  -- each other during the same incident each read the other as still an admin,
+  -- both writes succeed, and the system ends with zero admins. Transaction
+  -- scoped, so it is released on commit or rollback with no unlock path to get
+  -- wrong.
+  perform pg_advisory_xact_lock(hashtext('public.profiles.role'));
+
+  select role into v_old from public.profiles where id = p_user_id for update;
+  if v_old is null then
+    return json_build_object('ok', false, 'code', 'no_user', 'reason', 'No such user');
+  end if;
+  if v_old = p_role then
+    return json_build_object('ok', true, 'role', p_role, 'changed', false);
+  end if;
+
+  -- FORBIDDEN OUTRIGHT, even when other admins exist. There is no in-product
+  -- reason to remove your own admin: another admin can do it for you, and a sole
+  -- admin handing over promotes their successor first and is then demoted BY
+  -- them. Allowing it buys nothing, and it is the exact click that produced this
+  -- migration.
+  if p_actor_id = p_user_id and v_old = 'admin' and p_role <> 'admin' then
+    return json_build_object('ok', false, 'code', 'self_demote',
+      'reason', 'You cannot remove your own admin access. Ask another admin to do it.');
+  end if;
+
+  if v_old = 'admin' and p_role <> 'admin' then
+    select count(*) into v_others
+      from public.profiles where role = 'admin' and id <> p_user_id;
+    if v_others = 0 then
+      return json_build_object('ok', false, 'code', 'last_admin',
+        'reason', 'This is the only admin account. Promote someone else first.');
+    end if;
+  end if;
+
+  update public.profiles set role = p_role where id = p_user_id;
+
+  return json_build_object('ok', true, 'role', p_role, 'changed', true,
+                           'previousRole', v_old);
+end $$;
+
+
+-- ------------------------------------------------- the invariant, in the DB
+-- profile_set_role() above produces the readable message. THIS is the guard.
+--
+-- It fires on any UPDATE from any client — the service-role client, a future
+-- route that reaches for .update({ role }) again, a psql session, the Supabase
+-- dashboard. That is the whole reason it exists rather than living only in JS.
+--
+-- SCOPE — TWO TRIGGERS, AND THE DELETE ARM IS NOT OPTIONAL.
+--
+-- An UPDATE-only guard would leave the invariant reachable, because losing your
+-- admin role is not the only way to stop being an admin: 20260901010000_
+-- account_deletion.sql routes self-serve deletion through
+-- auth.admin.deleteUser(), and public.profiles.id is
+-- `references auth.users(id) on delete cascade`. So the sole admin can empty the
+-- system of admins from /dashboard/settings, on the OTHER origin, without ever
+-- touching a role. A guard that only watches UPDATE would have claimed to make
+-- "zero admins" unreachable while that door stood open.
+--
+-- Both arms share one function, branching on tg_op, so the count and the
+-- break-glass cannot drift apart between them.
+--
+-- WHAT THE DELETE ARM DOES TO THE DELETE ROUTE. Raising here aborts the cascade,
+-- which aborts auth.admin.deleteUser(), which surfaces to the caller as a failed
+-- deletion. That is the correct answer — a sole admin must promote a successor
+-- before they can leave — but app/api/account/delete must render it as a
+-- sentence a person can act on, not as a raw constraint error. The errcode is
+-- check_violation and the message is prefixed `last_admin:` so it can be matched.
+--
+-- Neither arm touches INSERT, so handle_new_user() inserting `role default
+-- 'user'` is unaffected, and promoting the first admin by hand still works
+-- (that is non-admin -> admin, which no arm acts on).
+--
+-- BREAK GLASS. The one legitimate reason to remove the last admin is winding an
+-- environment down, and locking the owner out of their own database to prevent a
+-- mistake is the wrong trade. So, inside the transaction:
+--     set local app.allow_last_admin_removal = 'on';
+-- Session-local, deliberately awkward to type, and it leaves a trace in whatever
+-- ran it. APPLICATION CODE MUST NEVER SET THIS.
+create or replace function public.profiles_keep_one_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row     public.profiles;
+  v_losing  boolean;
+  v_others  integer;
+begin
+  -- A BEFORE trigger must return the row it is inspecting: OLD for a delete,
+  -- NEW for an update. Returning the wrong one silently cancels the statement.
+  v_row := case when tg_op = 'DELETE' then old else new end;
+
+  v_losing := case
+                when tg_op = 'DELETE' then old.role = 'admin'
+                else old.role = 'admin' and new.role is distinct from 'admin'
+              end;
+
+  if not v_losing then
+    return v_row;
+  end if;
+
+  if coalesce(current_setting('app.allow_last_admin_removal', true), '') = 'on' then
+    return v_row;
+  end if;
+
+  -- Same lock as profile_set_role(), so a demotion arriving through some other
+  -- code path serializes against one arriving through the function. Taking it in
+  -- only one of the two places would leave exactly the race the function's copy
+  -- exists to close.
+  perform pg_advisory_xact_lock(hashtext('public.profiles.role'));
+
+  select count(*) into v_others
+    from public.profiles where role = 'admin' and id <> old.id;
+
+  if v_others = 0 then
+    raise exception 'last_admin: refusing to leave this system with no admin account'
+      using errcode = 'check_violation';
+  end if;
+
+  return v_row;
+end $$;
+
+drop trigger if exists profiles_keep_one_admin on public.profiles;
+create trigger profiles_keep_one_admin
+  before update of role on public.profiles
+  for each row execute function public.profiles_keep_one_admin();
+
+-- The arm that closes the cascade door. Separate trigger because `before delete`
+-- cannot carry an `of role` column list.
+drop trigger if exists profiles_keep_one_admin_on_delete on public.profiles;
+create trigger profiles_keep_one_admin_on_delete
+  before delete on public.profiles
+  for each row execute function public.profiles_keep_one_admin();
+
+
+-- ============================================================ revoke / grant
+-- Against the EXACT signatures, for the reason 20260829120000_credit_billing.sql
+-- gives: a revoke naming a signature that does not exist silently does nothing
+-- and leaves the function world-callable.
+--
+-- subscription_set is re-listed because it was DROPPED and recreated above, so
+-- the grant the razorpay migration gave it went with the old function.
+--
+-- If this is wrong the symptom is silent. Verify with \df+ and check the access
+-- privileges column reads service_role only.
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'public.subscription_set(uuid,text,text,timestamptz,text,text,uuid,text,text)',
+    'public.profile_set_role(uuid,text,uuid)'
+  ] loop
+    execute format('revoke all on function %s from public, anon, authenticated', f);
+    execute format('grant execute on function %s to service_role', f);
+  end loop;
+end $$;
+
+
+-- ============================================================ schema cache
+-- PostgREST answers from a cached copy of the schema. Without this, the first
+-- rpc('profile_set_role') fails with "Could not find the function
+-- public.profile_set_role in the schema cache" — which reads like the migration
+-- failed when it succeeded. Same for the first read of subscription_events.
+-- Idiom borrowed from 20260901010000_account_deletion.sql.
+notify pgrst, 'reload schema';
 
 notify pgrst, 'reload schema';

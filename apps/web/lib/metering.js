@@ -41,7 +41,7 @@ export const MAX_GRANT_MINUTES = 100 * 60
  *  flat minute. */
 export const RESEARCH_COST_MINUTES = 1
 
-/** RESUME-UPLOAD 2026-08-30: résumé parsing, for the same structural reason as
+/** RESUME-UPLOAD 2026-08-30: resume parsing, for the same structural reason as
  *  research — a one-shot model call at setup time, before any session exists, so
  *  the per-minute meter cannot reach it and it would otherwise be the only
  *  unmetered model call in the product.
@@ -176,4 +176,35 @@ export const setSubscription = ({
     p_actor_id:              actorId || null,
     p_razorpay_customer:     razorpayCustomerId || null,
     p_razorpay_subscription: razorpaySubscriptionId || null,
+  })
+
+/**
+ * ADMIN SPLIT 2026-09-01 ─ the only way a role changes from application code.
+ *
+ * It lives in this file rather than beside the route because this file already
+ * owns "everything reached through a service-role RPC", and because a role
+ * change belongs to the same class as the functions above it: it fails closed,
+ * it is awaited, and it is unreachable from a browser holding the anon key.
+ *
+ * What it replaced, in app/api/admin/users/role/route.js:
+ *
+ *   // const { error } = await createAdminClient()
+ *   //   .from('profiles')
+ *   //   .update({ role })
+ *   //   .eq('id', userId)
+ *
+ * That ran with the service-role client — which bypasses RLS — and had no guard
+ * of any kind, on a page that renders "Remove admin" on every row INCLUDING the
+ * caller's own. One click and one confirm() was enough for a sole admin to lock
+ * every admin out of the product, recoverable only from the SQL editor.
+ *
+ * profile_set_role() returns the repo's {ok, code, reason} shape rather than
+ * raising, so the route can turn a refusal into a sentence. Codes: bad_role,
+ * no_user, self_demote, last_admin.
+ */
+export const setRole = ({ userId, role, actorId }) =>
+  rpc('profile_set_role', {
+    p_user_id:  userId,
+    p_role:     role,
+    p_actor_id: actorId || null,
   })

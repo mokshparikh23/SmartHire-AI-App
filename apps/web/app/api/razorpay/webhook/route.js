@@ -245,7 +245,24 @@ export async function POST(request) {
         // handler does it, so wallet_is_unlimited() has one fewer thing to reason
         // about. Credits are untouched: the account drops back onto whatever
         // balance it had.
-        await setSubscription({ userId, kind: null })
+        /*
+          ADMIN SPLIT 2026-09-01 ─ the customer id is passed on the CANCEL path
+          too, for the reason spelled out in the Stripe handler: subscription_set()
+          now writes a public.subscription_events row and derives its `source`
+          from what the call carries. Without an id here, every genuine Razorpay
+          cancellation would record as 'system'.
+
+          A no-op for the wallet — razorpay_customer_id is coalesced onto its own
+          value — while razorpay_subscription_id is still cleared, because
+          p_kind is null.
+
+          // await setSubscription({ userId, kind: null })
+        */
+        await setSubscription({
+          userId,
+          kind: null,
+          razorpayCustomerId: subscription.customer_id || null,
+        })
         break
       }
 
