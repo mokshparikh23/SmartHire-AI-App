@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react'
 import Icon from 'smarthire-ui/Icon'
 import PillTabs from 'smarthire-ui/PillTabs'
 import { Badge } from 'smarthire-ui'
+import { TABS } from '@/content/desi-mode'
 
 /*
   DESI-MODE 2026-08-30
@@ -53,87 +54,18 @@ import { Badge } from 'smarthire-ui'
    visible space. Caught in the browser at 375 and 1280. Keep the comma or full
    stop inside the bracket whenever a highlight runs up to one. */
 /*
-  CONCEPT 2026-08-30: the interviewer-side tabs, kept per the convention in this
-  repo. Their categories came from WHAT MAKES A GOOD FOLLOW-UP; the ones below
-  come from answerPrompt(), for the same reason.
+  SPLIT 2026-09-01: TABS moved to content/desi-mode.js.
 
-  const TABS = [
-    {
-      key: 'vague',
-      label: 'Vague claim',
-      heard: '“The migration went pretty smoothly, and performance improved a lot once we shipped it.”',
-      formal: 'Could you elaborate on the performance improvements you observed, and describe the methodology by which they were measured?',
-      desi: [
-        '“Improved a lot” — ', ['how much exactly?'], ' Ask for ',
-        ['the number before and after,'], ' and ', ['who measured it.'],
-      ],
-      wrong: 'Nobody asks a question like that out loud. You would rewrite it in your head first, and by then the moment has gone.',
-      right: 'Reads in one pass. The number that is missing is the whole question.',
-    },
-    {
-      key: 'who',
-      label: 'Who did what',
-      heard: '“We rebuilt the payments service end to end. I drove most of that with the platform team.”',
-      formal: 'It would be helpful to understand the delineation of responsibilities between yourself and the platform team on that initiative.',
-      desi: [
-        'They said ', ['“we”, then “I”.'], ' Ask ', ['what they decided themselves,'],
-        ' and ', ['what the platform team decided.'],
-      ],
-      wrong: 'It clears its throat for a full line before it asks anything. You will not finish reading it before the candidate has moved on.',
-      right: 'Two plain questions, and you can ask them exactly as they are written.',
-    },
-    {
-      key: 'broke',
-      label: 'What went wrong',
-      heard: '“It was a clean rollout. No major incidents, and the team was happy with how it went.”',
-      formal: 'Were there any unanticipated challenges encountered during the rollout that you would highlight in retrospect?',
-      desi: [
-        ['A clean rollout is rare.'], ' Ask ', ['what broke,'],
-        ' even something small, and ', ['what they changed afterwards.'],
-      ],
-      wrong: '“Any unanticipated challenges” invites a no. The politeness is doing the candidate’s work for them.',
-      right: 'Assumes something broke, so the honest answer becomes the easy one to give.',
-    },
-  ]
+  Not for tidiness — the intention was to keep it here, beside the measured
+  min-h table below that describes this copy and this layout together. It had to
+  move because this file is 'use client', and a Server Component importing from
+  a client module gets a client-reference proxy rather than the module's values.
+  The landing page renders one of these tabs as a static sample, and reading a
+  property off that proxy is a runtime 500. The full account is in that file.
+
+  THE min-h FLOORS BELOW STILL GOVERN THIS COPY. Change it there, re-measure
+  here.
 */
-const TABS = [
-  {
-    key: 'lead',
-    label: 'Answer first',
-    heard: '“How would you keep a payments API idempotent when the client retries after a timeout?”',
-    formal: 'There are a number of considerations at play, and it may be helpful to begin by outlining the general landscape of retry semantics before addressing idempotency itself.',
-    desi: [
-      'The client sends an ', ['idempotency key.'], ' Store it ',
-      ['with the result,'], ' and on a retry ', ['return what you stored.'],
-    ],
-    wrong: 'Thirty words of throat-clearing before the answer starts. You are still reading the wind-up while they wait.',
-    right: 'The answer is the first thing on the line, so you can start talking straight off it.',
-  },
-  {
-    key: 'unsure',
-    label: 'When you do not know',
-    heard: '“What write throughput were you running on that cluster at peak?”',
-    formal: 'Throughput in systems of that nature is typically governed by a range of factors, including replication configuration, batch size and the characteristics of the underlying storage.',
-    desi: [
-      ['Not sure of the exact figure'], ' — it was ', ['a few thousand writes a second'],
-      ' across three nodes. ', ['Say you would have to check.'],
-    ],
-    wrong: 'It fills the gap with something that sounds like an answer. That is the one thing you cannot walk back when they follow up.',
-    right: 'Honest about the number, useful about the shape. Nobody is caught out later.',
-  },
-  {
-    key: 'cv',
-    label: 'From your CV',
-    heard: '“You mentioned a billing migration on your CV. What was your part in it?”',
-    formal: 'I was engaged in a cross-functional capacity across the migration workstream, partnering with a number of stakeholders in order to deliver the intended outcome.',
-    desi: [
-      ['Four months on the payments team,'], ' and you owned ', ['the replay path.'],
-      ' Then the number: ', ['p99 from 900ms to 210ms.'],
-    ],
-    wrong: 'Says nothing a hiring manager can check. “Cross-functional capacity” is what people say when they did not own it.',
-    right: 'Two facts off your own CV, in the order they are worth saying.',
-  },
-]
 
 /*
   Four marks, and each restates a boundary the prompt already enforces rather

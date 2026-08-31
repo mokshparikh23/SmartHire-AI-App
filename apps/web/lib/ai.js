@@ -33,13 +33,31 @@ export const GEMINI_NATIVE_BASE = 'https://generativelanguage.googleapis.com/v1b
  * callers pick the model, so without this an extracted licence key could bill us
  * for the most expensive model available.
  */
+/* INTENT-ROUTING 2026-09-01 ─ fastModel / smartModel ──────────────────────────
+   Every provider now names two of its own models. `fastModel` answers the
+   ordinary spoken question, where the product IS the latency — the candidate has
+   about three seconds to read. `smartModel` answers a coding problem or a
+   screenshot, where the candidate has already stopped to press a key and a wrong
+   answer costs more than a slow one.
+
+   INVARIANT: both ids must appear in `models` below. modelForIntent() puts them
+   through resolveModel(), so a typo does not reach the provider — but it would
+   silently fall back to defaultModel, which on Gemini is the weakest model in the
+   list. A "smart" request quietly downgrading is the failure to watch for here. */
 export const PROVIDERS = {
   openai: {
     id: 'openai',
     label: 'OpenAI',
     base: OPENAI_BASE,
-    envKey: 'OPENAI_API_KEY',
-    defaultModel: 'gpt-4o',
+    /* INTENT-ROUTING 2026-09-01: was 'gpt-4o'. The default is now the fast one,
+       because it is what every heard question gets and most of them are ordinary.
+       Coding and screenshots escalate on their own, so this costs nothing on the
+       answers that actually need the bigger model. An install that already has
+       'gpt-4o' persisted keeps it — it is in the list, so nothing rewrites it. */
+    // defaultModel: 'gpt-4o',
+    defaultModel: 'gpt-4o-mini',
+    fastModel:    'gpt-4o-mini',
+    smartModel:   'gpt-4o',
     models: [
       { id: 'gpt-4o',       label: 'GPT-4o',       desc: 'Best quality', badge: 'Recommended' },
       { id: 'gpt-4o-mini',  label: 'GPT-4o mini',  desc: 'Fastest',      badge: 'Fast' },
@@ -67,6 +85,14 @@ export const PROVIDERS = {
        arrives after the moment has passed. */
     // defaultModel: 'gemini-3.7-flash',
     defaultModel: 'gemini-3.5-flash-lite',
+    /* INTENT-ROUTING 2026-09-01: smart is 3.6, NOT 3.7, and the measurements
+       above are why. 3.7-flash timed out at 12s on one of three runs — and 12s is
+       exactly STALL_TIMEOUT_MS in the desktop's aiBackend.js, so that run does
+       not arrive slowly, it arrives as an aborted answer. A model that fails one
+       request in three is not the one to escalate a coding question to. 3.6 is
+       ~3s with more detail than lite, which is the whole point of escalating. */
+    fastModel:  'gemini-3.5-flash-lite',
+    smartModel: 'gemini-3.6-flash',
     // VERIFIED 2026-08-30 against the compatibility endpoint, one request each.
     // gemini-2.5-flash and gemini-2.5-pro were in this list and BOTH 404 there —
     // they appear in GET /v1beta/models, so they exist, but the OpenAI-compatible
@@ -252,6 +278,39 @@ export const MAX_PARSE_CHARS = 24000
 export function resolveModel(model, provider = activeProvider()) {
   if (!provider) return DEFAULT_MODEL
   return provider.models.some((m) => m.id === model) ? model : provider.defaultModel
+}
+
+/**
+ * INTENT-ROUTING 2026-09-01 ─ which model answers THIS turn.
+ *
+ * WHY THE DECISION IS HERE AND NOT ON THE DESKTOP. The obvious design is for the
+ * client to send the model it wants. It cannot: resolveModel() above silently
+ * falls back to `provider.defaultModel` for anything not in the active provider's
+ * list, and on Gemini that default is the WEAKEST model available. A desktop
+ * asking for 'gpt-4o' against a Gemini server would not get an error, it would
+ * get lite — so the one request that most needed a better model would be the one
+ * that got the worst, invisibly. The client sends what KIND of question it is;
+ * the server, which is the only side that knows what it can actually reach,
+ * picks. Changing the mapping then needs no desktop release either.
+ *
+ * `intent` is untrusted input from a licence-key holder, so it is matched, never
+ * interpolated: anything unrecognised is an ordinary question.
+ *
+ * @param {'general'|'coding'|'aptitude'|'screen'|undefined} intent
+ * @param {string} model - the user's pick from the ⋮ menu; honoured for 'general'
+ */
+export function modelForIntent(intent, model, provider = activeProvider()) {
+  if (!provider) return DEFAULT_MODEL
+
+  if (intent === 'coding' || intent === 'aptitude' || intent === 'screen') {
+    // Through resolveModel, not raw: it keeps the allowlist honest, which is what
+    // stops an extracted licence key billing us for an arbitrary model name. If
+    // smartModel is ever mistyped this degrades to defaultModel rather than
+    // erroring — see the INVARIANT note on PROVIDERS.
+    return resolveModel(provider.smartModel, provider)
+  }
+
+  return resolveModel(model, provider)
 }
 
 /**

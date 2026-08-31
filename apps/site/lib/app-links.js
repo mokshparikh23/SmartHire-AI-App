@@ -14,6 +14,27 @@
  * at build time. Drop the prefix and it is `undefined` in the bundle and every
  * Buy button navigates to "undefined/dashboard/billing".
  *
+ * ── NEXT_PUBLIC_APP_URL MUST BE SET AT BUILD TIME, NOT ONLY AT RUNTIME ────────
+ *
+ * This bites in a way that is easy to miss because it only breaks SOME pages.
+ * Verified against a real production build:
+ *
+ *     /  /pricing  /compare        dynamic (they read geo headers), so they
+ *                                  resolve this at REQUEST time and pick up
+ *                                  whatever the server has.
+ *     /features  /how-it-works     static, so whatever was in the environment
+ *                                  during `next build` is BAKED INTO THE HTML.
+ *
+ * So a deployment that sets this only in the runtime environment ships two of
+ * five pages with every "Get started", "Log in" and footer link pointing at
+ * localhost — while the other three look perfectly fine. Nothing errors, and
+ * the pages that are checked first are the ones that work.
+ *
+ * Vercel and Netlify both expose project env vars to the build, so setting it
+ * normally is enough. The failure mode is a var injected at runtime only, or a
+ * build run before the variable was added. If two pages ever have the wrong
+ * origin and three do not, this is why — rebuild, do not patch.
+ *
  * THESE ARE PLAIN ANCHORS, NEVER next/link. Two reasons, and the first is a
  * hard error rather than a preference:
  *

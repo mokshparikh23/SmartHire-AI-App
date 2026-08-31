@@ -1,4 +1,6 @@
 import { Inter_Tight, IBM_Plex_Mono } from 'next/font/google'
+import { SiteNav, SiteFooter } from '@/components/SiteChrome'
+import { ScrollProgress } from '@/components/Reveal'
 import './globals.css'
 
 /*
@@ -162,10 +164,48 @@ export const metadata = {
   twitter: { card: 'summary_large_image' },
 }
 
+/*
+  ── THE CHROME LIVES HERE, NOT IN EACH PAGE ───────────────────────────────────
+
+  SPLIT 2026-09-01: on apps/web, `/` and `/compare` each rendered
+  <ScrollProgress/>, <SiteNav/>, <main> and <SiteFooter/> themselves. With five
+  routes that would be five copies of the same twelve lines — but the real cost
+  is that SiteNav would REMOUNT on every navigation, throwing away its scroll
+  listener and its gesture anchor each time.
+
+  Rendering it once here is also what makes the active-route underline possible:
+  the component survives the navigation and reads usePathname. The one thing it
+  has to do in exchange is reset itself on a route change, since it no longer
+  gets a fresh mount — there is a useEffect in SiteNav that does exactly that.
+
+  Page files return section content only.
+*/
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${tight.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <head>
+        {/*
+          SPLIT 2026-09-01: `.reveal { opacity: 0 }` means everything below the
+          hero is invisible until the IntersectionObserver runs. That was already
+          true of one long page; across five short routes it is most of the
+          document, and without JS the site is close to blank.
+
+          Not a crawler problem — the HTML is all there, and opacity is not
+          cloaking — but a real one for anyone with JS off or blocked. Three
+          lines in a <noscript> is the whole fix.
+        */}
+        <noscript>
+          <style>{'.reveal,.reveal .stagger{opacity:1!important;transform:none!important}'}</style>
+        </noscript>
+      </head>
+      <body>
+        <div className="min-h-screen bg-paper">
+          <ScrollProgress />
+          <SiteNav />
+          <main>{children}</main>
+          <SiteFooter />
+        </div>
+      </body>
     </html>
   )
 }

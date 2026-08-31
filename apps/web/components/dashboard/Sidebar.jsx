@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getProfile, getUser } from '@/lib/auth'
 import { getEntitlement } from '@/lib/entitlement'
 import Icon, { Logo } from 'smarthire-ui/Icon'
+import { MARKETING_HOME } from '@/lib/site-links'
 import NavItem from './NavItem'
 import SignOutButton from './SignOutButton'
 
@@ -66,10 +67,12 @@ const NAV_SCROLL = 'min-h-0 flex-1 overflow-y-auto px-3 py-1'
 function Brand() {
   return (
     <div className="px-5 py-5">
-      <Link href="/" className="flex items-center gap-2.5">
+      {/* SPLIT 2026-09-01: cross-origin now — see app/(auth)/layout.jsx.
+          <Link href="/" …> */}
+      <a href={MARKETING_HOME} className="flex items-center gap-2.5">
         <Logo size={28} />
         <span className="text-[14px] font-semibold tracking-tight text-ink">Interview&nbsp;AI</span>
-      </Link>
+      </a>
     </div>
   )
 }

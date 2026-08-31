@@ -23,7 +23,12 @@ export default function RootError({ error, retry }) {
       </p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Button onClick={() => retry()} size="lg">Try again</Button>
-        <Button href="/" variant="secondary" size="lg">Back to the homepage</Button>
+        {/* SPLIT 2026-09-01: "/" is the marketing site now, and it is the wrong
+            place to send somebody whose dashboard just failed — they have an
+            account and were trying to use it. This boundary sits above the
+            authenticated app, so the way back is into the app.
+            <Button href="/" variant="secondary" size="lg">Back to the homepage</Button> */}
+        <Button href="/dashboard" variant="secondary" size="lg">Back to your dashboard</Button>
       </div>
       {error?.digest && (
         <p className="mt-8 text-[12px] text-faint" data-numeric>Reference {error.digest}</p>

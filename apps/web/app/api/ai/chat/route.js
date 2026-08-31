@@ -1,5 +1,5 @@
 import {
-  CORS, MAX_TOKENS, GEMINI_REASONING_EFFORT, resolveModel, requireProvider,
+  CORS, MAX_TOKENS, GEMINI_REASONING_EFFORT, modelForIntent, requireProvider,
   requireSession, recordUsage, jsonError, upstreamError, fetchWithRetry,
   friendlyUpstreamMessage,
 } from '@/lib/ai'
@@ -26,7 +26,14 @@ export async function POST(request) {
     return jsonError('Body must be JSON', 400)
   }
 
-  const { licenseKey, sessionId, messages, model } = body || {}
+  /* INTENT-ROUTING 2026-09-01: `intent` added — 'general' | 'coding' | 'screen'.
+     The desktop says what KIND of question this is and modelForIntent() picks the
+     model; see the note there for why the client cannot pick it itself. Absent on
+     an older desktop build, which lands on 'general' and behaves exactly as
+     before — that backwards compatibility is why this is a new field rather than
+     a changed meaning for `model`. */
+  // const { licenseKey, sessionId, messages, model } = body || {}
+  const { licenseKey, sessionId, messages, model, intent } = body || {}
 
   // Advances the meter as well as checking it, and does so BEFORE the upstream
   // call, so a user at zero cannot extract one last free answer.
@@ -59,7 +66,8 @@ export async function POST(request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: resolveModel(model, provider),
+        // model: resolveModel(model, provider),
+        model: modelForIntent(intent, model, provider),
         max_tokens: MAX_TOKENS,
         stream: true,
         // THINKING 2026-08-30: Gemini only. OpenAI rejects reasoning_effort on

@@ -24,6 +24,42 @@ const nextConfig = {
      at build start if a package is in both. There is no overlap with unpdf. */
   transpilePackages: ['smarthire-ui', 'smarthire-pricing'],
 
+  /* SPLIT 2026-09-01 ────────────────────────────────────────────────────────
+     `/` and `/compare` are served by apps/site on the marketing domain now.
+
+     308 AND NOT 404. Both had inbound links and bookmarks — the sign-in page's
+     logo pointed at `/`, and anyone who bookmarked the old *.vercel.app host
+     lands there. A permanent redirect also consolidates whatever ranking those
+     two URLs accumulated onto the new domain instead of throwing it away.
+
+     For that consolidation to actually happen, Google has to be ALLOWED to
+     crawl these paths and see the 308. That is why app/robots.js below permits
+     crawling and the noindex is sent as a header instead — a Disallow here
+     would mean the redirects are never fetched and both copies stay indexed.
+     Revisit in 4–6 weeks once Search Console shows the moves picked up.
+
+     proxy.js needs no change: its matcher never covered `/` or `/compare`. */
+  async redirects() {
+    const site = (process.env.NEXT_PUBLIC_WWW_URL || 'https://smarthire.ai').replace(/\/$/, '')
+    return [
+      { source: '/',        destination: `${site}/`,        permanent: true },
+      { source: '/compare', destination: `${site}/compare`, permanent: true },
+    ]
+  },
+
+  /* SPLIT 2026-09-01: nothing on this deployment belongs in a search index.
+
+     Sent as a HEADER rather than only as metadata, because metadata only exists
+     on pages that render a <head> — it would miss all 23 /api routes and both
+     redirects above. The metadata in app/layout.js is the belt; this is the
+     braces. */
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+    }]
+  },
+
   /* RESUME-UPLOAD 2026-08-30 ──────────────────────────────────────────────────
      unpdf is left to Node at runtime instead of being traced by the bundler.
 

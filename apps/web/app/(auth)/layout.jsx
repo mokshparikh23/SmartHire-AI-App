@@ -1,15 +1,18 @@
-import Link from 'next/link'
 import Icon, { Logo } from 'smarthire-ui/Icon'
+import { MARKETING_HOME } from '@/lib/site-links'
 
 export default function AuthLayout({ children }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Form side */}
       <div className="flex flex-col px-6 py-8 sm:px-12">
-        <Link href="/" className="inline-flex items-center gap-2.5 self-start">
+        {/* SPLIT 2026-09-01: the marketing site is another origin now, so this
+            is a plain <a> — next/link is for in-app routes.
+            <Link href="/" …> */}
+        <a href={MARKETING_HOME} className="inline-flex items-center gap-2.5 self-start">
           <Logo size={30} />
           <span className="text-[15px] font-semibold tracking-tight text-ink">Smart Hire AI</span>
-        </Link>
+        </a>
 
         <div className="flex flex-1 items-center justify-center py-12">
           <div className="w-full max-w-sm">{children}</div>

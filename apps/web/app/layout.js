@@ -107,6 +107,18 @@ export const metadata = {
   description:
     'Real-time answers during live interviews. It hears the question, and puts the ' +
     'answer on screen — drawn from your own CV and tagged where each fact came from.',
+
+  /*
+    SPLIT 2026-09-01: this deployment is the app, not the shop window. Nothing
+    here — a sign-in form, a dashboard, an admin table — belongs in a search
+    index, and the marketing site on the root domain is what should rank.
+
+    This is the belt. The braces is the X-Robots-Tag header in next.config.mjs,
+    which also covers the /api routes and the two redirects, neither of which
+    renders a <head> for this to appear in. And app/robots.js deliberately
+    ALLOWS crawling, so that this is actually seen — see the note there.
+  */
+  robots: { index: false, follow: false },
 }
 
 export default function RootLayout({ children }) {

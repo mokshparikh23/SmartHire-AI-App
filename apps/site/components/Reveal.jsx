@@ -51,9 +51,18 @@ export default function Reveal({ as: Tag = 'div', className = '', children, ...r
  *
  * Fixed rather than pinned to the header, because SiteNav slides out of view on
  * the way down — a progress bar that leaves with it stops being a progress bar.
+ *
+ * SPLIT 2026-09-01: it hides itself on short pages.
+ *
+ * This was written for a single 872-line scroll, where "how far through am I"
+ * was a real question. On /pricing or /how-it-works, which are a couple of
+ * viewports each, a bar that jumps in 40% steps is noise pretending to be
+ * information. It lives in the shared layout, so the routes that should not
+ * have it opt out by being short rather than by remembering to.
  */
 export function ScrollProgress() {
   const [pct, setPct] = useState(0)
+  const [worthShowing, setWorthShowing] = useState(false)
 
   useEffect(() => {
     let frame = 0
@@ -64,6 +73,11 @@ export function ScrollProgress() {
       // Guard the divide: a page shorter than the viewport has zero scrollable
       // height, and 0/0 would put NaN into a style attribute.
       const scrollable = doc.scrollHeight - window.innerHeight
+
+      // Half a viewport of travel is the floor. Measured on every pass rather
+      // than once on mount, because images and webfonts land after hydration
+      // and a page can cross the line either way as they do.
+      setWorthShowing(scrollable > window.innerHeight * 0.5)
       setPct(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
     }
 
@@ -78,6 +92,8 @@ export function ScrollProgress() {
       if (frame) cancelAnimationFrame(frame)
     }
   }, [])
+
+  if (!worthShowing) return null
 
   return (
     <div

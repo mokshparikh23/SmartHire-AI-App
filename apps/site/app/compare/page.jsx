@@ -1,12 +1,12 @@
 import { headers } from 'next/headers'
 import Icon from 'smarthire-ui/Icon'
 import { Container, Button, Badge } from 'smarthire-ui'
-import { SiteNav, SiteFooter } from '@/components/marketing/SiteChrome'
-import SectionMark from '@/components/marketing/SectionMark'
-import Reveal, { ScrollProgress } from '@/components/marketing/Reveal'
-import ComparisonTable from '@/components/marketing/ComparisonTable'
+import SectionMark from '@/components/SectionMark'
+import Reveal from '@/components/Reveal'
+import ComparisonTable from '@/components/ComparisonTable'
 import { resolveCurrency, singlePackForCurrency } from 'smarthire-pricing'
 import { gatewayFor } from 'smarthire-pricing/gateway'
+import { SIGNUP } from '@/lib/app-links'
 import {
   COLUMNS, COMPETITORS, featureGroupsFor, US,
   SOURCE_DATE, SOURCE_LABEL, SOURCE_URL, competitorPrice,
@@ -49,13 +49,30 @@ import {
 */
 
 export const metadata = {
-  title: 'Compare AI interview assistants — Smart Hire AI',
+  /*
+    SPLIT 2026-09-01: SHORTENED, and it had to be. app/layout.js sets a title
+    template of '%s — Smart Hire AI', and this string already ended in exactly
+    that — so it would have rendered "Compare AI interview assistants — Smart
+    Hire AI — Smart Hire AI". This was the only page in the repo with a title of
+    its own when the template landed, so it is the only one that could hit it.
+
+    title: 'Compare AI interview assistants — Smart Hire AI',
+  */
+  title: 'Compare AI interview assistants',
   /* PIVOT 2026-08-30: was "… the difference that matters: four of them help the
      candidate answer, this one helps the interviewer ask." Ours answers too. */
   description:
     'Smart Hire AI compared with Parakeet AI, Final Round AI, LockedIn AI and Interview ' +
     'Warmup — what an hour costs, what happens to unused credits, and what each one ' +
     'will and will not claim to be.',
+  alternates: { canonical: '/compare' },
+  openGraph: {
+    title: 'Compare AI interview assistants — Smart Hire AI',
+    description:
+      'What an hour costs across five tools, what happens to unused credits, and what ' +
+      'each one will and will not claim to be. Sourced and dated.',
+    url: '/compare',
+  },
 }
 
 /*
@@ -129,11 +146,7 @@ export default async function ComparePage() {
       : competitorPrice(col, currency)
 
   return (
-    <div className="min-h-screen bg-paper">
-      <ScrollProgress />
-      <SiteNav />
-
-      <main>
+    <>
         {/* ═══════════════════════════════════════════════ hero ═════════ */}
         <section className="border-b border-line-soft">
           <Container wide className="py-16 sm:py-24">
@@ -158,7 +171,7 @@ export default async function ComparePage() {
 
               <div className="mt-9 flex flex-wrap items-center gap-3">
                 <Button href="#table" size="lg" iconRight="arrowRight">See the full table</Button>
-                <Button href="/signup" variant="secondary" size="lg">
+                <Button href={SIGNUP} variant="secondary" size="lg">
                   Start with ten free minutes
                 </Button>
               </div>
@@ -345,7 +358,7 @@ export default async function ComparePage() {
 
                     <div className="mt-auto pt-7">
                       {col.us ? (
-                        <Button href="/signup" variant="inverse" size="sm" className="w-full">
+                        <Button href={SIGNUP} variant="inverse" size="sm" className="w-full">
                           Get started
                         </Button>
                       ) : (
@@ -361,7 +374,7 @@ export default async function ComparePage() {
               Ours also runs as a subscription with unlimited interview time, and in larger
               credit packs that work out cheaper per hour —{' '}
               <a
-                href="/#pricing"
+                href="/pricing"
                 className="font-medium text-ink underline underline-offset-2 transition-colors hover:text-accent"
               >
                 see the full pricing
@@ -533,11 +546,11 @@ export default async function ComparePage() {
                 </p>
 
                 <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-                  <Button href="/signup" size="lg" variant="inverse">
+                  <Button href={SIGNUP} size="lg" variant="inverse">
                     Create your account
                   </Button>
                   <a
-                    href="/"
+                    href="/how-it-works"
                     className="border-b border-paper/25 pb-0.5 text-[15px] font-medium text-paper/75 transition-colors hover:border-paper hover:text-paper"
                   >
                     See how it works
@@ -552,9 +565,6 @@ export default async function ComparePage() {
             </div>
           </Container>
         </section>
-      </main>
-
-      <SiteFooter />
-    </div>
+    </>
   )
 }

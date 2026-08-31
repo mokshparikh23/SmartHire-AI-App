@@ -47,9 +47,31 @@ import { Badge, Button } from './index.jsx'
   selection; the moment the buyer touches a radio the component owns it. An
   effect that wrote the prop back on every render would fight them.
 */
+/*
+  SPLIT 2026-09-01: appOrigin — the prop that makes this component work on two
+  origins.
+
+  UNSET (apps/web, /dashboard/billing): everything below behaves exactly as it
+  always has. Same fetch, same signed-out routing, same states. That call site
+  passes nothing and did not change.
+
+  SET (apps/site, /pricing): buy() stops fetching entirely and navigates to
+  `${appOrigin}/dashboard/billing?plan=<id>`.
+
+  WHY NOT A CREDENTIALED CROSS-ORIGIN FETCH. apps/web sends
+  `Access-Control-Allow-Origin: *` and cannot narrow it — the packaged Electron
+  renderer connects from file:// with origin `null`, which no allowlist can
+  match — and browsers reject `*` outright for a request with credentials. The
+  way round it would be to widen the Supabase auth cookie to the apex domain and
+  set SameSite=None, which is three security downgrades on the endpoint that
+  starts payments, to save one page load.
+
+  A STRING, NOT A CALLBACK. This is a 'use client' component rendered by a
+  Server Component; a function prop cannot cross that boundary. An origin can.
+*/
 export default function PricingPlans({
   tiers, packs, singlePack, signedIn,
-  initialPlanId = null, initialMode = null,
+  initialPlanId = null, initialMode = null, appOrigin = null,
 }) {
   const router = useRouter()
 
@@ -84,12 +106,41 @@ export default function PricingPlans({
     if (pending) return
     setError('')
 
+    /*
+      SPLIT 2026-09-01: the cross-origin path. See the note on appOrigin above.
+
+      signedIn is deliberately not consulted here. The marketing site cannot
+      know, and does not need to: /dashboard/billing answers it on the origin
+      that actually holds the cookie. Signed in, the plan is preselected; signed
+      out, proxy.js redirects to /login carrying ?next= so the plan survives the
+      sign-in — and, since emailRedirectTo was added, the confirmation email too.
+    */
+    if (appOrigin) {
+      window.location.href =
+        `${appOrigin}/dashboard/billing?plan=${encodeURIComponent(id)}`
+      return
+    }
+
     // Checkout needs an account to hang the credits on, so an anonymous buyer
     // signs up first rather than bouncing off a Stripe page they cannot
     // complete.
     //
-    // No ?next= here: signup ends on an email-confirmation screen and returns
-    // through /auth/callback, so a redirect target would be dropped on the way.
+    /*
+      This comment used to read:
+
+        "No ?next= here: signup ends on an email-confirmation screen and returns
+         through /auth/callback, so a redirect target would be dropped on the way."
+
+      SPLIT 2026-09-01: that was true of the TARGET and not of the MECHANISM.
+      /auth/callback has always read ?next= — nothing in the repo ever set one.
+      The hop losing it was the confirmation link, which is exactly what
+      emailRedirectTo writes, so AuthForm sets it now and the target survives.
+
+      This branch is unreachable from apps/site (appOrigin returns above) and is
+      reached on apps/web only by a signed-out visitor who somehow got to
+      /dashboard/billing, which proxy.js already prevents. Kept as the honest
+      fallback rather than removed.
+    */
     if (!signedIn) {
       router.push('/signup')
       return
