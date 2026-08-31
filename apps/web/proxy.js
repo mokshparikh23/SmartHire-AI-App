@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import { safeNext } from '@/lib/next-url'
+import { AUTH_COOKIE } from '@/lib/auth-cookie'
 
 /*
   PIVOT 2026-08-29: this file used to call the NETWORK `supabase.auth.getUser()`
@@ -83,9 +84,14 @@ function loginWithNext(request) {
   return NextResponse.redirect(to)
 }
 
-// @supabase/ssr writes sb-<project-ref>-auth-token, chunked as .0/.1 when the
-// payload is large enough to split across cookies.
-const AUTH_COOKIE = /^sb-.+-auth-token(\.\d+)?$/
+// DELETE-ACCOUNT 2026-09-01: moved to lib/auth-cookie.js, unchanged. Three files
+// now need to agree on what an auth cookie looks like — this one, lib/auth.js
+// and app/api/account/delete — and the header there explains why a second copy
+// is how the redirect loop comes back.
+//
+// // @supabase/ssr writes sb-<project-ref>-auth-token, chunked as .0/.1 when the
+// // payload is large enough to split across cookies.
+// const AUTH_COOKIE = /^sb-.+-auth-token(\.\d+)?$/
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname

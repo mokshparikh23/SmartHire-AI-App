@@ -64,3 +64,73 @@ export function siteUrl(request) {
     return 'http://localhost:3000'
   }
 }
+
+/* ─────────────────────────────────────────────────────── account deletion */
+
+/**
+ * Cancel a subscription NOW.
+ *
+ * NOT `cancel_at_period_end`. The only caller is app/api/account/delete, and the
+ * account is being destroyed within the next few hundred milliseconds — a
+ * subscription left to lapse would keep pointing at a customer whose
+ * credit_wallets row no longer exists, and its `customer.subscription.deleted`
+ * event would arrive weeks later with nothing to attribute it to.
+ *
+ * No final invoice is raised on the way out: subscriptions.cancel defaults both
+ * `invoice_now` and `prorate` to false, so cancelling does not charge the card.
+ *
+ * ALREADY-CANCELLED AND NOT-FOUND ARE SUCCESS, and that is not leniency — it is
+ * what makes the delete route retryable. A caller that treated them as failures
+ * could never finish a half-completed deletion: the second attempt would fail on
+ * the subscription the first attempt had already cancelled, and the account would
+ * be permanently undeletable. Everything else propagates, because "Stripe is
+ * down" and "the subscription is gone" must not be the same answer.
+ */
+export async function cancelSubscription(id) {
+  if (!id) return { ok: true, alreadyGone: true }
+  try {
+    const sub = await getStripe().subscriptions.cancel(id)
+    return { ok: true, alreadyGone: false, status: sub?.status ?? 'canceled' }
+  } catch (e) {
+    if (e?.code === 'resource_missing' || e?.statusCode === 404) {
+      return { ok: true, alreadyGone: true }
+    }
+    if (/no such subscription|already been canceled|already canceled/i.test(e?.message || '')) {
+      return { ok: true, alreadyGone: true }
+    }
+    throw e
+  }
+}
+
+/**
+ * Detach every saved card from a customer. Best effort, never fatal.
+ *
+ * THIS IS THE ANSWER TO "DELETE MY PAYMENT DETAILS", and deleting the CUSTOMER is
+ * not. `customers.del()` is irreversible and makes the invoice history
+ * unreachable from the customer view — the exact opposite of what
+ * public.billing_archive exists to guarantee, since our archive is only the index
+ * and Stripe holds the actual document. Razorpay has no delete-customer API at
+ * all, so deleting on Stripe only would make the two halves of the product behave
+ * differently based on which currency the buyer's geo headers resolved to.
+ *
+ * Detaching removes the payment instrument — the part a person actually means —
+ * and touches not one receipt.
+ *
+ * One card failing is not the deletion failing. The account is already on its way
+ * out; a stranded payment method is a support ticket, not a reason to leave
+ * someone unable to close their account.
+ */
+export async function detachCustomerPaymentMethods(customerId) {
+  if (!customerId) return 0
+  try {
+    const stripe = getStripe()
+    const { data } = await stripe.paymentMethods.list({ customer: customerId, limit: 100 })
+    let n = 0
+    for (const pm of data ?? []) {
+      try { await stripe.paymentMethods.detach(pm.id); n++ } catch { /* see above */ }
+    }
+    return n
+  } catch {
+    return 0
+  }
+}

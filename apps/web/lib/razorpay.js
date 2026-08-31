@@ -87,7 +87,19 @@ async function rzp(path, { method = 'GET', body } = {}) {
 
   if (!res.ok) {
     const detail = data?.error?.description || data?.error?.reason || res.statusText
-    throw new Error(`Razorpay ${method} ${path} failed (${res.status}): ${detail}`)
+    // DELETE-ACCOUNT 2026-09-01: the status and the description are attached as
+    // PROPERTIES as well as interpolated into the message. Purely additive —
+    // every existing caller reads only `.message` — and cancelSubscription()
+    // below needs it: it has to tell "this mandate is already cancelled" from
+    // "Razorpay is down", and the difference decides whether someone's account
+    // gets destroyed. Regex-ing a sentence Razorpay is free to reword is not a
+    // way to make that call.
+    //
+    // throw new Error(`Razorpay ${method} ${path} failed (${res.status}): ${detail}`)
+    throw Object.assign(
+      new Error(`Razorpay ${method} ${path} failed (${res.status}): ${detail}`),
+      { status: res.status, rzpCode: data?.error?.code ?? null, description: detail },
+    )
   }
   return data
 }
@@ -209,6 +221,48 @@ export function createSubscription({ planId, kind, email, notes }) {
 
 /** Reads a subscription back — the webhook needs its period end. */
 export const fetchSubscription = (id) => rzp(`/subscriptions/${encodeURIComponent(id)}`)
+
+/**
+ * Cancel a subscription NOW.
+ *
+ * `cancel_at_cycle_end: 0` is the whole call, and it is the most consequential
+ * line in this file. Razorpay's other mode lets the current cycle run out, and an
+ * account that is about to stop existing has nobody left to serve it to — but the
+ * real reason is TOTAL_COUNT above. A monthly subscription is created with 120
+ * cycles. A mandate left standing is a UPI Autopay or e-mandate authorisation
+ * against a real bank account that keeps debiting monthly FOR TEN YEARS, with no
+ * row left to attribute the charges to and no webhook able to write anything, and
+ * the customer's only recourse is their bank. That is the failure this function
+ * exists to prevent.
+ *
+ * ALREADY-CANCELLED AND NOT-FOUND ARE SUCCESS, and that is not leniency — it is
+ * what makes the delete route retryable. Razorpay answers both with a 4xx
+ * carrying a description. A caller that treated them as failures could never
+ * finish a half-completed deletion: the second attempt would fail on the mandate
+ * the first attempt had already cancelled, and the account would be permanently
+ * undeletable. Everything else propagates, because "Razorpay is down" and "the
+ * mandate is gone" must not be the same answer.
+ */
+const GONE = /already\s*(been\s*)?cancell?ed|does not exist|not\s*found|no\s*such|not\s*cancellable|already\s*(been\s*)?completed|already\s*expired/i
+
+export async function cancelSubscription(id) {
+  if (!id) return { ok: true, alreadyGone: true }
+  try {
+    const sub = await rzp(`/subscriptions/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      body: { cancel_at_cycle_end: 0 },
+    })
+    return { ok: true, alreadyGone: false, status: sub?.status ?? 'cancelled' }
+  } catch (e) {
+    // Only a 4xx can mean "gone". A 5xx whose body happens to match GONE is
+    // Razorpay failing, and reading that as a cancelled mandate is how a live
+    // mandate outlives the account it belonged to.
+    if (e?.status >= 400 && e?.status < 500 && GONE.test(e.description || e.message || '')) {
+      return { ok: true, alreadyGone: true }
+    }
+    throw e
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────── webhooks */
 
