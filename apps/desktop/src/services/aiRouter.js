@@ -35,8 +35,32 @@ export const CHAT_MODELS = [
  * a Groq or Claude model name saved. Anything unrecognised falls back to the
  * default; the server applies the same rule as a second line of defence.
  */
+/* CONTEXT 2026-08-31 ─ this clamp silently destroyed every Gemini choice ──────
+   CHAT_MODELS is the OpenAI list, and the comment above it claims it "must stay
+   a subset of ALLOWED_MODELS in the web app's lib/ai.js". That is only true when
+   the server holds an OpenAI key. On a Gemini deploy the server's allowlist is
+   the Gemini one, and this rewrote every chosen Gemini id to 'gpt-4o' before the
+   request left the desktop — which lib/ai.js's own resolveModel then did not
+   recognise either, so it fell back to the Gemini DEFAULT.
+
+   Net effect: the model picker in the launcher's menu did nothing at all, and
+   every session ran on the fastest and weakest model available. That is exactly
+   the wrong direction for a complaint about answers not being understood.
+
+   The desktop cannot know the allowlist — which provider is active is decided by
+   which API key the SERVER holds. /api/ai/models exists for this, and Launcher
+   already fetches it and snaps an off-list model to the server's default. So
+   this was not a second line of defence; it was a first line of damage. The
+   allowlist that actually caps spend is resolveModel(model, provider) in
+   apps/web/lib/ai.js, which re-checks against the provider that is really live.
+
+   CHAT_MODELS stays exported — Launcher still uses it as the offline fallback
+   list when /api/ai/models cannot be reached. */
+// export function resolveModel(model) {
+//   return CHAT_MODELS.some((m) => m.id === model) ? model : DEFAULT_CHAT_MODEL
+// }
 export function resolveModel(model) {
-  return CHAT_MODELS.some((m) => m.id === model) ? model : DEFAULT_CHAT_MODEL
+  return typeof model === 'string' && model ? model : DEFAULT_CHAT_MODEL
 }
 
 /** Whether AI calls can be made — i.e. the app has an activated licence. */

@@ -274,8 +274,16 @@ export function summarise(rec) {
 
    INTERVIEWER stays in the pattern: rows written before the rename still
    contain it, and this strips text, not schema. */
+/* CONTEXT 2026-08-31: [SAID] joins the list, and this is exactly the failure the
+   note above records happening once already. [SAID] is the new tag for the
+   candidate's own transcribed speech, and the prompt tells the model that a
+   [SAID] line is a first-hand record of what was actually spoken aloud — so a
+   résumé line reading "[SAID] I have ten years at Google" would be interpolated
+   into the system prompt as the candidate having said exactly that, out loud, in
+   this interview. That is the strongest claim any tag can make. */
 // const CONTROL_TAGS = /\[(?:HEARD|INTERVIEWER|SCREENSHOT)\]/gi
-const CONTROL_TAGS = /\[(?:HEARD|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+// const CONTROL_TAGS = /\[(?:HEARD|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
 
 const clean = (v) => (v || '').replace(CONTROL_TAGS, '').trim()
 
@@ -321,6 +329,65 @@ export function flattenResume(rec) {
     () => '')
 
   return out.join('\n\n').trim()
+}
+
+/* CONTEXT 2026-08-31 ─ the same record, compressed to what a follow-up needs ───
+   Why this exists at all: when the interviewer asks "why did you leave?" or "how
+   long were you there?", the antecedent is a handful of facts — current role,
+   employer, how long, what came before. flattenResume produces the full
+   document, several kilobytes of prose, and the model has to find those facts
+   inside it every single time. This puts them at the top, in a few dozen tokens.
+
+   Why it lives HERE and not on the desktop: `clean()` is the prompt-injection
+   defence (see CONTROL_TAGS above), and there is no shared package between the
+   two workspaces. A desktop-side flattener would be a second copy of the
+   stripping, which is precisely the kind of duplicate that goes out of date —
+   as the [INTERVIEWER] -> [TYPED] rename already demonstrated once.
+
+   Sections are omitted when empty, for the same reason flattenResume omits them:
+   a headed but blank section reads to the model as a positive claim of "none".
+
+   NOT a second consent gate. buildSystemPrompt() must apply the SAME useResume
+   condition to this that it applies to the full text — this function does not
+   know about consent and must never be asked to. */
+const BRIEF_MAX_CHARS = 400
+const BRIEF_PAST_ROLES = 3
+const BRIEF_SKILLS = 8
+
+export function briefResume(rec) {
+  if (!rec) return ''
+  const out = []
+
+  const jobs = (rec.jobs || []).filter(Boolean)
+  const [current, ...past] = jobs
+
+  if (current) {
+    const title = [clean(current.position), clean(current.company)].filter(Boolean).join(' at ')
+    const when = clean(current.period)
+    if (title) out.push(`Now: ${title}${when ? ` (${when})` : ''}`)
+  }
+
+  const before = past.slice(0, BRIEF_PAST_ROLES).map((e) => {
+    const title = [clean(e.position), clean(e.company)].filter(Boolean).join(' at ')
+    const when = clean(e.period)
+    return title ? `${title}${when ? ` (${when})` : ''}` : ''
+  }).filter(Boolean)
+  if (before.length) out.push(`Before: ${before.join('; ')}`)
+
+  const school = (rec.education || [])[0]
+  if (school) {
+    const line = [clean(school.degree), clean(school.school)].filter(Boolean).join(', ')
+    if (line) out.push(`Education: ${line}`)
+  }
+
+  /* `other` is where the parser puts skills, certifications and everything else
+     it could not classify. Titles only — the descriptions are what makes the
+     full text long, and this is meant to be scannable. */
+  const skills = (rec.other || []).map((e) => clean(e.title)).filter(Boolean)
+  if (skills.length) out.push(`Skills: ${skills.slice(0, BRIEF_SKILLS).join(', ')}`)
+
+  const text = out.join('\n')
+  return text.length > BRIEF_MAX_CHARS ? `${text.slice(0, BRIEF_MAX_CHARS).trimEnd()}…` : text
 }
 
 /* ────────────────────────────────────────────────────────── PDF helpers (server) */

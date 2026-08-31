@@ -4,8 +4,13 @@ import { useSettingsStore } from '../store/settingsStore'
 import { askAIStream } from '../services/aiRouter'
 import { createUtteranceAggregator } from '../utils/utteranceAggregator'
 import { createLogger } from '../utils/logger'
+// SELF-VOICE 2026-08-31: the desktop mirror of lib/resume.js's tag stripping.
+import { stripControlTags } from '../utils/utterance'
 import { useVoice } from './useVoice'
 import { useLiveVoice } from './useLiveVoice'
+// SELF-VOICE 2026-08-31: the candidate's own microphone, captured alongside the
+// interviewer's loopback. See that file's header for the whole argument.
+import { useSelfVoice } from './useSelfVoice'
 
 const segLog = createLogger('seg')
 
@@ -32,11 +37,26 @@ const segLog = createLogger('seg')
    system audio the speaker on the other end is no longer necessarily an
    interviewer. [TYPED] describes the surface without asserting who is at it.
    buildSystemPrompt() reads these exact strings — change one, change both. */
+/* SELF-VOICE 2026-08-31 ─ a tag that names a SPEAKER, deliberately ────────────
+   The note above states the rule this breaks: tags name the SURFACE a message
+   came from, never who is at it. That rule was right when there was one audio
+   stream — "heard" fully identified it.
+
+   With the candidate's own microphone captured alongside the loopback there are
+   two audio surfaces and "heard" no longer identifies anyone: both are heard.
+   So [SAID] names the speaker, on purpose, and the prompt's WHO IS SPEAKING
+   section is written around exactly that.
+
+   buildSystemPrompt() reads these exact strings — change one, change both. And
+   lib/resume.js's CONTROL_TAGS must strip it, or a résumé line beginning
+   "[SAID] " is interpolated into the system prompt as something the candidate
+   actually said out loud in this interview. */
 const TAG = {
   // voice:  '[HEARD]',        // transcribed from the room; the candidate speaking
   // manual: '[INTERVIEWER]',  // typed into the transcript bar
   // chat:   '[INTERVIEWER]',  // typed into the chat thread
   voice:  '[HEARD]',        // transcribed from the captured audio
+  self:   '[SAID]',         // transcribed from the candidate's own microphone
   manual: '[TYPED]',        // typed into the transcript bar
   chat:   '[TYPED]',        // typed into the chat thread
   screen: '[SCREENSHOT]',   // asked about a captured image
@@ -47,22 +67,65 @@ const TAG = {
  * multimodal array a screenshot uses — where the tag belongs on the text part,
  * not on the image.
  */
-function tagContent(content, source) {
-  const tag = TAG[source] || TAG.voice
+/* SELF-VOICE 2026-08-31 ─ why `said` merges INTO the message, not beside it ────
+   The candidate's lines could have been separate user messages. They are folded
+   into the same one for two reasons:
 
-  if (typeof content === 'string') return `${tag} ${content}`
+     - consecutive same-role messages are a portability risk on Gemini's
+       OpenAI-compatible surface, and this app switches providers by which key
+       the server holds;
+     - putting the antecedent immediately adjacent to the follow-up is where
+       attention is strongest. "[SAID] …Redis cache… / [HEARD] Why?" reads as one
+       exchange, which is what it is.
+
+   Taken from the END when clipped: the referent of "why?" is the last thing
+   said, never the first. */
+const SELF_CHARS_PER_TURN = 600
+
+function saidBlock(said) {
+  if (!Array.isArray(said) || !said.length) return ''
+  const lines = []
+  let budget = SELF_CHARS_PER_TURN
+  for (let i = said.length - 1; i >= 0; i--) {
+    // SELF-VOICE 2026-08-31: a transcribed line that itself contains a tag could
+    // otherwise claim to be a different speaker. See stripControlTags.
+    const line = stripControlTags((said[i] || '').trim())
+    if (!line) continue
+    if (line.length > budget) break
+    budget -= line.length
+    lines.unshift(`${TAG.self} ${line}`)
+  }
+  return lines.length ? `${lines.join('\n')}\n` : ''
+}
+
+// SELF-VOICE 2026-08-31: `said` prepends the candidate's own lines to the same
+// message. Optional, so every existing call site is unchanged.
+// function tagContent(content, source) {
+function tagContent(content, source, said) {
+  const tag = TAG[source] || TAG.voice
+  const prefix = saidBlock(said)
+
+  // if (typeof content === 'string') return `${tag} ${content}`
+  // SELF-VOICE 2026-08-31: strip any tag the text itself carries, for the same
+  // reason lib/resume.js strips them out of a résumé — the tag decides who the
+  // model thinks spoke, so text must never be able to supply its own.
+  if (typeof content === 'string') return `${prefix}${tag} ${stripControlTags(content)}`
 
   if (Array.isArray(content)) {
     let tagged = false
     const parts = content.map((part) => {
       if (!tagged && part?.type === 'text') {
         tagged = true
-        return { ...part, text: `${tag} ${part.text}` }
+        // SELF-VOICE 2026-08-31: the self lines go on the text part, never on
+        // the image — same reason the tag itself does.
+        // return { ...part, text: `${tag} ${part.text}` }
+        return { ...part, text: `${prefix}${tag} ${stripControlTags(part.text)}` }
       }
       return part
     })
     // An array with no text part at all would otherwise go untagged.
-    return tagged ? parts : [{ type: 'text', text: tag }, ...parts]
+    // return tagged ? parts : [{ type: 'text', text: tag }, ...parts]
+    return tagged ? parts : [{ type: 'text', text: `${prefix}${tag}` }, ...parts]
   }
 
   return content
@@ -123,16 +186,58 @@ export function useInterviewSession() {
      Every user turn is tagged, not just the last — the same reasoning sendChat
      records below: an untagged history drifts the model straight back to
      treating typed input as something overheard. */
-  const HISTORY_TURNS = 3
-  const HISTORY_ANSWER_CHARS = 800
+  /* CONTEXT 2026-08-31 ─ three turns loses the thread by the second follow-up ──
+     An interview follow-up chain routinely runs four or five deep: "tell me
+     about a time you improved performance" -> "why?" -> "and what happened?" ->
+     "would you do it again?". At three turns the second "why" has already lost
+     the original topic, which is exactly the reported symptom.
+
+     Six turns at roughly 250 tokens each is ~1500 tokens, against a system
+     prompt that already runs 1500-3000 with a resume attached. MAX_TOKENS in
+     apps/web/lib/ai.js is the OUTPUT budget and is unaffected.
+
+     Clipping is tiered rather than uniform: the model needs the TOPIC of an old
+     answer but the TEXT of the immediately preceding one, because that is what
+     "why did you say that" points at. 3x800 = 2400 chars becomes 2x800 + 4x400 =
+     3200 — modest growth for double the depth. */
+  // const HISTORY_TURNS = 3
+  // const HISTORY_ANSWER_CHARS = 800
+  const HISTORY_TURNS = 6
+  const HISTORY_ANSWER_CHARS = 800      // the two most recent turns
+  const HISTORY_ANSWER_CHARS_OLD = 400  // everything older
+  const RECENT_FULL_TURNS = 2
+
+  /* CONTEXT 2026-08-31: t.a.slice(n) cuts mid-word, and in Devanagari or
+     Gujarati it can cut mid-grapheme — splitting a combining mark off the
+     consonant it belongs to, or halving a UTF-16 surrogate pair. Back up to the
+     last whitespace and mark the cut so the model knows it is reading an
+     excerpt rather than a sentence that trailed off. */
+  const clipAnswer = (text, limit) => {
+    if (text.length <= limit) return text
+    const cut = text.slice(0, limit)
+    const lastSpace = cut.lastIndexOf(' ')
+    return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
+  }
 
   const recentHistory = useCallback(() => {
     const { turns } = useSessionStore.getState()
-    return turns.slice(-HISTORY_TURNS).flatMap((t) => {
+    const recent = turns.slice(-HISTORY_TURNS)
+    return recent.flatMap((t, i) => {
       if (!t.q) return []
-      const pair = [{ role: 'user', content: tagContent(t.q, t.source || 'voice') }]
-      if (t.a) pair.push({ role: 'assistant', content: t.a.slice(0, HISTORY_ANSWER_CHARS) })
-      return pair
+      /* CONTEXT 2026-08-31: a turn that failed with no answer contributed a lone
+         user message, which puts two user messages back to back. That is noise
+         rather than context, and consecutive same-role messages are a
+         portability risk on Gemini's OpenAI-compatible surface. */
+      if (!t.a) return []
+      const fromEnd = recent.length - 1 - i
+      const limit = fromEnd < RECENT_FULL_TURNS ? HISTORY_ANSWER_CHARS : HISTORY_ANSWER_CHARS_OLD
+      return [
+        // SELF-VOICE 2026-08-31: replay what the candidate actually said before
+        // that question, so a follow-up two turns later still has its antecedent.
+        // { role: 'user', content: tagContent(t.q, t.source || 'voice') },
+        { role: 'user', content: tagContent(t.q, t.source || 'voice', t.said) },
+        { role: 'assistant', content: clipAnswer(t.a, limit) },
+      ]
     })
   }, [])
 
@@ -186,9 +291,17 @@ export function useInterviewSession() {
       asked = store.extendQuestion(q)
     } else {
       store.commitInterrupted()
+      /* SELF-VOICE 2026-08-31: take everything the candidate has said since the
+         last question and attach it to THIS turn. Draining rather than reading:
+         each line belongs to exactly one turn — the next question asked after
+         it — so this gives no duplication and the right order for free.
+
+         Drained after commitInterrupted, before setQuestion stores it. */
+      const said = store.drainSelfSpeech()
       // keepAnswer: the previous answer stays readable until the first token of
       // the new one lands, instead of the card blanking to three dots.
-      store.setQuestion(q, source, { keepAnswer: true })
+      // store.setQuestion(q, source, { keepAnswer: true })
+      store.setQuestion(q, source, { keepAnswer: true, said })
     }
 
     // Remember which utterance the card is showing, so the NEXT emit can decide
@@ -212,8 +325,15 @@ export function useInterviewSession() {
         // PIPELINE 2026-08-31: `asked`, not `q` — on a chained turn the question
         // that goes up is the MERGED one the store just assembled, not the
         // fragment that arrived. `q` remains correct for every other path.
+        // SELF-VOICE 2026-08-31: currentSaid read back from the store rather
+        // than closed over, so the chained branch — which does not drain — still
+        // carries the self lines the head of the chain collected.
         // [...recentHistory(), { role: 'user', content: tagContent(content ?? q, source) }],
-        [...recentHistory(), { role: 'user', content: tagContent(content ?? asked, source) }],
+        // [...recentHistory(), { role: 'user', content: tagContent(content ?? asked, source) }],
+        [...recentHistory(), {
+          role: 'user',
+          content: tagContent(content ?? asked, source, useSessionStore.getState().currentSaid),
+        }],
         (chunk) => {
           if (gen !== genRef.current) return     // a newer question took over
           bufRef.current += chunk
@@ -251,7 +371,18 @@ export function useInterviewSession() {
   // Stable identity: useVoice tears down and re-acquires the mic if this changes.
   // PIPELINE 2026-08-31: takes the whole emit payload rather than just its text.
   // const onQuestion = useCallback((text) => generate(text, 'voice'), [generate])
-  const onQuestion = useCallback((u) => generate(u.text, 'voice', null, u), [generate])
+  const onQuestion = useCallback((u) => {
+    /* SELF-VOICE 2026-08-31: feed the echo backstop. These are the last few
+       things the OTHER side said; speakerDedupe compares an incoming self line
+       against them, so an interviewer sentence that came back through the
+       candidate's speakers is dropped instead of being attributed to them.
+
+       Kept short on purpose: an echo arrives within a second or two of the
+       original, so a longer window only adds false positives. */
+    const RECENT_REMOTE = 4
+    recentRemoteRef.current = [...recentRemoteRef.current, u.text].slice(-RECENT_REMOTE)
+    generate(u.text, 'voice', null, u)
+  }, [generate])
 
   // SEGMENTATION 2026-08-30: the aggregator is built once and never rebuilt, so
   // its emit callback reads the CURRENT onQuestion through a ref rather than
@@ -309,6 +440,25 @@ export function useInterviewSession() {
      text STAYS on screen — the user watches "So what is" persist across their
      own pause, which is the clearest possible signal that the app is waiting on
      purpose rather than having dropped the question. */
+  /* SELF-VOICE 2026-08-31 ─ the three refs the self-capture path needs ─────────
+     All refs, none state: nothing renders from any of them, and putting them in
+     state would re-run the capture effects and re-acquire the device.
+
+     remoteSpeakingRef is the temporal echo gate. It mirrors the primary VAD's
+     speaking state, and useSelfVoice discards any self speech that BEGINS while
+     it is true — which on speakers is the interviewer's own voice coming back in
+     through the microphone.
+
+     recentRemoteRef is the text backstop's input: the last few things the
+     interviewer said, for speakerDedupe to compare against.
+
+     harvestSelfRef is filled in by useSelfVoice with its harvest function, so
+     the aggregator's speech-start edge can reach it without this hook knowing
+     anything about recorders. */
+  const remoteSpeakingRef = useRef(false)
+  const recentRemoteRef = useRef([])
+  const harvestSelfRef = useRef(null)
+
   const aggRef = useRef(null)
   /* PIPELINE 2026-08-31 ─ the aggregator died in dev and nobody noticed ───────
      main.jsx wraps the app in <React.StrictMode>, which in development runs
@@ -336,8 +486,37 @@ export function useInterviewSession() {
       // emit: (u) => { onQuestionRef.current?.(u.text) },
       emit: (u) => { onQuestionRef.current?.(u) },
       onHoldChange: (text) => { heldRef.current = text; partialRef.current = text },
+      /* SELF-VOICE 2026-08-31: the interviewer starting to talk is, by
+         construction, the candidate having stopped. Harvest there — the upload
+         then overlaps the interviewer still speaking AND the aggregator's hold,
+         so the text lands in the store before generate() is ever called.
+
+         harvest() returns immediately; nothing here awaits anything. That is
+         what keeps the "a COMPLETE question is never held" guarantee intact. */
+      onSpeechStart: () => {
+        remoteSpeakingRef.current = true
+        harvestSelfRef.current?.('remote-speech')
+      },
     })
   }
+
+  /* SELF-VOICE 2026-08-31: the falling edge of the same signal. The aggregator
+     has no onSpeechEnd option — noteSpeechEnd is called by the capture hooks, so
+     this reads the state it already maintains rather than adding a second
+     callback for one boolean. Polling on a frame is far cheaper than the render
+     a state update would cost, and this is the same imperative pattern the level
+     meter and the caption already use. */
+  useEffect(() => {
+    if (!isRunning) return
+    let raf = 0
+    const tick = () => {
+      const agg = aggRef.current
+      if (agg && !agg.isDisposed()) remoteSpeakingRef.current = agg.inspect().speaking
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [isRunning])
 
   /* PIPELINE 2026-08-31 ─ one bad handshake used to cost the whole interview ───
      setLiveFailed(false) existed in exactly one place: start(). So a single
@@ -406,6 +585,32 @@ export function useInterviewSession() {
     // onQuestion,
     aggRef,
     levelRef,
+  })
+
+  /* SELF-VOICE 2026-08-31 ─ the candidate's own microphone, alongside loopback ─
+     Enabled only when the PRIMARY capture is system loopback. On 'mic' the
+     primary already hears the whole room and there is no cheap way to separate
+     the two speakers, so this stays off and buildSystemPrompt() adds a CAPTURE
+     paragraph telling the model not to assert who spoke.
+
+     Also off in 'followups' mode: that prompt is written for the interviewer, is
+     never sent [SAID], and capturing for it would be paid-for work nobody reads.
+
+     No new OS permission is needed — main.cjs already calls
+     askForMediaAccess('microphone') at startup and the plist key is already
+     shipped. */
+  const answerMode = useSettingsStore((s) => s.answerMode)
+
+  const onSelfSpeech = useCallback((text) => {
+    useSessionStore.getState().appendSelfSpeech(text)
+  }, [])
+
+  useSelfVoice({
+    enabled: isRunning && micEnabled && captureSource === 'system' && answerMode === 'answer',
+    remoteSpeakingRef,
+    harvestRef: harvestSelfRef,
+    onSelfSpeech,
+    recentRemoteRef,
   })
 
   const askManual = useCallback((text) => generate(text, 'manual'), [generate])

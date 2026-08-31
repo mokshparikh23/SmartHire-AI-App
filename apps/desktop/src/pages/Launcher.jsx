@@ -128,10 +128,26 @@ export default function Launcher({ session, licenseData, onLogout }) {
     // is deliberate. It is a preference the ⋮ menu can override, seeded when the
     // candidate is picked — see the effect above. Adding it to this object would
     // make Start discard an override made seconds earlier.
+    /* CONTEXT 2026-08-31: candidateName, companyDomain and resumeBrief added.
+       candidateName was already fetched and already rendered in the list above —
+       it just never made it into the store the prompt reads, so the model never
+       knew whose interview it was sitting in. companyDomain and resumeBrief are
+       newly returned by /api/profiles.
+
+       This call is also what makes the tightened partialize in settingsStore
+       safe: every résumé field is rewritten here from a freshly fetched row on
+       every start, so nothing depends on the persisted copy. */
+    // setInterviewContext({
+    //   company: profile.company, role: profile.role, resume: profile.resume,
+    //   resumeConsent: profile.resumeConsent, jobDescription: profile.jobDescription,
+    // })
     setInterviewContext({
       company:        profile.company,
+      companyDomain:  profile.companyDomain || '',
       role:           profile.role,
+      candidateName:  profile.candidateName || '',
       resume:         profile.resume,
+      resumeBrief:    profile.resumeBrief || '',
       resumeConsent:  profile.resumeConsent,
       jobDescription: profile.jobDescription,
     })

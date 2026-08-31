@@ -119,3 +119,28 @@ export function isFiller(text) {
 export function worthAnswering(text) {
   return isSubstantive(text) && !isFiller(text)
 }
+
+/* SELF-VOICE 2026-08-31 ─ the desktop mirror of lib/resume.js's CONTROL_TAGS ───
+   Every user message sent to the model is prefixed with a tag that tells it who
+   spoke — [HEARD] the interviewer, [SAID] the candidate, [TYPED] the keyboard.
+   The model is instructed to read that tag FIRST and to treat what follows
+   accordingly, so text containing a tag is text that can rewrite who said it.
+
+   The web app already strips these from résumés, which is where the risk is
+   largest and where the class of bug has already occurred once. This closes the
+   other door: text that arrives through the transcript. It is unlikely from
+   speech — a transcriber has little reason to emit square brackets — but
+   "unlikely" is not a security property, and the typed transcript bar and the
+   chat composer are plain text fields where it is not unlikely at all.
+
+   Strips only, never rejects: a question is still a question with a stray tag
+   removed from it, and dropping the utterance would be a worse failure than
+   answering a slightly shortened one.
+
+   Kept in step with lib/resume.js's copy BY HAND — there is no shared package
+   between the two workspaces. Change one, change both. */
+const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+
+export function stripControlTags(text) {
+  return typeof text === 'string' ? text.replace(CONTROL_TAGS, '').trim() : text
+}

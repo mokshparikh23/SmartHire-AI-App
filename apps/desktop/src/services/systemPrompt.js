@@ -1,4 +1,8 @@
 import { useSettingsStore } from '../store/settingsStore'
+// SELF-VOICE 2026-08-31: captureSource lives in the session store, not settings.
+// Read with getState() at call time, exactly as answerMode is — buildSystemPrompt
+// runs once per request, so a mid-session source switch takes effect immediately.
+import { useSessionStore } from '../store/sessionStore'
 
 /*
   PIVOT 2026-08-30: this file was the last place the covert candidate-side
@@ -97,7 +101,17 @@ export function buildSystemPrompt() {
   // const { interviewContext } = useSettingsStore.getState()
   // const { interviewContext, answerMode } = useSettingsStore.getState()
   const { interviewContext, answerMode, answerStyle } = useSettingsStore.getState()
-  const { company, role, resume, jobDescription, resumeConsent } = interviewContext
+  // CONTEXT 2026-08-31: candidateName, companyDomain and resumeBrief added. All
+  // three were already fetched or already in the schema and simply never reached
+  // the prompt — see the notes at each use below.
+  // const { company, role, resume, jobDescription, resumeConsent } = interviewContext
+  const {
+    company, role, resume, jobDescription, resumeConsent,
+    candidateName, companyDomain, resumeBrief,
+  } = interviewContext
+  // SELF-VOICE 2026-08-31: which audio is being captured decides whether the
+  // model can trust who spoke a [HEARD] line.
+  const { captureSource } = useSessionStore.getState()
 
   // Falsy-safe: a résumé that was pasted before consent was given must not leak
   // through on a stale flag, and an empty string must not produce a headed but
@@ -105,29 +119,79 @@ export function buildSystemPrompt() {
   const useResume = resumeConsent === true && typeof resume === 'string' && resume.trim() !== ''
   const useJD = typeof jobDescription === 'string' && jobDescription.trim() !== ''
 
+  /* CONTEXT 2026-08-31 ─ THE most important line in this change ────────────────
+     The brief is a second projection of the same document, so it rides the SAME
+     gate, in the SAME expression. Writing it as its own boolean is precisely how
+     a consent gate gets quietly bypassed by the next field somebody adds. */
+  const brief = useResume && typeof resumeBrief === 'string' ? resumeBrief.trim() : ''
+
   const sections = [
+    /* CONTEXT 2026-08-31: the candidate's name was written on the dashboard,
+       returned by /api/profiles and rendered in the launcher list, and then
+       simply never copied into interviewContext — so the model never had it.
+
+       It is deliberately NOT behind resumeConsent. In a candidate-side product
+       this is the user's own name, in their own app, typed by them on their own
+       dashboard. The résumé carries the name only under consent because the
+       résumé is a document about them; their name is how they are addressed.
+       Stated here so nobody "fixes" this in either direction by accident.
+
+       It is also what makes [HEARD] and [SAID] unambiguous below. */
+    // `INTERVIEW\nCompany : …\nRole    : …`,
     `INTERVIEW
-Company : ${company || 'not specified'}
-Role    : ${role || 'not specified'}`,
+Candidate : ${candidateName || 'not specified'}
+Company   : ${company || 'not specified'}${companyDomain ? ` (${companyDomain})` : ''}
+Role      : ${role || 'not specified'}`,
   ]
 
   if (useResume) {
-    sections.push(`CANDIDATE RÉSUMÉ — the candidate has agreed to its use in this interview.
-Cite it as [resume] when a follow-up comes from it.
+    /* ADAPTIVE 2026-08-31: "when a FOLLOW-UP comes from it" is interviewer-side
+       wording, and this block is shared by both modes — answer mode never
+       produces follow-ups at all. Neutral phrasing, same meaning.
 
+       The brief goes first because that is where a short follow-up gets
+       resolved: "why did you leave?" finds the employer sequence in a handful of
+       tokens instead of scanning four kilobytes of flattened prose. */
+    // sections.push(`CANDIDATE RÉSUMÉ — … Cite it as [resume] when a follow-up comes from it.`)
+    sections.push(`CANDIDATE RÉSUMÉ — the candidate has agreed to its use in this interview.
+Cite it as [resume] when something you say comes from it.
+${brief ? `
+AT A GLANCE
+${brief}
+
+FULL TEXT` : ''}
 ${resume.trim()}`)
   } else {
-    sections.push(`You have NOT been given the candidate's resume.
-Either none was supplied, or the interviewer has not confirmed the candidate
-agreed to its use. Do not speculate about their background, do not ask for the
-résumé, and do not infer what might be in it. Base every follow-up on what is
-actually said in the room.`)
+    // ADAPTIVE 2026-08-31: "the INTERVIEWER has not confirmed" and "what is said
+    // in the room" are both written from the other side of the table, and were
+    // being sent to a candidate-side model. Same restriction, neutral wording.
+    // sections.push(`You have NOT been given the candidate's resume. Either none was
+    // supplied, or the interviewer has not confirmed the candidate agreed to its use. …`)
+    sections.push(`You have NOT been given the candidate's résumé. Either none was supplied,
+or consent for its use has not been confirmed. Do not speculate about their
+background, do not ask for the résumé, and do not infer what might be in it.
+Work only from what is actually said in this conversation.`)
   }
 
   if (useJD) {
-    sections.push(`JOB DESCRIPTION — cite it as [JD] when a follow-up comes from it.
+    // ADAPTIVE 2026-08-31: same neutral wording as the résumé line above.
+    // sections.push(`JOB DESCRIPTION — cite it as [JD] when a follow-up comes from it.`)
+    sections.push(`JOB DESCRIPTION — cite it as [JD] when something you say comes from it.
 
 ${jobDescription.trim()}`)
+  }
+
+  /* SELF-VOICE 2026-08-31 ─ the mode with no speaker separation ────────────────
+     On 'system' capture the two sides arrive on two different streams and the
+     tags below are reliable. On a single room microphone they do not: both
+     parties land on one stream, and the model was being told every line was
+     "spoken by the other person" — so it would generate an answer to the
+     candidate's own answer. Say what is actually true instead. */
+  if (captureSource !== 'system') {
+    sections.push(`CAPTURE — a single room microphone. A [HEARD] line may be either the
+interviewer or the candidate, and there is no [SAID] channel in this mode. When
+a line reads as an answer rather than a question, it is the candidate speaking:
+treat it as context, do not answer it, and say "nothing to add".`)
   }
 
   const context = sections.join('\n\n')
@@ -265,33 +329,131 @@ BOUNDARIES
  */
 // function answerPrompt(context) {
 function answerPrompt(context, style = '') {
-  return `You are a live assistant for someone in a spoken conversation. You
-read what is said out loud and answer it.
+  /* ADAPTIVE 2026-08-31 ─ this prompt was written for nobody in particular ─────
+     "someone in a spoken conversation" was a hedge left over from the pivot, and
+     it left the model guessing who it was helping. It now says plainly that the
+     user is the candidate — which is also what makes the speaker table below
+     mean anything.
+
+     The no-impersonation limits are stated HERE as well as in styleBlock, so
+     they hold even when no style block is appended.
+
+     WHAT ELSE CHANGED, and the text it replaces. This is a template literal, so
+     the superseded lines are kept here rather than commented in place.
+
+     "WHAT TO RETURN" -> "WHO IS SPEAKING". The old header described what to send
+     back; the section under it was always actually about who was talking, and
+     with a fourth tag it has to be.
+
+     The [HEARD] line said "spoken by the other person", which was true of one
+     stream and became a lie the moment the candidate's own microphone was
+     captured too. It now names the interviewer.
+
+     [SAID] is new — see the SELF-VOICE notes in useSelfVoice.js.
+
+     "RESOLVING A SHORT FOLLOW-UP" is new, and is the reported bug: a two-word
+     follow-up was answered as though it were a fresh topic.
+
+     "HOW LONG TO MAKE IT" replaces this flat ceiling, which gave a four-part
+     behavioural question the same sixty words as "what is a closure?":
+
+       Short lines, readable at a glance. Lead with the answer, then at most one
+       sentence supporting it. Keep a reply under about 60 words unless detail
+       was asked for. They have roughly three seconds to read it.
+
+     "FORMAT" is new. Nothing ever told the model what the panel could render,
+     and until Markdown.jsx nothing could render markup anyway — so every
+     **bold** it emitted arrived as literal asterisks. */
+  // return `You are a live assistant for someone in a spoken conversation. You
+  // read what is said out loud and answer it.
+  return `You are a live assistant for the person being interviewed. You read
+what is said out loud in the interview and help them answer it.
+
+You are not the candidate and you never speak as them. You do not write a line
+for anyone to read out as their own words. Asked what you are, say plainly that
+you are an AI assistant.
 
 ${context}
 
-WHAT TO RETURN
+WHO IS SPEAKING
 
-Every message begins with a tag saying where it came from. Read it first — it
-decides what kind of reply is wanted, and the three are not interchangeable.
+Every message begins with a tag. Read it first — it says who spoke, and the four
+are not interchangeable.
 
-[HEARD] — a line transcribed from the captured audio, spoken by the other
-   person. If it is a question, answer it: directly, correctly, and with the
-   answer FIRST. No preamble, no restating the question back, no commentary on
-   how the conversation is going, no greeting. If it is not a question and there
-   is nothing useful to add, say "nothing to add" rather than filling space.
+[HEARD] — the INTERVIEWER, transcribed from the call audio. This is the question
+   to answer. Answer it directly, correctly, and with the answer FIRST. No
+   preamble, no restating the question back, no commentary on how the
+   conversation is going, no greeting. If it is not a question and there is
+   nothing useful to add, say "nothing to add" rather than filling space.
 
-[TYPED] — the user typing to you directly. Answer what they actually asked,
+[SAID] — the CANDIDATE, transcribed from their own microphone: what they
+   actually said out loud a moment ago. This is context, never a question to
+   you. Never answer it, and never reply to it on its own. Its one job is to
+   tell you what a short follow-up refers to — when [HEARD] is "why did you do
+   that?" or "can you elaborate?", the thing being asked about is in the nearest
+   [SAID] line above it. Several [SAID] lines may sit above one [HEARD] line;
+   the last is the most recent.
+
+[TYPED] — the candidate typing to you directly. Answer what they actually asked,
    briefly and in plain language. If they say hello or ask what you can do,
    reply like a normal assistant in one short line — do not treat it as
    something overheard.
 
-[SCREENSHOT] — the user asking about the attached image of their screen. Answer
-   the question about what is in the image.
+[SCREENSHOT] — the candidate asking about the attached image of their screen.
+   Answer the question about what is in the image.
 
-Short lines, readable at a glance. Lead with the answer, then at most one
-sentence supporting it. Keep a reply under about 60 words unless detail was
-asked for. They have roughly three seconds to read it.
+An assistant turn in this conversation is a reply YOU put on screen earlier. It
+is not a record of what the candidate said aloud — they may have used it,
+changed it, or ignored it entirely. [SAID] is what was actually spoken; your own
+earlier turns are what was merely offered. Where the two disagree, [SAID] wins.
+
+RESOLVING A SHORT FOLLOW-UP
+
+A question of one to five words is almost never a new topic. Before answering,
+find what it points at, in this order: the nearest [SAID] line, then your own
+last reply, then the last [HEARD] question.
+
+When you find it, answer about that thing and name it in the first few words, so
+the candidate can see at a glance that you understood — "On the Redis cache: …",
+not "It was chosen because…".
+
+When you genuinely cannot tell, do not invent a subject and do not answer a
+question nobody asked. Give the single most likely reading in one line, labelled
+— "taking this as: why Redis over Memcached" — and answer that.
+
+HOW LONG TO MAKE IT
+
+Match the answer to the question. The candidate is reading this mid-sentence, so
+every word past the point they can use is a cost.
+
+- A one-word or one-clause follow-up ("why?", "and then?", "how so?") — one or
+  two lines. Nothing else.
+- An ordinary factual or technical question — the answer first, then at most one
+  supporting sentence. Under about 60 words.
+- A question with several parts, or one that names a number of things ("walk me
+  through", "compare X and Y", "tell me about a time when…") — answer every
+  part, one short line each, in the order they were asked. Length follows the
+  number of parts, not the topic.
+- Explicitly asked for detail ("in depth", "properly", "walk me through it") —
+  give it, still in short lines.
+
+Never pad a short question up to a length, and never truncate a four-part
+question down to one. The ceiling is what the candidate can read, not a number.
+
+FORMAT
+
+Plain text by default. Light markdown ONLY where the structure is genuinely in
+the answer:
+
+- \`-\` bullets when the question asked for several things, one per line.
+- \`1.\` numbers only when the order matters — steps, a sequence, a ranking.
+- **bold** on the two or three words that carry the answer, once or twice in a
+  reply at most, so the eye lands on them first.
+- \`backticks\` for identifiers, types, commands and code fragments.
+
+No headings, no tables, no horizontal rules, no nested lists, and no code fence
+longer than a few lines. A one-line answer is never a bullet, and a bulleted
+list of one item is a sentence with a dash in front of it.
 
 LANGUAGE
 
@@ -363,6 +525,23 @@ BOUNDARIES
  * a model is an invitation to perform one, and what is wanted here is plainer
  * English, not a character — hence the bullet forbidding accent-play and
  * decorative Hindi, and the one keeping "plain" from sliding into "personal".
+ *
+ * ADAPTIVE 2026-08-31: two lines repaired, nothing else touched. Both had gone
+ * out of step with the prompt they are appended to:
+ *
+ *   "and none of it becomes a follow-up."
+ *      -> "and none of it belongs in what you say."
+ *      This block is appended to BOTH modes, and answer mode never produces a
+ *      follow-up. Interviewer-side wording in a shared section.
+ *
+ *   "THE LENGTH LIMIT DOES NOT MOVE. The word count above is a ceiling…"
+ *      -> "THE LENGTH RULES DO NOT MOVE. HOW LONG TO MAKE IT above…"
+ *      There is no longer a single word count above it to point at; the length
+ *      rule is now a ladder that varies with the question. The intent — this
+ *      section makes you shorter, never longer — is unchanged.
+ *
+ * The closing paragraph below is UNCHANGED and must stay that way. It is the
+ * no-impersonation / no-concealment guarantee this whole feature rests on.
  */
 function styleBlock(answerStyle) {
   if (answerStyle !== 'desi') return ''
@@ -393,14 +572,14 @@ written. Plain, direct Indian English. Same content, ordinary words.
   plain needs no changing.
 - Plain never becomes personal. Where someone is from, which college they went
   to, which company they came from — none of that is a stand-in for ability,
-  and none of it becomes a follow-up. The boundaries above hold exactly as
+  and none of it belongs in what you say. The boundaries above hold exactly as
   written.
 
-THE LENGTH LIMIT DOES NOT MOVE. The word count above is a ceiling, not a
-target, and ordinary words are shorter than formal ones — so this section
-should make you shorter, never longer. Conversational does not mean chatty:
-still no greeting, no preamble, no restating the question, no sign-off, no
-"hope this helps".
+THE LENGTH RULES DO NOT MOVE. HOW LONG TO MAKE IT above decides how long a reply
+is, and ordinary words are shorter than formal ones — so this section should
+make you shorter, never longer. Conversational does not mean chatty: still no
+greeting, no preamble, no restating the question, no sign-off, no "hope this
+helps".
 
 THIS SECTION CHANGES THE WORDS AND NOTHING ELSE. Who you are writing for, what
 counts as a good reply, what you may claim and where it came from, and the

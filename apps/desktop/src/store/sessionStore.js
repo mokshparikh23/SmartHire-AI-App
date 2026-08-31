@@ -94,8 +94,26 @@ export const useSessionStore = create((set, get) => ({
   // one is rendered by AnswerPanel only, so chat failures were invisible.
   chatError: null,
 
+  /* SELF-VOICE 2026-08-31 ─ what the CANDIDATE said, waiting for its turn ──────
+     The app only ever captured the interviewer, so the `assistant` entries in
+     the history sent to the model were the AI's own past SUGGESTIONS — not a
+     word of what the candidate actually said out loud. When the interviewer then
+     asked "why?" or "can you elaborate?", the thing being asked about had never
+     been shown to the model at all. That is the reported "short questions get no
+     understanding", and no amount of prompt wording fixes it.
+
+     A bounded ring, not a log: these are attached to the NEXT question asked and
+     then drained, so anything still sitting here is at most one turn old. The
+     cap exists only so that a candidate who talks for ten minutes without being
+     interrupted cannot grow this without limit. */
+  selfSpeech: [],      // [{ id, text, at }] — drained by the next setQuestion
+  currentSaid: [],     // what was drained onto the turn currently showing
+
   // Committed log
-  turns: [],           // [{ id, q, a, ts, source, error, feedback }]
+  // SELF-VOICE 2026-08-31: turns[] gains `said` — what the candidate had said
+  // before that question, so recentHistory can replay it alongside the pair.
+  // turns: [],        // [{ id, q, a, ts, source, error, feedback }]
+  turns: [],           // [{ id, q, a, said, ts, source, error, feedback }]
   activeTurnId: null,  // null = showing the live stream, not a past turn
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -134,6 +152,9 @@ export const useSessionStore = create((set, get) => ({
       // not be showing over a fresh one.
       captureState: 'idle',
       captureError: null,
+      // SELF-VOICE 2026-08-31: last interview's words are not this one's context.
+      selfSpeech: [],
+      currentSaid: [],
       turns: [],
       activeTurnId: null,
     })
@@ -146,6 +167,7 @@ export const useSessionStore = create((set, get) => ({
     set({
       isRunning: false, timerInterval: null, isThinking: false,
       answerPending: false,   // PIPELINE 2026-08-31
+      selfSpeech: [], currentSaid: [],   // SELF-VOICE 2026-08-31
       sessionId: null, chatStreaming: false,
     })
   },
@@ -166,12 +188,37 @@ export const useSessionStore = create((set, get) => ({
   // PIPELINE 2026-08-31: opts.keepAnswer leaves the previous answer on screen
   // until the replacement's first token lands. See `answerPending` above.
   // setQuestion: (q, source = 'voice') =>
+  /* SELF-VOICE 2026-08-31 ─ the candidate's own words ─────────────────────────
+     MAX_SELF_LINES bounds the ring. Draining is the correct semantic rather than
+     a rolling window: each line belongs to exactly ONE turn — the next question
+     asked after it — so draining gives no duplication, no unbounded growth, and
+     the right order for free. */
+  appendSelfSpeech: (text) =>
+    set((s) => {
+      const clean = (text || '').trim()
+      if (!clean) return {}
+      const MAX_SELF_LINES = 40
+      const next = [...s.selfSpeech, { id: s.selfSpeech.length, text: clean, at: Date.now() }]
+      return { selfSpeech: next.slice(-MAX_SELF_LINES) }
+    }),
+
+  /** Hands over everything pending and empties the ring. */
+  drainSelfSpeech: () => {
+    const { selfSpeech } = get()
+    if (!selfSpeech.length) return []
+    set({ selfSpeech: [] })
+    return selfSpeech.map((l) => l.text)
+  },
+
+  // SELF-VOICE 2026-08-31: opts.said carries the drained self lines onto the
+  // turn, so setAnswerDone can commit them with the pair.
   setQuestion: (q, source = 'voice', opts = {}) =>
     set({
       currentQuestion: q,
       // currentAnswer: '',
       currentAnswer: opts.keepAnswer ? get().currentAnswer : '',
       answerPending: !!opts.keepAnswer,
+      currentSaid: opts.said || [],   // SELF-VOICE 2026-08-31
       // REDESIGN 2026-08-29: the answer card's footer shows "Answer · HH:MM".
       // turns[].ts covers history; this covers the turn still streaming.
       questionAt: Date.now(),
@@ -200,6 +247,9 @@ export const useSessionStore = create((set, get) => ({
       currentQuestion: next,
       currentAnswer,          // stays on screen until the new first token
       answerPending: true,
+      // SELF-VOICE 2026-08-31: an extension keeps the self lines already on the
+      // turn — it is the same question, so it has the same antecedent.
+      currentSaid: get().currentSaid,
       isThinking: true,
       error: null,
       activeTurnId: null,
@@ -231,7 +281,9 @@ export const useSessionStore = create((set, get) => ({
      setAnswerDone sets it, setQuestion nulls it, selectTurn points it at
      history. A non-null id here means there is nothing uncommitted to rescue. */
   commitInterrupted: () => {
-    const { currentQuestion, currentAnswer, source, turns, activeTurnId, error } = get()
+    // SELF-VOICE 2026-08-31: currentSaid rides along, so a superseded turn keeps
+    // the antecedent it was answered against.
+    const { currentQuestion, currentAnswer, source, turns, activeTurnId, error, currentSaid } = get()
     if (!currentQuestion || activeTurnId !== null) return
 
     set({
@@ -239,6 +291,7 @@ export const useSessionStore = create((set, get) => ({
         id: `${turns.length}-${currentQuestion.slice(0, 24)}`,
         q: currentQuestion,
         a: currentAnswer,
+        said: currentSaid,   // SELF-VOICE 2026-08-31
         ts: Date.now(),
         source,
         error,
@@ -249,7 +302,7 @@ export const useSessionStore = create((set, get) => ({
   },
 
   setAnswerDone: () => {
-    const { currentQuestion, currentAnswer, source, turns, error } = get()
+    const { currentQuestion, currentAnswer, source, turns, error, currentSaid } = get()
     if (!currentQuestion) return set({ isThinking: false, answerPending: false })
 
     /* PIPELINE 2026-08-31 ─ a completion that streamed nothing showed nothing ──
@@ -271,6 +324,7 @@ export const useSessionStore = create((set, get) => ({
       id: `${turns.length}-${currentQuestion.slice(0, 24)}`,
       q: currentQuestion,
       a: currentAnswer,
+      said: currentSaid,   // SELF-VOICE 2026-08-31
       ts: Date.now(),      // wall clock — Dashboard renders this as a time of day
       source,
       // error,
@@ -312,6 +366,7 @@ export const useSessionStore = create((set, get) => ({
       error: turn.error ?? null,
       isThinking: false,
       answerPending: false,   // PIPELINE 2026-08-31
+      currentSaid: turn.said || [],   // SELF-VOICE 2026-08-31
       activeTurnId: id,
     })
   },

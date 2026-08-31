@@ -86,10 +86,22 @@ export const useSettingsStore = create(
       // once for the life of the install.
       //
       // interviewContext: { company: '', role: '', resume: '', jobDescription: '', isSetup: false },
+      /* CONTEXT 2026-08-31: candidateName, companyDomain and resumeBrief added.
+         All three already existed on the interview_profiles row; they were
+         simply never carried across into the prompt. See systemPrompt.js for
+         why candidateName is deliberately NOT behind resumeConsent and why
+         resumeBrief deliberately IS. */
+      // interviewContext: {
+      //   company: '', role: '', resume: '', jobDescription: '',
+      //   resumeConsent: false, isSetup: false,
+      // },
       interviewContext: {
         company: '',
+        companyDomain: '',
         role: '',
+        candidateName: '',
         resume: '',
+        resumeBrief: '',
         jobDescription: '',
         resumeConsent: false,
         isSetup: false,
@@ -102,8 +114,11 @@ export const useSettingsStore = create(
         set({
           interviewContext: {
             company: '',
+            companyDomain: '',   // CONTEXT 2026-08-31
             role: '',
+            candidateName: '',   // CONTEXT 2026-08-31
             resume: '',
+            resumeBrief: '',     // CONTEXT 2026-08-31
             jobDescription: '',
             resumeConsent: false,
             isSetup: false,
@@ -155,9 +170,29 @@ export const useSettingsStore = create(
         restart is only the value used in the window between the app opening and
         a candidate being picked — a window in which no session can start.
       */
+      /* CONTEXT 2026-08-31 ─ blank the DOCUMENT too, not just the flag ────────
+         The note above calls text-without-consent "the safe pairing", and that
+         reasoning was sound when the text was the only copy. It no longer is:
+         Launcher.start() rewrites resume, resumeBrief and resumeConsent from a
+         freshly fetched /api/profiles row on every single session start, and it
+         is the only live caller of session.start(). So the persisted copy is
+         redundant — and a résumé sitting in localStorage under a false flag is a
+         landmine rather than a safety property.
+
+         This is STRICTLY STRICTER than what it replaces. Nothing that was gated
+         becomes ungated; one more thing stops being written to disk. */
+      // partialize: (s) => ({
+      //   ...s,
+      //   interviewContext: { ...s.interviewContext, resumeConsent: false },
+      // }),
       partialize: (s) => ({
         ...s,
-        interviewContext: { ...s.interviewContext, resumeConsent: false },
+        interviewContext: {
+          ...s.interviewContext,
+          resume: '',
+          resumeBrief: '',
+          resumeConsent: false,
+        },
       }),
     }
   )

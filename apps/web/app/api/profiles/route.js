@@ -1,6 +1,9 @@
 import { CORS, jsonError } from '@/lib/http'
 import { requireLicense } from '@/lib/ai'
 import { createAdminClient } from '@/lib/supabase-server'
+// CONTEXT 2026-08-31: the compressed résumé is computed server-side, where the
+// prompt-injection stripping in lib/resume.js's clean() already lives.
+import { briefResume, normalizeParsed } from '@/lib/resume'
 
 export const runtime     = 'nodejs'
 export const dynamic     = 'force-dynamic'
@@ -66,7 +69,15 @@ export async function POST(request) {
       // back to its own default, and keep writing in the old register while the
       // dashboard insisted the setting had saved.
       // .select('id, candidate_name, company, role, resume, resume_consent, job_description, updated_at')
-      .select('id, candidate_name, company, role, resume, resume_consent, answer_style, job_description, updated_at')
+      /* CONTEXT 2026-08-31: resume_parsed and company_domain join the
+         projection. Both have existed on the row since their migrations and
+         were simply never selected, so the desktop could not see them — the
+         exact silent-by-default failure the note above describes.
+
+         resume_parsed is the structured record; only its compressed projection
+         travels (see briefResume), never the raw jsonb. */
+      // .select('id, candidate_name, company, role, resume, resume_consent, answer_style, job_description, updated_at')
+      .select('id, candidate_name, company, company_domain, role, resume, resume_parsed, resume_consent, answer_style, job_description, updated_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
@@ -84,8 +95,16 @@ export async function POST(request) {
       id:              r.id,
       candidateName:   r.candidate_name,
       company:         r.company || '',
+      companyDomain:   r.company_domain || '',   // CONTEXT 2026-08-31
       role:            r.role || '',
       resume:          r.resume || '',
+      /* CONTEXT 2026-08-31: derived here, not shipped raw. Coerced at the
+         boundary for the same reason answerStyle is below — the desktop should
+         never have to decide what a malformed parse means mid-interview. It is
+         a projection of the résumé and carries no consent of its own;
+         buildSystemPrompt() gates it on the same useResume condition as the
+         full text, in the same expression. */
+      resumeBrief:     briefResume(normalizeParsed(r.resume_parsed)),
       resumeConsent:   r.resume_consent === true,
       // ANSWER-STYLE 2026-08-30: normalised here rather than passed through. The
       // CHECK constraint means a row cannot hold a third value, but it can still

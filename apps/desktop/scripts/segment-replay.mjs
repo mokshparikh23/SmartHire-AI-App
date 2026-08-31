@@ -27,6 +27,9 @@ import assert from 'node:assert/strict'
 // import { createUtteranceAggregator } from '../src/utils/utteranceAggregator.js'
 import { createUtteranceAggregator, SEGMENT_DEFAULTS } from '../src/utils/utteranceAggregator.js'
 import { scoreCompleteness, VERDICT } from '../src/utils/completeness/index.js'
+// SELF-VOICE 2026-08-31: the echo backstop. Pure and near-importless by design,
+// precisely so it can be driven here without a microphone.
+import { isEcho } from '../src/utils/speakerDedupe.js'
 
 /* ── virtual clock ───────────────────────────────────────────────────────── */
 
@@ -489,6 +492,71 @@ check('a slow-arriving COMPLETE question is labelled complete, not capped', () =
   assert.equal(out[0].reason, 'complete', `emitted as ${out[0].reason}`)
   assert.equal(out[0].final, true)
   assert.equal(out[0].continues, null)
+})
+
+/* SELF-VOICE 2026-08-31 ─ the candidate's own voice, and its echo guard ───────
+   The capture itself needs a microphone and cannot be driven here. What CAN be
+   driven — and is where the risk actually is — is the aggregator hook the
+   harvest hangs off, and the text-overlap backstop that decides whether a line
+   was the candidate speaking or the interviewer coming back through speakers. */
+
+/* H — the new onSpeechStart option must be inert to segmentation. This is the
+      whole safety argument for adding a callback to the aggregator at all. */
+check('onSpeechStart fires without changing a single emit', () => {
+  const events = [
+    ...burst({ text: 'So what is',                     from: 0,    to: 900,  transcriptAt: 2250 }),
+    ...burst({ text: 'tell me about class in C sharp', from: 2000, to: 3600, transcriptAt: 5000 }),
+  ]
+  const withoutHook = run(events)
+
+  const seen = []
+  const clock = makeClock()
+  const emitted = []
+  const agg = createUtteranceAggregator({
+    emit: (u) => emitted.push(u),
+    onSpeechStart: (at) => seen.push(at),
+    now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
+  })
+  const ordered = [...events].sort((a, b) => a.at - b.at)
+  for (const e of ordered) {
+    clock.advanceTo(e.at)
+    if (e.speechStart) agg.noteSpeechStart(e.at)
+    else if (e.speechEnd) agg.noteSpeechEnd(e.at, e.endReason || 'silence')
+    else agg.pushFragment(e.text, e)
+  }
+  clock.advanceTo(ordered[ordered.length - 1].at + 60000)
+
+  assert.ok(seen.length >= 2, 'onSpeechStart never fired')
+  assert.equal(emitted.length, withoutHook.length)
+  assert.deepEqual(emitted.map((u) => u.text), withoutHook.map((u) => u.text))
+  assert.deepEqual(emitted.map((u) => u.heldMs), withoutHook.map((u) => u.heldMs))
+})
+
+/* I — echo. The same sentence arriving on both streams must be dropped, and two
+      different sentences about the same topic must NOT be. */
+check('speaker dedupe drops an echo and keeps a genuine answer', () => {
+  const heard = ['What is a closure in JavaScript, and when would you use one?']
+
+  // Transcribed from the speakers by the candidate's own mic — same words,
+  // different casing and a dropped tail, exactly as a second transcription
+  // of the same audio comes out.
+  assert.equal(isEcho('what is a closure in javascript and when would you use one', heard), true)
+  assert.equal(isEcho('What is a closure in JavaScript, and when would you', heard), true)
+
+  // The candidate actually answering. Same topic, different words — must survive.
+  assert.equal(
+    isEcho('A closure is a function that captures the scope it was defined in.', heard), false)
+  assert.equal(isEcho('I used one for the debounce helper in our search box.', heard), false)
+
+  // Nothing to compare against is not a reason to drop anything.
+  assert.equal(isEcho('A closure is a function that captures its scope.', []), false)
+})
+
+/* J — the short-line floor. Below it the ratio is meaningless, and a false
+      positive there would silently swallow real context. */
+check('speaker dedupe does not fire on text too short to judge', () => {
+  assert.equal(isEcho('ok', ['ok then']), false)
+  assert.equal(isEcho('yes', ['yes, exactly right']), false)
 })
 
 console.log(failures === 0 ? '\nall green\n' : `\n${failures} failing\n`)

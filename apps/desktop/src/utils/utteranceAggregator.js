@@ -153,8 +153,14 @@ export const SEGMENT_DEFAULTS = {
  * @param {Function} [o.log]          (event, data) => void
  * @param {object}   [o.tuning]       overrides for SEGMENT_DEFAULTS
  */
+// SELF-VOICE 2026-08-31: `onSpeechStart` added — see noteSpeechStart below for
+// what it is for. Optional and defaulted, so nothing that does not pass it
+// changes behaviour by a single instruction.
+// export function createUtteranceAggregator({
+//   emit, onHoldChange, score, now: nowFn, setTimer, clearTimer, log, tuning,
+// } = {}) {
 export function createUtteranceAggregator({
-  emit, onHoldChange, score, now: nowFn, setTimer, clearTimer, log, tuning,
+  emit, onHoldChange, onSpeechStart, score, now: nowFn, setTimer, clearTimer, log, tuning,
 } = {}) {
   const cfg = { ...SEGMENT_DEFAULTS, ...(tuning || {}) }
   const now = nowFn || (() => performance.now())
@@ -449,6 +455,18 @@ export function createUtteranceAggregator({
       speaking = true
       speechActiveSince = at
       if (held && holdTimer !== null) hold(cfg.holdDanglingMs, 'speech-resumed')
+
+      /* SELF-VOICE 2026-08-31 ─ the moment the candidate stopped talking ───────
+         The instant the interviewer begins speaking is, by construction, the
+         instant the candidate finished. That is the cheapest possible trigger
+         for harvesting what the candidate just said, and it is free: this edge
+         is already being detected for a different reason.
+
+         Fired LAST, after the state above is settled, so a listener that reads
+         inspect() sees the new state rather than the old one. The listener is
+         expected not to block — useInterviewSession's only starts an upload and
+         returns, which is what keeps the zero-added-latency guarantee intact. */
+      onSpeechStart?.(at)
     },
 
     /**
