@@ -51,12 +51,34 @@
  * change to Button at all. Only SiteChrome's footer, which calls Link
  * unconditionally, has to branch.
  *
- * 127.0.0.1 rather than localhost in the default, to match apps/desktop/.env and
- * the root README: Electron's main process resolves localhost to ::1 and will
- * not fall back to IPv4. Nothing here runs in Electron, but having one spelling
- * of "the local app" across the repo is worth more than the two characters.
+ * ── localhost, NOT 127.0.0.1, AND THAT IS NOT COSMETIC ───────────────────────
+ *
+ * The first version of this file used 127.0.0.1 for symmetry with
+ * apps/desktop/.env, which has to use the IP because Electron's main process
+ * runs Node and resolves localhost to ::1 without falling back. That reasoning
+ * does not transfer, because the consumer here is a BROWSER, and it broke
+ * sign-in in a way that looked like nothing at all:
+ *
+ *   `next dev` serves on localhost and treats any other host as cross-origin.
+ *   So a browser that arrived at 127.0.0.1:3000 from a link here got the HTML
+ *   fine and every /_next/static chunk BLOCKED — "Blocked cross-origin request
+ *   to Next.js dev resource ... from 127.0.0.1".
+ *
+ *   With no JavaScript, React never hydrates, AuthForm's onSubmit never runs,
+ *   and the sign-in form falls back to a native HTML submit:
+ *       GET /login?email=...&password=...
+ *   The page re-renders, nothing navigates, and the credentials end up in the
+ *   URL bar, the browser history and the dev server log.
+ *
+ * There is a second, quieter reason. localhost and 127.0.0.1 are DIFFERENT
+ * cookie origins, so signing in at one leaves you signed out at the other. Any
+ * mix of the two across the site and the app splits the session in half.
+ *
+ * So: everything a browser follows uses localhost. apps/desktop keeps
+ * 127.0.0.1, because Node is not a browser and its reason still holds. The two
+ * differ on purpose — see the port note in apps/site/package.json.
  */
-const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
+const APP_ORIGIN = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
 
 /** An absolute URL on the product app. */
 export function appUrl(path = '/') {

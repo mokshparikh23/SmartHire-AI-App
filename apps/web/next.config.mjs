@@ -8,6 +8,26 @@ const nextConfig = {
     optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr']
   },
 
+  /* SPLIT 2026-09-01 ─ DEV ONLY, AND IT PREVENTS A SILENT SIGN-IN FAILURE.
+
+     `next dev` serves on localhost and blocks /_next/static requests from any
+     other host. Reaching this app at 127.0.0.1:3000 therefore returns the HTML
+     and none of the JavaScript, React never hydrates, and AuthForm's onSubmit
+     never runs — so the sign-in form falls back to a NATIVE submit:
+
+         GET /login?email=...&password=...
+
+     Nothing navigates, so it reads as a dead button, and the password is left
+     in the URL bar, the history and this server's log. That is how it was found.
+
+     The real fix is that browser-facing links use localhost (see
+     apps/site/lib/app-links.js). This is the backstop for anyone who types the
+     IP anyway, and it costs nothing: the option is ignored outside `next dev`.
+
+     apps/desktop is unaffected either way — it calls /api/* from Node, which
+     does not fetch these chunks, and it must keep using 127.0.0.1. */
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+
   /* SPLIT 2026-09-01 ────────────────────────────────────────────────────────
      The shared workspace packages ship RAW source — plain ESM, and JSX once
      packages/ui lands. There is no build step for them and there should not be:
@@ -40,10 +60,45 @@ const nextConfig = {
 
      proxy.js needs no change: its matcher never covered `/` or `/compare`. */
   async redirects() {
-    const site = (process.env.NEXT_PUBLIC_WWW_URL || 'https://smarthire.ai').replace(/\/$/, '')
+    const configured = process.env.NEXT_PUBLIC_WWW_URL?.replace(/\/$/, '')
+
+    /*
+      FIXED 2026-09-01, same day it was introduced. The first version of this
+      block read:
+
+        const site = (process.env.NEXT_PUBLIC_WWW_URL || 'https://smarthire.ai')
+
+      — a hardcoded fallback to a domain nobody owns yet, served as a 308.
+
+      A 308 IS A ONE-WAY DOOR. Browsers cache permanent redirects indefinitely
+      and without needing a Cache-Control header, so one visit to
+      localhost:3000/ was enough to make that browser jump straight to a dead
+      hostname forever, without asking this server again. Fixing the config does
+      not undo it; the person has to clear their cache. Which is exactly how it
+      was found — "I clicked log in and nothing happened".
+
+      Two rules come out of that, and neither should be relaxed:
+
+      1. NEVER REDIRECT TO A GUESSED DESTINATION. If the marketing origin is not
+         configured, there is no correct target. In development, send `/` to the
+         local site so it still works; in a real build with nothing configured,
+         emit no redirect at all and let `/` 404 — this app genuinely has no `/`
+         page, so a 404 is the honest answer and it is recoverable.
+
+      2. PERMANENT ONLY ONCE THE DOMAIN IS REAL. `permanent` is gated on the
+         variable actually being set AND a production build. Until then it is a
+         307, which browsers re-check every time.
+    */
+    const site = configured
+      || (process.env.NODE_ENV === 'development' ? 'http://localhost:3002' : null)
+
+    if (!site) return []
+
+    const permanent = Boolean(configured) && process.env.NODE_ENV === 'production'
+
     return [
-      { source: '/',        destination: `${site}/`,        permanent: true },
-      { source: '/compare', destination: `${site}/compare`, permanent: true },
+      { source: '/',        destination: `${site}/`,        permanent },
+      { source: '/compare', destination: `${site}/compare`, permanent },
     ]
   },
 

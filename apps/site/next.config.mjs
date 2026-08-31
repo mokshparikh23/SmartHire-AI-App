@@ -4,6 +4,13 @@ const nextConfig = {
      sits on top of page content. Compile and runtime errors still surface. */
   devIndicators: false,
 
+  /* SPLIT 2026-09-01: the same backstop apps/web carries, for the same reason.
+     `next dev` blocks /_next/static from any host but localhost, so opening
+     this site at 127.0.0.1:3002 would serve HTML with no JavaScript — every
+     nav link still works, but the mobile menu and the Desi Mode tabs would
+     silently do nothing. Ignored outside `next dev`. */
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+
   /* SPLIT 2026-09-01 ────────────────────────────────────────────────────────
      Both shared packages ship RAW source — plain ESM in smarthire-pricing, JSX
      in smarthire-ui — with no build step. There is nothing in this repo to run
