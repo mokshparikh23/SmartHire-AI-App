@@ -1,215 +1,39 @@
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  apps/web — the product app's stylesheet.
+
+  SPLIT 2026-09-01: this file was 489 lines and held the whole design system.
+  The shared half — the @theme palette and font tokens, @theme static motion,
+  @layer base, and the .display / .hl / .display-italic / .eyebrow / .mono
+  typography — moved to packages/ui/src/styles/base.css, imported below, so
+  apps/site cannot drift from it. Read that file's header first; it explains the
+  split, the font contract with the two layout.js files, and the @source line
+  that keeps the package's own class names in both builds.
+
+  ORDER IS LOAD-BEARING. "tailwindcss" first, base.css second, everything else
+  after. Our @layer contributions have to join Tailwind's layers once Tailwind
+  has declared them, which is what keeps them beating preflight exactly as they
+  did when this was one file.
+
+  WHAT IS LEFT HERE, AND FOR HOW LONG:
+
+    ::view-transition rules — PERMANENT. PageTransition.jsx is imported by 11
+    dashboard files and nothing else, so its CSS belongs with it.
+
+    the marketing motion and .marker / .x-scroll-fade components — TEMPORARY.
+    They exist for app/page.jsx and app/compare/page.jsx, which still live in
+    this app and move to apps/site later in the split. They are kept rather than
+    moved early on purpose: deleting them now would leave those two pages
+    rendering unstyled in every commit between then and now, and the point of
+    doing this in phases is that each one is deployable. When those pages move,
+    everything under "marketing motion" below goes with them and this file gets
+    shorter by about half.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
 @import "tailwindcss";
-
-/*
-  Light editorial palette.
-
-  Deliberately narrow: one ink, one warm paper, one hairline, one accent. The
-  previous design leaned on indigo-to-purple gradients, which is what made it
-  read as a template. Here the accent appears only on links and small marks —
-  primary actions are ink black, which is what makes the page feel considered
-  rather than decorated.
-*/
-@theme {
-  --color-paper:     #ffffff;
-  --color-canvas:    #faf9f7;
-  --color-canvas-2:  #f4f2ee;
-  --color-ink:       #16161a;
-  --color-ink-soft:  #3f3f46;
-  --color-muted:     #71717a;
-  --color-faint:     #a1a1aa;
-  --color-line:      #e7e5e4;
-  --color-line-soft: #f0eeeb;
-  --color-accent:    #4338ca;
-  --color-accent-soft: #eef2ff;
-  --color-positive:  #15803d;
-  --color-positive-soft: #f0fdf4;
-  --color-critical:  #b91c1c;
-  --color-critical-soft: #fef2f2;
-  --color-warning:   #a16207;
-  --color-warning-soft: #fefce8;
-
-  /*
-    PIVOT 2026-08-29: these two lines referenced THEMSELVES. next/font wrote
-    --font-sans / --font-display from an unlayered class on <html>; @theme
-    writes them inside @layer theme. Unlayered wins, so next/font's value was
-    used and everything after the var() here never shipped. If the className
-    were ever removed from <html> these would win, self-reference, and become
-    invalid at computed-value time — the whole site in Times.
-
-    --font-sans:    var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-    --font-display: var(--font-display), ui-serif, Georgia, serif;
-
-    layout.js emits differently-named variables so that collision is unreachable
-    — --font-inter-tight and --font-mono-plex as of 2026-08-30, when Inter and
-    Instrument Serif were dropped. See the note there.
-  */
-  /*
-    The generic stacks are var() FALLBACKS, not trailing list items. That
-    distinction is the whole fix: per CSS Variables §3, if the referenced
-    property is guaranteed-invalid and no var() fallback is supplied, the entire
-    declaration is invalid at computed-value time and anything after the var()
-    is never reached. Commas inside a var() fallback are legal and all belong to
-    the fallback, so this form degrades correctly if the next/font className is
-    ever missing from <html> — and keeps next/font's metric-matched
-    "Inter Tight Fallback" / "IBM Plex Mono Fallback" faces when it is present.
-  */
-  /*
-    EXTENDED 2026-08-30: two faces for the whole app, not four. Inter and
-    Instrument Serif were removed from layout.js, so --font-sans and
-    --font-display both resolve to Inter Tight now and the authenticated screens
-    match the marketing site instead of reading as a different product.
-
-    --font-display is kept as a name rather than deleted: `.display` has ~16 call
-    sites across dashboard, admin and auth, and pointing the token at the new
-    face changes all of them without touching a single component.
-
-    --font-sans:    var(--font-inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
-    --font-display: var(--font-instrument-serif, ui-serif, Georgia, Cambria, serif);
-
-    The generic stack is the var() FALLBACK, not a trailing list item — that is
-    what makes these degrade correctly if the next/font className ever comes off
-    <html>, per the note in layout.js.
-  */
-  --font-sans:    var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
-  --font-display: var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
-  --font-tight:   var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
-  --font-mono:    var(--font-mono-plex, ui-monospace, SFMono-Regular, Menlo, monospace);
-}
-
-/*
-  Motion.
-
-  `@theme static` rather than plain `@theme`: Tailwind v4 tree-shakes theme vars
-  that are only referenced from hand-written CSS, and every one of these is
-  consumed by the ::view-transition rules at the bottom of this file rather than
-  by a utility class.
-
-  Budget is 120ms out + 200ms in = 320ms perceived, deliberately asymmetric. Old
-  content should leave quickly because it has nothing left to say; new content
-  arrives more gently, and its fade waits for the exit so the two never overlap
-  as a muddle.
-*/
-@theme static {
-  --ease-exit:     cubic-bezier(0.55, 0.085, 0.68, 0.53);  /* ease-in-quad   */
-  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);         /* ease-out-quint */
-
-  --motion-exit:  120ms;
-  --motion-enter: 200ms;
-  --motion-move:  320ms;
-}
-
-@layer base {
-  * { box-sizing: border-box; }
-
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-
-    /* PIVOT 2026-08-29: text-rendering: optimizeLegibility is a well-known
-       footgun — it silently switches on kerning and optional ligatures and
-       applies them inconsistently across engines, and it does nothing useful for
-       either face here. Inter's kerning is already on by default via GPOS.
-
-       text-rendering: optimizeLegibility; */
-
-    scroll-behavior: smooth;
-    /* The sticky header is 4rem tall. Without this an in-page anchor lands
-       underneath it and the section heading is the first thing you cannot read. */
-    scroll-padding-top: 5rem;
-  }
-
-  body {
-    background: var(--color-paper);
-    color: var(--color-ink);
-    font-family: var(--font-sans);
-  }
-
-  /*
-    PIVOT 2026-08-29: the original comment here said "Serif numerals default to
-    old-style in this face … lining, tabular figures everywhere instead". That
-    fix cannot happen. Decompressing the shipped Instrument Serif woff2 shows
-    GSUB [ccmp liga locl] only — no `tnum`, no `lnum`, no `onum`. The rule is
-    therefore inert on every .display element and only ever worked where the
-    text was Inter (which does ship tnum/pnum/lnum).
-
-    Kept exactly as it was, minus the misleading claim: it still does real work
-    on tables, Stat values, licence keys and timers, all of which are Inter.
-
-    table, [data-numeric] {
-      font-variant-numeric: tabular-nums lining-nums;
-    }
-  */
-  table, [data-numeric] {
-    font-variant-numeric: tabular-nums lining-nums;
-  }
-
-  ::selection {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-
-  :focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-    border-radius: 2px;
-  }
-}
+@import "smarthire-ui/styles/base.css";
 
 @layer components {
-  /*
-    Headline treatment.
-
-    EXTENDED 2026-08-30: was the Instrument Serif setting —
-
-      font-weight: 400;         (the serif shipped one weight, so this was forced)
-      letter-spacing: -0.015em;
-      line-height: 1.04;
-
-    Inter Tight needs different numbers to sit right at headline sizes: 500
-    rather than 400, because a sans at 400 goes thin and washed out above ~2rem
-    where the serif's stroke contrast was carrying it; and slightly tighter
-    tracking, because the sans has wider default sidebearings than the serif did.
-
-    `.hl` is the same treatment under the name the marketing page uses. Both are
-    kept rather than collapsed into one: `.display` is the established name
-    across the app, and rewriting its ~16 call sites to say `.hl` would be churn
-    for nothing.
-  */
-  .display,
-  .hl {
-    font-family: var(--font-display);
-    font-weight: 500;
-    letter-spacing: -0.024em;
-    line-height: 1.14;
-  }
-
-  .display-italic {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-weight: 500;
-    letter-spacing: -0.024em;
-  }
-
-  /*
-    Small caps label used above section headings.
-
-    EXTENDED 2026-08-30: moved to the mono face, which is what the reference uses
-    for every small label. Weight drops 600 → 500 deliberately: layout.js loads
-    IBM Plex Mono at 400 and 500 only, so 600 would have been faux-bolded by the
-    browser — a synthetic weight that looks smudged at 11px.
-  */
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--color-faint);
-  }
-
-  /* PIVOT 2026-08-29: zero call sites anywhere in app/ or components/.
-     .hairline { border-color: var(--color-line); } */
-
   /* ─────────────────────────────────── marketing redesign, 2026-08-30 ──────
      Ported from the reference design. These are hand-written CSS rather than
      utility soups because each one is a multi-part composite (a marker is a
@@ -217,15 +41,8 @@
      animations plus edge masks) that would be unreadable inline and is repeated
      across the page.
 
-     `.hl` used to be declared here as its own rule. It is now defined alongside
-     `.display` above, since after 2026-08-30 the two are the same treatment and
-     a second declaration would just be a copy waiting to drift.
+     SPLIT 2026-09-01: these leave with app/page.jsx and app/compare/page.jsx.
   */
-
-  .mono {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums lining-nums;
-  }
 
   /* ───────────────────────────────────── comparison table, 2026-08-30 ──────
      The right-edge fade on /compare's feature grid, which is how that table
@@ -286,10 +103,13 @@
   tree-shakes @theme variables, not @keyframes, but keeping these outside a layer
   also keeps them winning over utility-level animation resets.
 
-  Every animation here is covered by the global prefers-reduced-motion block at
-  the bottom of this file, which zeroes animation-duration on `*`. The JS-driven
-  pieces (the cycling demo panel) cannot be reached that way and guard themselves
-  with matchMedia — see components/marketing/LiveDemo.jsx.
+  Every animation here is covered by the prefers-reduced-motion block in
+  packages/ui/src/styles/base.css, which zeroes animation-duration on `*`. The
+  JS-driven pieces (the cycling demo panel) cannot be reached that way and guard
+  themselves with matchMedia — see components/marketing/LiveDemo.jsx.
+
+  SPLIT 2026-09-01: everything from here to the view-transitions heading moves
+  to apps/site/app/globals.css with the pages that use it.
 */
 
 /* Hand-drawn underline under the hero's last phrase. The path is dashed at its
@@ -399,6 +219,12 @@
   sidebar click and again when a Suspense fallback resolves into its content.
   The same two class names cover both, so "page A → page B" and
   "skeleton → real data" share one vocabulary rather than needing two systems.
+
+  SPLIT 2026-09-01: these STAY. PageTransition.jsx is imported by 11 files, all
+  of them under app/dashboard, and by nothing on the marketing side. The four
+  --motion-* / --ease-* tokens they read come from packages/ui's `@theme static`
+  block — `static` is what stops Tailwind tree-shaking them now that the
+  declaration and the only consumer are in different files.
 */
 ::view-transition-old(.page-out) {
   animation: var(--motion-exit) var(--ease-exit) both vt-fade reverse;
@@ -446,40 +272,30 @@
   pointer-events: none;
 }
 
+/*
+  SPLIT 2026-09-01: this app's half of the reduced-motion block. The universal
+  duration zeroing, the scroll-behavior undo and the .animate-spin exception now
+  live in packages/ui/src/styles/base.css — see the note there for why splitting
+  this across files is safe (unlayered !important beats every layer regardless of
+  source order, and specificity, not order, decides between these rules).
+*/
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  /* The header then snaps rather than slides, and anchors jump rather than
-     glide — which is the point. */
-  html { scroll-behavior: auto !important; }
-
-  /* AUTH 2026-08-30: a busy spinner is a status indicator, not decoration. At
-     0.01ms it does not stop — it strobes, landing on a new random angle every
-     frame, which is worse for a motion-sensitive reader than the spin was. Slow
-     it right down instead, so "something is happening" still reads.
-
-     This wins over both rules above it: for !important declarations the cascade
-     reverses layer order, so an unlayered rule beats Tailwind's layered
-     `.animate-spin`, and a class beats `*`. */
-  .animate-spin { animation-duration: 1.8s !important }
-
-  /* Zeroing the duration above would leave the platforms strip parked at the
-     keyframe's end state, -50%, with the far end of the list unreachable —
+  /* Zeroing the duration in base.css would leave the platforms strip parked at
+     the keyframe's end state, -50%, with the far end of the list unreachable —
      scrolling is the only way that band is readable at all. So stop it at the
-     start instead, and hand the row back to the pointer. */
+     start instead, and hand the row back to the pointer.
+
+     Leaves with the marketing motion above. */
   .mark-strip { overflow-x: auto }
   .mark-strip .ticker-row {
     animation: none !important;
     transform: none !important;
   }
 
-  /* View-transition pseudo-elements are not matched by the * selector above, so
-     they need naming explicitly or the page transitions keep animating for
-     people who asked for no motion. Zeroing the duration leaves the browser's
-     default instant swap. */
+  /* View-transition pseudo-elements are not matched by the * selector in
+     base.css, so they need naming explicitly or the page transitions keep
+     animating for people who asked for no motion. Zeroing the duration leaves
+     the browser's default instant swap. */
   ::view-transition-old(*),
   ::view-transition-new(*),
   ::view-transition-group(*) {

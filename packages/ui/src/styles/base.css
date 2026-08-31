@@ -1,0 +1,352 @@
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  The shared half of what used to be apps/web/app/globals.css.
+
+  SPLIT 2026-09-01. Marketing moved to its own deployment, and the stylesheet
+  had to go somewhere. Three options, and only one of them is right:
+
+    DUPLICATE  — the @theme block below IS the design system. A colour that
+                 drifts between the two domains is the most visible failure this
+                 repo could ship, and nothing would catch it.
+    SHARE ALL  — each app would then carry ~90 lines of the other's dead
+                 animation CSS. Tailwind v4 tree-shakes @theme variables and NOT
+                 @keyframes, which the marketing-motion comment in apps/web's
+                 globals.css already says in as many words.
+    SPLIT      — tokens, base and typography here; each app keeps only the rules
+                 its own components use.
+
+  What each app adds on top of this file is listed in its own globals.css.
+
+  ── WHO IMPORTS THIS ──────────────────────────────────────────────────────────
+      apps/web/app/globals.css
+      apps/site/app/globals.css
+  Both do `@import "tailwindcss"` FIRST and this file SECOND. That order matters:
+  our @layer base and @layer components contributions have to join Tailwind's
+  layers after Tailwind has declared them, which is what keeps them winning over
+  preflight exactly as they did when this was one file.
+
+  ── THE FONT CONTRACT ─────────────────────────────────────────────────────────
+  The four --font-* tokens below read --font-inter-tight and --font-mono-plex,
+  which next/font emits. THEY ARE A CONTRACT WITH TWO FILES:
+
+      apps/web/app/layout.js
+      apps/site/app/layout.js
+
+  Both must declare exactly those two variable names, and NEITHER may reuse a
+  name defined here. next/font writes its variable from an UNLAYERED class on
+  <html>; @theme writes into @layer theme; unlayered always wins. Name them the
+  same and the @theme declaration references itself the moment the className is
+  absent — invalid at computed-value time, and the whole site renders in Times.
+  The full account is in the PIVOT note inside the @theme block below.
+
+  AND THEY CANNOT BE FACTORED INTO ONE SHARED CALL. next/font/google is compiled
+  by Next's SWC font loader, which parses the CALL SITE and rejects spreads and
+  imported identifiers with "Font loader values must be explicitly written
+  literals". The duplication in those two layout files is required, not laziness.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
+
+/*
+  ── @source: THE ONE LINE THAT KEEPS THIS PACKAGE VISIBLE ─────────────────────
+
+  Tailwind v4's PostCSS plugin roots its content scan at process.cwd() — see
+  `let base = opts.base ?? process.cwd()` in @tailwindcss/postcss/dist/index.js.
+  Every build here runs as `npm run build --workspace apps/<name>`, so cwd is
+  that app, and nothing in packages/ is scanned. Without the line below, every
+  utility class used by Button, Icon, PillTabs and PricingPlans is absent from
+  the emitted CSS.
+
+  THAT FAILURE IS SILENT. The build succeeds. The pages render. The buttons are
+  simply unstyled. It is the only failure in this whole split that produces a
+  green build and broken output, which is why there is a grep for it in the
+  commit that introduced this file.
+
+  It lives HERE, in the package, rather than in each app's globals.css on
+  purpose: @tailwindcss/postcss ships a `fix-relative-paths` pass that resolves
+  @source against the file the at-rule appears in, so one line covers every
+  consumer — present and future — and no new app can forget it.
+*/
+@source "../**/*.jsx";
+
+/*
+  Light editorial palette.
+
+  Deliberately narrow: one ink, one warm paper, one hairline, one accent. The
+  previous design leaned on indigo-to-purple gradients, which is what made it
+  read as a template. Here the accent appears only on links and small marks —
+  primary actions are ink black, which is what makes the page feel considered
+  rather than decorated.
+*/
+@theme {
+  --color-paper:     #ffffff;
+  --color-canvas:    #faf9f7;
+  --color-canvas-2:  #f4f2ee;
+  --color-ink:       #16161a;
+  --color-ink-soft:  #3f3f46;
+  --color-muted:     #71717a;
+  --color-faint:     #a1a1aa;
+  --color-line:      #e7e5e4;
+  --color-line-soft: #f0eeeb;
+  --color-accent:    #4338ca;
+  --color-accent-soft: #eef2ff;
+  --color-positive:  #15803d;
+  --color-positive-soft: #f0fdf4;
+  --color-critical:  #b91c1c;
+  --color-critical-soft: #fef2f2;
+  --color-warning:   #a16207;
+  --color-warning-soft: #fefce8;
+
+  /*
+    PIVOT 2026-08-29: these two lines referenced THEMSELVES. next/font wrote
+    --font-sans / --font-display from an unlayered class on <html>; @theme
+    writes them inside @layer theme. Unlayered wins, so next/font's value was
+    used and everything after the var() here never shipped. If the className
+    were ever removed from <html> these would win, self-reference, and become
+    invalid at computed-value time — the whole site in Times.
+
+    --font-sans:    var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-display: var(--font-display), ui-serif, Georgia, serif;
+
+    layout.js emits differently-named variables so that collision is unreachable
+    — --font-inter-tight and --font-mono-plex as of 2026-08-30, when Inter and
+    Instrument Serif were dropped. See the note there.
+
+    SPLIT 2026-09-01: "layout.js" is now TWO files, apps/web's and apps/site's,
+    and the rule binds both. See the font contract at the top of this file.
+  */
+  /*
+    The generic stacks are var() FALLBACKS, not trailing list items. That
+    distinction is the whole fix: per CSS Variables §3, if the referenced
+    property is guaranteed-invalid and no var() fallback is supplied, the entire
+    declaration is invalid at computed-value time and anything after the var()
+    is never reached. Commas inside a var() fallback are legal and all belong to
+    the fallback, so this form degrades correctly if the next/font className is
+    ever missing from <html> — and keeps next/font's metric-matched
+    "Inter Tight Fallback" / "IBM Plex Mono Fallback" faces when it is present.
+  */
+  /*
+    EXTENDED 2026-08-30: two faces for the whole app, not four. Inter and
+    Instrument Serif were removed from layout.js, so --font-sans and
+    --font-display both resolve to Inter Tight now and the authenticated screens
+    match the marketing site instead of reading as a different product.
+
+    --font-display is kept as a name rather than deleted: `.display` has ~16 call
+    sites across dashboard, admin and auth, and pointing the token at the new
+    face changes all of them without touching a single component.
+
+    --font-sans:    var(--font-inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
+    --font-display: var(--font-instrument-serif, ui-serif, Georgia, Cambria, serif);
+
+    The generic stack is the var() FALLBACK, not a trailing list item — that is
+    what makes these degrade correctly if the next/font className ever comes off
+    <html>, per the note in layout.js.
+  */
+  --font-sans:    var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  --font-display: var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  --font-tight:   var(--font-inter-tight, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  --font-mono:    var(--font-mono-plex, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+/*
+  Motion.
+
+  `@theme static` rather than plain `@theme`: Tailwind v4 tree-shakes theme vars
+  that are only referenced from hand-written CSS, and every one of these is
+  consumed by the ::view-transition rules in apps/web/app/globals.css rather
+  than by a utility class.
+
+  SPLIT 2026-09-01: `static` matters MORE now, not less. Those consuming rules
+  used to sit at the bottom of the same file; they are in another package's
+  consumer today, and apps/site imports these tokens and uses none of them. A
+  plain @theme would therefore drop all five from BOTH builds. Do not "tidy" the
+  keyword away because nothing in this file appears to use them — that is the
+  symptom the keyword exists to prevent.
+
+  Budget is 120ms out + 200ms in = 320ms perceived, deliberately asymmetric. Old
+  content should leave quickly because it has nothing left to say; new content
+  arrives more gently, and its fade waits for the exit so the two never overlap
+  as a muddle.
+*/
+@theme static {
+  --ease-exit:     cubic-bezier(0.55, 0.085, 0.68, 0.53);  /* ease-in-quad   */
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);         /* ease-out-quint */
+
+  --motion-exit:  120ms;
+  --motion-enter: 200ms;
+  --motion-move:  320ms;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* PIVOT 2026-08-29: text-rendering: optimizeLegibility is a well-known
+       footgun — it silently switches on kerning and optional ligatures and
+       applies them inconsistently across engines, and it does nothing useful for
+       either face here. Inter's kerning is already on by default via GPOS.
+
+       text-rendering: optimizeLegibility; */
+
+    scroll-behavior: smooth;
+    /* The sticky header is 4rem tall. Without this an in-page anchor lands
+       underneath it and the section heading is the first thing you cannot read.
+
+       SPLIT 2026-09-01: kept shared even though it was written for the marketing
+       header. apps/site still has in-page anchors (#desi, #platforms, #limits),
+       and on the dashboard — which has none — it is inert rather than wrong. */
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /*
+    PIVOT 2026-08-29: the original comment here said "Serif numerals default to
+    old-style in this face … lining, tabular figures everywhere instead". That
+    fix cannot happen. Decompressing the shipped Instrument Serif woff2 shows
+    GSUB [ccmp liga locl] only — no `tnum`, no `lnum`, no `onum`. The rule is
+    therefore inert on every .display element and only ever worked where the
+    text was Inter (which does ship tnum/pnum/lnum).
+
+    Kept exactly as it was, minus the misleading claim: it still does real work
+    on tables, Stat values, licence keys and timers, all of which are Inter.
+
+    table, [data-numeric] {
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+  */
+  table, [data-numeric] {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /*
+    Headline treatment.
+
+    EXTENDED 2026-08-30: was the Instrument Serif setting —
+
+      font-weight: 400;         (the serif shipped one weight, so this was forced)
+      letter-spacing: -0.015em;
+      line-height: 1.04;
+
+    Inter Tight needs different numbers to sit right at headline sizes: 500
+    rather than 400, because a sans at 400 goes thin and washed out above ~2rem
+    where the serif's stroke contrast was carrying it; and slightly tighter
+    tracking, because the sans has wider default sidebearings than the serif did.
+
+    `.hl` is the same treatment under the name the marketing page uses. Both are
+    kept rather than collapsed into one: `.display` is the established name
+    across the app, and rewriting its ~16 call sites to say `.hl` would be churn
+    for nothing.
+
+    SPLIT 2026-09-01: they stay in ONE rule, in this shared file, even though
+    `.hl` now has no call sites in apps/web and `.display` few in apps/site.
+    Splitting them across the two stylesheets to save each app one unused
+    selector would recreate exactly the copy-waiting-to-drift the paragraph
+    above refuses.
+  */
+  .display,
+  .hl {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.024em;
+    line-height: 1.14;
+  }
+
+  .display-italic {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: -0.024em;
+  }
+
+  /*
+    Small caps label used above section headings.
+
+    EXTENDED 2026-08-30: moved to the mono face, which is what the reference uses
+    for every small label. Weight drops 600 → 500 deliberately: layout.js loads
+    IBM Plex Mono at 400 and 500 only, so 600 would have been faux-bolded by the
+    browser — a synthetic weight that looks smudged at 11px.
+  */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+  }
+
+  /* PIVOT 2026-08-29: zero call sites anywhere in app/ or components/.
+     .hairline { border-color: var(--color-line); } */
+
+  /*
+    `.hl` used to be declared separately, under the marketing-redesign heading.
+    It is defined alongside `.display` above, since after 2026-08-30 the two are
+    the same treatment and a second declaration would just be a copy waiting to
+    drift.
+  */
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+}
+
+/*
+  ── REDUCED MOTION, THE SHARED HALF ───────────────────────────────────────────
+
+  SPLIT 2026-09-01: this block is split across three files, and that is safe for
+  a reason worth stating rather than rediscovering.
+
+  These rules are UNLAYERED and !important. For !important declarations the
+  cascade reverses layer order, so an unlayered rule beats every layered Tailwind
+  utility no matter which stylesheet it came from. Between the rules here, the
+  winner is decided by SPECIFICITY, not by source order — `.animate-spin` and
+  `.mark-strip .ticker-row` both beat `*` wherever they live. So each app can add
+  its own overrides in its own globals.css without ordering games.
+
+  Here: the universal duration zeroing, the undo of the smooth-scroll rule set
+  in @layer base above, and the spinner — which lives in this package, so its
+  exception has to as well.
+
+  apps/web adds:  the ::view-transition-* overrides (PageTransition is its own).
+  apps/site adds: the .mark-strip carve-out (the platforms marquee is its own).
+*/
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* The header then snaps rather than slides, and anchors jump rather than
+     glide — which is the point. */
+  html { scroll-behavior: auto !important; }
+
+  /* AUTH 2026-08-30: a busy spinner is a status indicator, not decoration. At
+     0.01ms it does not stop — it strobes, landing on a new random angle every
+     frame, which is worse for a motion-sensitive reader than the spin was. Slow
+     it right down instead, so "something is happening" still reads.
+
+     This wins over both rules above it: for !important declarations the cascade
+     reverses layer order, so an unlayered rule beats Tailwind's layered
+     `.animate-spin`, and a class beats `*`. */
+  .animate-spin { animation-duration: 1.8s !important }
+}

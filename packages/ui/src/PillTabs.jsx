@@ -17,7 +17,7 @@ const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayout
  * `Tabs` that hard-coded its two labels and its aria-label. The Desi Mode card
  * needs three, and re-implementing a measured indicator plus a resize listener
  * plus a fonts.ready re-measure is exactly the drift that put CONTROL, TH and
- * Field into components/ui/index.jsx.
+ * Field into ./index.jsx.
  *
  * It lives in its own file rather than in that barrel because the barrel has no
  * 'use client' directive, and adding one there would turn Container, Button,

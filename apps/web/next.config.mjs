@@ -22,7 +22,7 @@ const nextConfig = {
 
      Nothing here may also appear in serverExternalPackages below — Next throws
      at build start if a package is in both. There is no overlap with unpdf. */
-  transpilePackages: ['smarthire-pricing'],
+  transpilePackages: ['smarthire-ui', 'smarthire-pricing'],
 
   /* RESUME-UPLOAD 2026-08-30 ──────────────────────────────────────────────────
      unpdf is left to Node at runtime instead of being traced by the bundler.

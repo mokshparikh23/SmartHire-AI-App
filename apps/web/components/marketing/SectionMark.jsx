@@ -5,7 +5,7 @@
  * comparison page opens its sections the same way, and a second copy of a
  * component whose whole job is "every section opens identically" is the exact
  * drift this file exists to prevent — the same reason CONTROL and TH were lifted
- * into components/ui/index.jsx. The original declaration is kept commented in
+ * into packages/ui/src/index.jsx. The original declaration is kept commented in
  * app/page.jsx, per the convention in this repo.
  *
  * `dark` is for the ink panels, where the marker's border and the lede have to

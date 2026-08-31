@@ -1,6 +1,6 @@
 import CopyButton from '@/components/dashboard/CopyButton'
-import Icon from '@/components/ui/Icon'
-import { Card, Badge } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Card, Badge } from 'smarthire-ui'
 
 const STATUS = {
   active:  { tone: 'positive', label: 'Active' },

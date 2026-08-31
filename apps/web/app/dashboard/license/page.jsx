@@ -1,7 +1,8 @@
 import { requireUser, getSupabase } from '@/lib/auth'
+import { ensureLicense } from '@/lib/license'
 import { getLatestRelease } from '@/lib/releases'
 import LicenseCard from '@/components/dashboard/LicenseCard'
-import { Card, Button, PageHeader, EmptyState } from '@/components/ui'
+import { Card, Button, PageHeader, EmptyState } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 
 export const metadata = { title: 'License — Smart Hire AI' }
@@ -21,6 +22,17 @@ export default async function LicensePage() {
   // const { data: { user } } = await supabase.auth.getUser()
   const user = await requireUser()
   const supabase = await getSupabase()
+
+  /*
+    AUTO-ISSUE 2026-09-01: this page reads `licenses` directly rather than going
+    through getEntitlement(), and it renders in a different Suspense subtree from
+    <Sidebar> — so it cannot assume the sidebar's ensureLicense() has already
+    landed. Without this call, the one page whose entire job is showing the key
+    would be the one page that never mints it.
+
+    Awaited, not fire-and-forget: the query below has to see the row.
+  */
+  await ensureLicense(user.id).catch(() => {})
 
   const [{ data: licenses }, release] = await Promise.all([
     supabase

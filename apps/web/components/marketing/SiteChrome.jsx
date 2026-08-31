@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import Icon, { Logo } from '@/components/ui/Icon'
-import { Container } from '@/components/ui'
+import Icon, { Logo } from 'smarthire-ui/Icon'
+import { Container } from 'smarthire-ui'
 
 // The header reacts to scroll, so it lives in its own client component. Kept
 // re-exported here so pages still pull both halves of the chrome from one place.

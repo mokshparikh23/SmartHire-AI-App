@@ -1,9 +1,9 @@
 'use client'
 
 import { Fragment, useState } from 'react'
-import Icon from '@/components/ui/Icon'
-import PillTabs from '@/components/ui/PillTabs'
-import { Badge } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import PillTabs from 'smarthire-ui/PillTabs'
+import { Badge } from 'smarthire-ui'
 
 /*
   DESI-MODE 2026-08-30
@@ -171,7 +171,7 @@ export default function DesiMode() {
                 tone string (bg-ink / text-paper) or with the base (text-[11px] /
                 font-medium), so there is no same-property collision for Tailwind
                 to resolve by stylesheet order. That is exactly why `ink` is a
-                TONE rather than a className here — see components/ui/index.jsx. */}
+                TONE rather than a className here — see packages/ui/src/index.jsx. */}
             <Badge tone="ink" className="mono uppercase tracking-[0.12em]">New</Badge>
           </div>
           {/* <p …>The same follow-ups, written in plain, direct Indian English.</p> */}

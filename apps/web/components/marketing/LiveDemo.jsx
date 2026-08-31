@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Icon from '@/components/ui/Icon'
+import Icon from 'smarthire-ui/Icon'
 
 /**
  * The product frame in the hero, running as a loop.

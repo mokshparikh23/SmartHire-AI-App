@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Card, Button } from '@/components/ui'
+import { Card, Button } from 'smarthire-ui'
 
 /*
   Covers all five dashboard pages and their loading states — the router nests

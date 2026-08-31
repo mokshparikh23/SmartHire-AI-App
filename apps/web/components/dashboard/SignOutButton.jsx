@@ -3,7 +3,7 @@
 import { useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Icon from '@/components/ui/Icon'
+import Icon from 'smarthire-ui/Icon'
 
 /*
   PIVOT 2026-08-29: shared by the dashboard and admin sidebars, which each had a

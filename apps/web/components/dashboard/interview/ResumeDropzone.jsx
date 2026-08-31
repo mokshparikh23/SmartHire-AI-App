@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { Button } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import { MAX_RESUME_BYTES } from '@/lib/resume'
 
 /*

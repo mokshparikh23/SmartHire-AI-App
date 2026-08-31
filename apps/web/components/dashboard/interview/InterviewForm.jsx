@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, Button, Field, CONTROL } from '@/components/ui'
+import { Card, Button, Field, CONTROL } from 'smarthire-ui'
 import CompanyCombobox from './CompanyCombobox'
 import ResumePanel from './ResumePanel'
 
@@ -58,7 +58,12 @@ export default function InterviewForm({ value, onChange, onSave, onCancel, busy,
             The reader is the candidate, so what this field is actually for is
             telling one interview from another in the desktop picker. The column
             is still `candidate_name` — see the note in InterviewProfiles.jsx. */}
-        <Field label="Interview name" required hint="So you can pick the right one in the app.">
+        {/* CANDIDATE-FIRST 2026-09-01: not `required` any more. deriveInterviewName()
+            in lib/resume.js names it from the company and role — or the date —
+            when this is left blank, so the asterisk was promising a wall that no
+            longer exists. */}
+        {/* <Field label="Interview name" required hint="So you can pick the right one in the app."> */}
+        <Field label="Interview name" hint="Optional — named from the company and role if you leave it blank.">
           <input className={CONTROL} value={value.candidate_name} autoFocus
             onChange={(e) => set('candidate_name', e.target.value)} placeholder="Google · round 2" />
         </Field>

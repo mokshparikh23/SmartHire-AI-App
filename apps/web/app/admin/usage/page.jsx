@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase-server'
 import { requireAdminPage } from '@/lib/auth'
-import { Card, Badge, Stat, PageHeader, EmptyState } from '@/components/ui'
+import { Card, Badge, Stat, PageHeader, EmptyState } from 'smarthire-ui'
 
 export const metadata = { title: 'Usage — Admin' }
 

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
-import { Button, Badge, CONTROL } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Button, Badge, CONTROL } from 'smarthire-ui'
 import { formatBalance, MINUTES_PER_CREDIT } from '@/lib/credits'
 
 /** Shortcuts, not the vocabulary. Discounts and manual fulfilment mean any

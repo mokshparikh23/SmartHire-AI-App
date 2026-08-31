@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Logo } from '@/components/ui/Icon'
-import { Container, Button } from '@/components/ui'
+import { Logo } from 'smarthire-ui/Icon'
+import { Container, Button } from 'smarthire-ui'
 
 /*
   COMPARE 2026-08-30: the hrefs were bare fragments, which only worked because

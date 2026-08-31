@@ -16,10 +16,16 @@ import { getLatestRelease, PLATFORMS } from '@/lib/releases'
  * protection and would break the marketing site linking to it. What actually
  * gates the product is /api/license/validate: the app is inert without a key.
  *
- * Gating on entitlement would also be actively wrong today. Licences are only
- * issued by an admin from /admin/licenses — the Stripe webhook grants minutes
- * and never calls createLicense — so most paying customers have no licence row
- * yet and would be refused their own download.
+ * AUTO-ISSUE 2026-09-01: the paragraph below was true when it was written and is
+ * not any more — ensureLicense() in lib/license.js now mints a key on the first
+ * authenticated render, so every account has one. The conclusion still holds for
+ * the reason above it (the bytes are public), but not for this reason, and a
+ * reader who kept it would re-derive a gate as safe once the premise flipped.
+ *
+ * // Gating on entitlement would also be actively wrong today. Licences are only
+ * // issued by an admin from /admin/licenses — the Stripe webhook grants minutes
+ * // and never calls createLicense — so most paying customers have no licence row
+ * // yet and would be refused their own download.
  */
 
 // The redirect target changes when a release is published, and the upstream

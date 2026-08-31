@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef } from 'react'
-import { Button, Field, CONTROL } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { Button, Field, CONTROL } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import { blankEntry } from '@/lib/resume'
 
 /*

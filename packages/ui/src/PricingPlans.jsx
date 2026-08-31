@@ -2,16 +2,16 @@
 
 // DESI-MODE 2026-08-30: useCallback, useEffect, useLayoutEffect and useRef were
 // all used only by the private Tabs below, which has moved to
-// components/ui/PillTabs.jsx. useState is the only one left.
+// ./PillTabs.jsx. useState is the only one left.
 // import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
-import PillTabs from '@/components/ui/PillTabs'
-import { Badge, Button } from '@/components/ui'
+import Icon from './Icon'
+import PillTabs from './PillTabs'
+import { Badge, Button } from './index.jsx'
 
 /*
-  DESI-MODE 2026-08-30: useIsoLayoutEffect moved to components/ui/PillTabs.jsx
+  DESI-MODE 2026-08-30: useIsoLayoutEffect moved to ./PillTabs.jsx
   along with the Tabs component that was its only user. Unchanged there.
 
   const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
@@ -248,7 +248,7 @@ export default function PricingPlans({
 /* ──────────────────────────────────────────────────────────────── tabs */
 
 /*
-  DESI-MODE 2026-08-30: moved to components/ui/PillTabs.jsx, generalised over an
+  DESI-MODE 2026-08-30: moved to ./PillTabs.jsx, generalised over an
   items array and given arrow-key navigation. Kept here per the convention in
   this repo; the call site above is the wrapper it used to render itself.
 

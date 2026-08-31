@@ -1,4 +1,7 @@
-import { Card } from './index'
+// SPLIT 2026-09-01: the barrel moved to packages/ui; this file stayed, because
+// its only consumers are the dashboard's loading.jsx files.
+// import { Card } from './index'
+import { Card } from 'smarthire-ui'
 
 /*
   Loading placeholders.

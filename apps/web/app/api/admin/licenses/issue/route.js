@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
-import { createLicense } from '@/lib/license'
+import { ensureLicense } from '@/lib/license'
 import { grantMinutes, MAX_GRANT_MINUTES } from '@/lib/metering'
 import { MINUTES_PER_CREDIT, creditsToMinutes } from '@/lib/credits'
 
@@ -16,6 +16,12 @@ import { MINUTES_PER_CREDIT, creditsToMinutes } from '@/lib/credits'
  * The credits are granted AFTER the licence exists, and a failure there is
  * reported rather than swallowed: a key that silently arrives empty looks to the
  * customer exactly like a key that does not work.
+ *
+ * AUTO-ISSUE 2026-09-01: ensureLicense(), not createLicense(). Every account now
+ * mints its own key on first dashboard load, so a bare createLicense() here would
+ * hand out a SECOND key to essentially every user this route is aimed at. What is
+ * left of manual fulfilment is the credits, which is the half admins actually
+ * use — so this returns the key the account already has and grants on top of it.
  */
 export async function POST(request) {
   try {
@@ -36,7 +42,16 @@ export async function POST(request) {
         { status: 400 })
     }
 
-    const license = await createLicense({ userId })
+    // const license = await createLicense({ userId })
+    const license = await ensureLicense(userId)
+
+    // A revoked licence is not a licence to fund. Say so rather than granting
+    // minutes onto a key the desktop app will refuse at the next validate tick.
+    if (license.status !== 'active') {
+      return NextResponse.json({
+        error: `${license.license_key} is ${license.status}. Un-revoke it before granting credits.`,
+      }, { status: 409 })
+    }
 
     let minutesRemaining = null
     if (startingMinutes > 0) {

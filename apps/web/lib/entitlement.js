@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { createClient } from './supabase-server'
+import { ensureLicense } from './license'
 
 /**
  * What a signed-in customer is currently entitled to, read through the cookie
@@ -31,6 +32,29 @@ export const getEntitlement = cache(async (userId) => {
       .order('created_at', { ascending: false }),
   ])
 
+  /*
+    AUTO-ISSUE 2026-09-01: mint the account's first licence on the first
+    authenticated render that finds none. This is the single call site that
+    covers every user — free trials included, which the payment webhooks never
+    see — and it is where the answer is consumed, so cache() collapses the
+    sidebar's ask and the page's into one.
+
+    Note the shape: the query above filters `status = 'active'`, so a revoked
+    account also lands here. ensureLicense() deliberately returns that revoked
+    row rather than minting over it, and the `=== 'active'` test below is what
+    keeps a revoked user looking revoked.
+
+    Failure is swallowed on purpose. If we cannot mint, the page should render
+    exactly the licence-less state it renders today, not a 500.
+  */
+  let list = licenses
+  if (!list?.length) {
+    try {
+      const minted = await ensureLicense(userId)
+      if (minted?.status === 'active') list = [minted]
+    } catch { /* render the "no licence" state, same as before this existed */ }
+  }
+
   const minutes = wallet?.minutes_balance ?? 0
   const periodEnd = wallet?.subscription_period_end ? new Date(wallet.subscription_period_end) : null
 
@@ -41,7 +65,11 @@ export const getEntitlement = cache(async (userId) => {
 
   return {
     wallet,
-    license: licenses?.[0] ?? null,
+    // AUTO-ISSUE 2026-09-01: `list`, not `licenses` — a key minted a few lines
+    // above has to be the one this render returns, or the card stays empty
+    // until a reload.
+    // license: licenses?.[0] ?? null,
+    license: list?.[0] ?? null,
     minutes,
     spentTotal: wallet?.minutes_spent_total ?? 0,
     unlimited,

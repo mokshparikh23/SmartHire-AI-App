@@ -1,7 +1,7 @@
 // Brand marks for the platforms named in the compatibility band on the landing
 // page.
 //
-// These live here rather than in components/ui/Icon.jsx on purpose. That file's
+// These live here rather than in packages/ui/src/Icon.jsx on purpose. That file's
 // whole contract is a monochrome currentColor stroke path on a 24x24 box, with a
 // hardcoded four-name list deciding fill-vs-stroke. Vendor marks are solid,
 // multi-path shapes and would fight it.

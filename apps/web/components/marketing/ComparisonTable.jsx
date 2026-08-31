@@ -1,4 +1,4 @@
-import Icon from '@/components/ui/Icon'
+import Icon from 'smarthire-ui/Icon'
 import { US, LEGEND } from '@/lib/comparison'
 
 /*

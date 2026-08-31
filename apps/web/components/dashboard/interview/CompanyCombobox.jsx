@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { CONTROL, CONTROL_PADLESS } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { CONTROL, CONTROL_PADLESS } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { companyLookupEnabled, logoUrl, searchCompanies } from '@/lib/company'
 import CompanyLogo from './CompanyLogo'

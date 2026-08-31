@@ -4,8 +4,8 @@ import { formatBalance, balanceTone, LOW_BALANCE_MINUTES } from '@/lib/credits'
 import { sweepStaleSessions } from '@/lib/metering'
 import { getLatestRelease, formatSize } from '@/lib/releases'
 import CopyButton from '@/components/dashboard/CopyButton'
-import Icon from '@/components/ui/Icon'
-import { Card, Badge, Button, Stat, PageHeader } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Card, Badge, Button, Stat, PageHeader } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 
 export const metadata = { title: 'Dashboard — Smart Hire AI' }

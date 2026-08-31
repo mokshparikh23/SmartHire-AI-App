@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Button } from '@/components/ui'
+import { Button } from 'smarthire-ui'
 
 export default function AuthError({ error, retry }) {
   useEffect(() => { console.error(error) }, [error])

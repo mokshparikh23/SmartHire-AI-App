@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
-import { Button, CONTROL } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Button, CONTROL } from 'smarthire-ui'
 import { formatBalance } from '@/lib/credits'
 
 export default function IssueLicenseForm({ users }) {

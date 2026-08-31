@@ -1,4 +1,5 @@
 import { grantMinutes } from '@/lib/metering'
+import { ensureLicense } from '@/lib/license'
 import { MINUTES_PER_CREDIT } from '@/lib/credits'
 
 /**
@@ -8,7 +9,7 @@ import { MINUTES_PER_CREDIT } from '@/lib/credits'
  * were local functions. With Razorpay landing, a second webhook needs exactly
  * the same behaviour, and a near-identical copy of the code that decides whether
  * to give someone free hours is not a copy anybody should be maintaining twice.
- * Same trigger as CONTROL and TH in components/ui/index.jsx.
+ * Same trigger as CONTROL and TH in packages/ui/src/index.jsx.
  *
  * IDEMPOTENCY IS THE WHOLE JOB, and it lives here rather than in either webhook.
  * Both gateways retry aggressively and will redeliver an event days later;
@@ -73,6 +74,19 @@ export async function fulfilCreditOrder(admin, order, patch = {}) {
       orderId: order.id,
     })
   }
+
+  /*
+    AUTO-ISSUE 2026-09-01: defence in depth, not the fix. A customer who pays and
+    then opens the dashboard gets their key from getEntitlement(); this covers the
+    one who pays and goes straight to the desktop app.
+
+    Deliberately AFTER the grants and deliberately not awaited for its result:
+    a licence we failed to mint is recoverable on the next dashboard load, but a
+    throw between claimOrder() and grantMinutes() would leave an order marked paid
+    with no credits, and the retry would skip it as already fulfilled. That is why
+    this is here and not inside claimOrder().
+  */
+  ensureLicense(order.user_id).catch(() => {})
 
   return { granted: true, credits: (order.credits || 0) + (order.bonus_credits || 0) }
 }

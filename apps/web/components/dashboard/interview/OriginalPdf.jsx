@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Button } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { Button } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { RESUME_BUCKET } from '@/lib/resume'
 

@@ -86,7 +86,7 @@ export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '
     // hard to spot in review and impossible to spot in production. Still renders
     // nothing, but says so while developing.
     if (process.env.NODE_ENV !== 'production') {
-      console.warn(`Icon: no path for "${name}". Add it to PATHS in components/ui/Icon.jsx.`)
+      console.warn(`Icon: no path for "${name}". Add it to PATHS in packages/ui/src/Icon.jsx.`)
     }
     return null
   }

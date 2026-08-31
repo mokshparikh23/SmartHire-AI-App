@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { CONTROL, Field } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { CONTROL, Field } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import {
   BLANK_RESUME, MAX_RESUME_BYTES, isEmptyRecord, normalizeParsed, summarise,
 } from '@/lib/resume'
@@ -70,8 +70,14 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
     abortRef.current = ac
 
     try {
+      /* CANDIDATE-FIRST 2026-09-01: the silent abort lived here. ensureProfileId()
+         returned null when the interview had no name, and this put the dropzone
+         back to idle with no spinner, no message and nothing to retry — the whole
+         "app me error aata hai" report. It throws now, so the catch below is the
+         one place a failed attach is reported, and it reports it at the dropzone. */
+      // const profileId = await ensureProfileId()
+      // if (!profileId) { setPhase('idle'); return }
       const profileId = await ensureProfileId()
-      if (!profileId) { setPhase('idle'); return }
 
       const body = new FormData()
       body.append('file', file)
@@ -103,7 +109,16 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
       setPhase('ready')
     } catch (e) {
       setPhase('idle')
-      if (e?.name !== 'AbortError') setError('Upload failed. Check your connection and try again.')
+      // CANDIDATE-FIRST 2026-09-01: ensureProfileId() throws here now, and its
+      // message says what actually went wrong with the row. A bare "Upload
+      // failed. Check your connection" would be a lie for that case, and the
+      // user has no connection problem to go and check.
+      // if (e?.name !== 'AbortError') setError('Upload failed. Check your connection and try again.')
+      if (e?.name !== 'AbortError') {
+        setError(e?.message
+          ? `Could not attach the résumé: ${e.message}`
+          : 'Upload failed. Check your connection and try again.')
+      }
     } finally {
       abortRef.current = null
     }
@@ -221,10 +236,15 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
 
         {hasRecord && !busy && (
           <>
+            {/* CANDIDATE-FIRST 2026-09-01: error={error} was missing on this one.
+                The idle dropzone above had it, so a first upload reported its
+                failure and a REPLACEMENT reported nothing — the zone just snapped
+                back to the old résumé as if the drop had never happened. */}
             <ResumeDropzone
               phase="ready"
               fileName={value.resume_file_name || 'Typed by hand'}
               summary={summarise(record)}
+              error={error}
               onFile={upload}
               onRemove={remove}
             />

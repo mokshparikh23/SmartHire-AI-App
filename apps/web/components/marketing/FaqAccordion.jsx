@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import Icon from '@/components/ui/Icon'
+import Icon from 'smarthire-ui/Icon'
 
 /**
  * One-open-at-a-time FAQ list.

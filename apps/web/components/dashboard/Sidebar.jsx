@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getProfile, getUser } from '@/lib/auth'
 import { getEntitlement } from '@/lib/entitlement'
-import Icon, { Logo } from '@/components/ui/Icon'
+import Icon, { Logo } from 'smarthire-ui/Icon'
 import NavItem from './NavItem'
 import SignOutButton from './SignOutButton'
 

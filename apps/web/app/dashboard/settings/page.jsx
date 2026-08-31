@@ -3,8 +3,8 @@ import { requireUser, getProfile } from '@/lib/auth'
 import { listDevices, DEVICE_COOKIE, ACTIVE_WINDOW_MS } from '@/lib/devices'
 import ProfileForm from '@/components/dashboard/ProfileForm'
 import DeviceList from '@/components/dashboard/DeviceList'
-import Icon from '@/components/ui/Icon'
-import { Card, Badge, PageHeader } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Card, Badge, PageHeader } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 
 export const metadata = { title: 'Settings — Smart Hire AI' }

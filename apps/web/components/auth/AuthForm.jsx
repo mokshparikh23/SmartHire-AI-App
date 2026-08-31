@@ -5,13 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { safeNext } from '@/lib/next-url'
-import Icon, { Spinner } from '@/components/ui/Icon'
-import { Button } from '@/components/ui'
+import Icon, { Spinner } from 'smarthire-ui/Icon'
+import { Button } from 'smarthire-ui'
 
 /*
   AUTH 2026-08-30: split so the password field can inset its show/hide button
   and reserve room for it. This is the same split, for the same reason, as
-  CONTROL_PADLESS in components/ui/index.jsx: stacking `pr-11` onto a class that
+  CONTROL_PADLESS in packages/ui/src/index.jsx: stacking `pr-11` onto a class that
   already carries `px-3.5` would NOT reliably win, because shorthand and
   longhand of one property collide and Tailwind v4 resolves that by stylesheet
   order, not by the order of your class attribute.

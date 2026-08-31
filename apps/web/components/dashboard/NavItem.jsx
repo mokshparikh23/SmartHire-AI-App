@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
+import Icon from 'smarthire-ui/Icon'
 
 /**
  * One sidebar link.

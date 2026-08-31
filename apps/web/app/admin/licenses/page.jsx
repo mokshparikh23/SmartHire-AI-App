@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase-server'
 import { requireAdminPage } from '@/lib/auth'
 import IssueLicenseForm from './IssueLicenseForm'
 import LicenseTable from './LicenseTable'
-import { Card, PageHeader } from '@/components/ui'
+import { Card, PageHeader } from 'smarthire-ui'
 
 export const metadata = { title: 'Licenses — Admin' }
 

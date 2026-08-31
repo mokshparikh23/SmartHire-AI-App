@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Card, Button, Badge, EmptyState } from '@/components/ui'
-import Icon from '@/components/ui/Icon'
+import { Card, Button, Badge, EmptyState } from 'smarthire-ui'
+import Icon from 'smarthire-ui/Icon'
 import { BLANK_ROW, hydrate, toRow } from '@/lib/resume'
 import { logoUrl } from '@/lib/company'
 import InterviewForm from './interview/InterviewForm'
@@ -60,8 +60,12 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
   */
   const save = async () => {
     const form = editing
+    /* CANDIDATE-FIRST 2026-09-01: the name is no longer a wall. toRow() derives
+       one from the company and role — or the date — when the field is blank, so
+       an interview with nothing typed into it is a legal placeholder rather than
+       a save that gets refused. */
     // if (!form.candidate_name.trim()) return setError('Candidate name is required.')
-    if (!form.candidate_name.trim()) return setError('Give this interview a name.')
+    // if (!form.candidate_name.trim()) return setError('Give this interview a name.')
 
     setBusy(true)
     setError(null)
@@ -91,17 +95,27 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
    * us their own CV, so an interview existing for it is expected, and it is
    * visible in the list rather than held in limbo.
    *
-   * Returns null and surfaces the reason if it cannot, so the panel can stop
-   * cleanly instead of uploading into nowhere.
+   * CANDIDATE-FIRST 2026-09-01: THROWS rather than returning null. The old
+   * contract — "return null and surface the reason" — had exactly one caller,
+   * ResumePanel, whose response to a null was `setPhase('idle'); return`. That is
+   * a silent abort: the user drops a PDF, the dropzone snaps back to empty, and
+   * the reason is printed by a different component well above it. With the name
+   * check gone there is no legitimate null left, so the remaining failure is a
+   * database error, and the panel's own catch is the right place to report it —
+   * right under the drop target the user is looking at.
    */
   const ensureProfileId = async () => {
     if (editing?.id) return editing.id
 
+    /* The wall this function used to be. See save() above: the name is derived
+       now, so a résumé dropped on an unnamed interview creates the row and
+       attaches, instead of failing with nothing on screen.
     if (!editing.candidate_name.trim()) {
       // setError('Add the candidate’s name before attaching a résumé.')
       setError('Name this interview before attaching a résumé.')
       return null
     }
+    */
 
     const { data, error: err } = await supabase
       .from('interview_profiles')
@@ -109,7 +123,8 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
       .select()
       .single()
 
-    if (err) { setError(err.message); return null }
+    // if (err) { setError(err.message); return null }
+    if (err) throw new Error(err.message)
 
     setEditing(prev => ({ ...prev, id: data.id }))
     merge(data)
@@ -213,7 +228,7 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
                     through className puts two same-property utilities on one
                     element and Tailwind v4 picks the winner by stylesheet order
                     rather than by the order you wrote them — add a tone to TONES
-                    in components/ui/index.jsx if a colour is ever wanted here. */}
+                    in packages/ui/src/index.jsx if a colour is ever wanted here. */}
                 {p.answer_style === 'desi' && <Badge>Indian English</Badge>}
               </div>
 

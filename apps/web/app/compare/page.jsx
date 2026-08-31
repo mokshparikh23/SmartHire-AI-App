@@ -1,6 +1,6 @@
 import { headers } from 'next/headers'
-import Icon from '@/components/ui/Icon'
-import { Container, Button, Badge } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Container, Button, Badge } from 'smarthire-ui'
 import { SiteNav, SiteFooter } from '@/components/marketing/SiteChrome'
 import SectionMark from '@/components/marketing/SectionMark'
 import Reveal, { ScrollProgress } from '@/components/marketing/Reveal'

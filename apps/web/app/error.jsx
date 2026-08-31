@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Container, Button } from '@/components/ui'
+import { Container, Button } from 'smarthire-ui'
 
 /*
   The outer net. Needed because app/dashboard/error.jsx cannot catch a throw

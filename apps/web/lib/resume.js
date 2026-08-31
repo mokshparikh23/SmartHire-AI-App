@@ -131,6 +131,35 @@ export function hydrate(row) {
 }
 
 /**
+ * A name for an interview the user did not name.
+ *
+ * CANDIDATE-FIRST 2026-09-01. `candidate_name` is NOT NULL, and until today the
+ * form refused to save — and refused to accept a résumé — until something was
+ * typed into it. That made it the only required user-supplied field in the whole
+ * product, and it is a field that, for a candidate using this on themselves, has
+ * nobody to hold: they ARE the candidate. The column stays NOT NULL; what changes
+ * is that the form fills it in rather than standing in the way.
+ *
+ * DELIBERATELY NOT derived from resume_parsed.personal.name. That is the reader's
+ * own name, and using it here would recreate the exact concept error being
+ * removed — five interviews all labelled with the user's own name.
+ *
+ * The clock is in the fallback because two interviews created on the same day are
+ * ordinary; two in the same minute are not.
+ */
+export function deriveInterviewName(form, now = new Date()) {
+  const bits = [form?.company, form?.role]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean)
+
+  if (bits.length) return bits.join(' · ')
+
+  return `Interview — ${now.toLocaleString(undefined, {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  })}`
+}
+
+/**
  * What save() sends to Supabase.
  *
  * resume_file_path is absent on purpose and its absence is load-bearing: the
@@ -160,7 +189,12 @@ export function toRow(form) {
   const resume = (parsed ? flattenResume(parsed) : '') || form.resume.trim() || ''
 
   return {
-    candidate_name:  form.candidate_name.trim(),
+    /* CANDIDATE-FIRST 2026-09-01: one choke point for the derived name, because
+       toRow() is used by BOTH save() and the insert inside ensureProfileId().
+       Putting the fallback in either caller would leave the other writing '' and
+       failing the NOT NULL. */
+    // candidate_name:  form.candidate_name.trim(),
+    candidate_name:  form.candidate_name.trim() || deriveInterviewName(form),
     company:         form.company.trim() || null,
     company_domain:  form.company_domain.trim() || null,
     role:            form.role.trim() || null,

@@ -9,9 +9,9 @@ import {
   // SPLIT 2026-09-01: for validating ?plan= and deciding which tab it belongs to.
   PACK_BY_ID, SUBSCRIPTION_TIERS,
 } from 'smarthire-pricing'
-import PricingPlans from '@/components/marketing/PricingPlans'
-import Icon from '@/components/ui/Icon'
-import { Card, Badge, Button, PageHeader, EmptyState, TH } from '@/components/ui'
+import PricingPlans from 'smarthire-ui/PricingPlans'
+import Icon from 'smarthire-ui/Icon'
+import { Card, Badge, Button, PageHeader, EmptyState, TH } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 
 export const metadata = { title: 'Billing — Smart Hire AI' }

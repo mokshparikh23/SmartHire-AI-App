@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Icon from '@/components/ui/Icon'
-import { Badge, Button } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Badge, Button } from 'smarthire-ui'
 
 /**
  * "Where is this account signed in", with a way to sign each one out.

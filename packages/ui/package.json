@@ -1,0 +1,25 @@
+{
+  "name": "smarthire-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The design system shared by apps/web and apps/site. Raw JSX, no build step — the consuming app's compiler is what turns it into a bundle, which is the only way a 'use client' directive is guaranteed to survive.",
+  "_comment_exports": "SUBPATH EXPORTS, NOT ONE BARREL, AND THAT IS LOAD-BEARING. The root export has no 'use client' directive and must never gain one: adding it there would turn Container, Button, Card and Badge into client components at every call site in both apps. PillTabs and PricingPlans DO carry the directive, so each gets its own entry point and the root never re-exports them. The same reasoning is written out at the top of src/PillTabs.jsx, where it was discovered.",
+  "_comment_names": "Subpath names deliberately mirror the old filenames, so the ~50-file import rewrite was one reviewable substitution of @/components/ui for smarthire-ui rather than fifty judgement calls.",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": "./src/index.jsx",
+    "./Icon": "./src/Icon.jsx",
+    "./PillTabs": "./src/PillTabs.jsx",
+    "./PricingPlans": "./src/PricingPlans.jsx",
+    "./styles/base.css": "./src/styles/base.css"
+  },
+  "_comment_peers": "PEER DEPENDENCIES ONLY — this package must never install its own React. apps/desktop is pinned to React 18 and Tailwind 3 on purpose (see the version note in the root README); a real dependency here is how a second React ends up in that tree. It also cannot be imported from apps/desktop by accident, because src/index.jsx imports next/link and apps/desktop has no next — so the mistake fails loudly at build rather than quietly at runtime.",
+  "peerDependencies": {
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

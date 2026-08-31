@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Icon, { Logo } from '@/components/ui/Icon'
+import Icon, { Logo } from 'smarthire-ui/Icon'
 import NavItem from '@/components/dashboard/NavItem'
 import SignOutButton from '@/components/dashboard/SignOutButton'
 

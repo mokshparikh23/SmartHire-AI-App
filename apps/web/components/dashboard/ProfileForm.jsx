@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Icon from '@/components/ui/Icon'
-import { Button } from '@/components/ui'
+import Icon from 'smarthire-ui/Icon'
+import { Button } from 'smarthire-ui'
 
 const FIELD =
   'w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink ' +

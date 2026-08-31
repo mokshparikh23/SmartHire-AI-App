@@ -1,4 +1,4 @@
-import { Card, PageHeader } from '@/components/ui'
+import { Card, PageHeader } from 'smarthire-ui'
 import { StatSkeleton, RowSkeleton } from '@/components/ui/Skeleton'
 import PageTransition from '@/components/ui/PageTransition'
 

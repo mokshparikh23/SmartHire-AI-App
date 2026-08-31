@@ -1,5 +1,5 @@
 import { requireUser, getSupabase } from '@/lib/auth'
-import { PageHeader } from '@/components/ui'
+import { PageHeader } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 import InterviewProfiles from '@/components/dashboard/InterviewProfiles'
 

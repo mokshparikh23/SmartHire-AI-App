@@ -28,6 +28,61 @@ export async function createLicense({ userId }) {
 }
 
 /**
+ * The account's licence, minting one the first time it is asked for.
+ *
+ * AUTO-ISSUE 2026-09-01. Until now createLicense() had exactly one caller —
+ * /api/admin/licenses/issue — and handle_new_user() grants a wallet but no
+ * licence. Neither payment webhook issues one either. So every user, paying or
+ * free, reached LicenseGate in the desktop app with nothing to paste and no way
+ * to get it without an admin. The 10 free minutes the signup trigger grants were
+ * unspendable.
+ *
+ * WHY HERE AND NOT IN handle_new_user(). Doing it in SQL means reimplementing
+ * generateLicenseKey()'s format in plpgsql — a second definition of a format, in
+ * a repo that has already paid for exactly that kind of drift once. Worse, the
+ * insert would run inside the auth transaction against a UNIQUE license_key, so
+ * a collision would abort the signup itself. A user who cannot create an account
+ * is a strictly worse failure than a user without a key.
+ *
+ * THE SELECT IS STATUS-AGNOSTIC, AND THAT IS THE WHOLE CORRECTNESS ARGUMENT.
+ * getEntitlement() reads `status = 'active'`, so an account whose only licence
+ * was revoked looks licence-less to it. If this function filtered the same way
+ * it would mint a fresh key on the revoked user's next dashboard load and hand
+ * the app straight back to them. Finding the revoked row and returning it is
+ * what makes revocation stick; callers decide what to do with a non-active row.
+ */
+export async function ensureLicense(userId) {
+  const admin = createAdminClient()
+
+  const read = async () => {
+    const { data, error } = await admin
+      .from('licenses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    // Prefer an active key for the RETURN value, but any row at all — revoked
+    // included — means we must not mint.
+    return data?.length ? (data.find((l) => l.status === 'active') ?? data[0]) : null
+  }
+
+  const existing = await read()
+  if (existing) return existing
+
+  try {
+    return await createLicense({ userId })
+  } catch (e) {
+    // 23505 is the partial unique index on (user_id) where status = 'active'.
+    // Two tabs opening the dashboard at once is the ordinary way to get here;
+    // the key the other one minted is just as good as the one we wanted.
+    if (e?.code === '23505') return await read()
+    // A database wobble is not "no licence" — same rule validateLicense() keeps
+    // below. Swallowing it here would show a paying customer an empty card.
+    throw e
+  }
+}
+
+/**
  * Validate a licence key. Called by the desktop app on activation, on a timer,
  * and once every stream tick.
  *

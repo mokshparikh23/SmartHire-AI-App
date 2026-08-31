@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Icon, { Logo } from '@/components/ui/Icon'
+import Icon, { Logo } from 'smarthire-ui/Icon'
 
 export default function AuthLayout({ children }) {
   return (
