@@ -12,13 +12,37 @@ const QUICK_CREDITS = [1, 2, 5, 10]
 
 const SUBSCRIPTIONS = ['weekly', 'monthly', 'yearly']
 
-export default function UserActions({ user, activeLicense, wallet }) {
+export default function UserActions({ user, activeLicense, wallet, viewerId, adminCount }) {
   const router = useRouter()
   const [loading, setLoading]   = useState(false)
   const [modal, setModal]       = useState(null)      // 'credits' | 'plan' | null
   const [error, setError]       = useState('')
 
   const balance = wallet?.minutes_balance ?? 0
+
+  /*
+    ADMIN SPLIT 2026-09-01 ─ THIS IS AFFORDANCE, NOT THE GUARD. Read that twice
+    before trusting it: everything below is a `disabled` attribute, and a
+    disabled attribute stops an accident, not an attacker. The real guard is
+    profile_set_role() plus the profiles_keep_one_admin triggers in
+    20260901035900_admin_split_audit.sql, which hold against this UI, the API
+    route, a psql session and the Supabase dashboard alike. Do not move either
+    rule up here and delete it down there.
+
+    What it prevents in practice. This table lists every profile INCLUDING your
+    own, so "Remove admin" was rendered on your own row, one confirm() away from
+    a service-role update that bypasses RLS. A sole admin pressing it left the
+    system with no admin and no way back inside the product.
+
+    Both values arrive free from page.jsx: requireAdminPage() already returns the
+    viewer's profile, and the page already has the full list to count.
+  */
+  const isSelf     = user.id === viewerId
+  const isLastAdmin = user.role === 'admin' && adminCount <= 1
+  const roleLocked = user.role === 'admin' && (isSelf || isLastAdmin)
+  const roleReason = isSelf
+    ? 'You cannot remove your own admin access. Ask another admin to do it.'
+    : 'This is the only admin account. Promote someone else first.'
 
   const doAction = async (url, body, confirmMsg) => {
     if (confirmMsg && !confirm(confirmMsg)) return null
@@ -149,8 +173,13 @@ export default function UserActions({ user, activeLicense, wallet }) {
           </Button>
         )}
 
+        {/* title, not a tooltip component: a disabled button is the one control
+            that cannot explain itself on click, so the reason has to be on hover
+            — and it is the same sentence profile_set_role() returns, so the
+            person who reaches the 409 another way reads the same words. */}
         <Button
-          size="sm" variant="ghost" disabled={loading}
+          size="sm" variant="ghost" disabled={loading || roleLocked}
+          title={roleLocked ? roleReason : undefined}
           onClick={() => doAction(
             '/api/admin/users/role',
             { userId: user.id, role: user.role === 'admin' ? 'user' : 'admin' },

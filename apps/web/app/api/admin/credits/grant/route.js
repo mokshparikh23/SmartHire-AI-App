@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
 import { grantMinutes, MAX_GRANT_MINUTES } from '@/lib/metering'
 import { MINUTES_PER_CREDIT, creditsToMinutes } from '@/lib/credits'
+import { fail } from '@/lib/http'
 
 /**
  * Adds or removes session time on an account.
@@ -64,7 +65,12 @@ export async function POST(request) {
       minutesRemaining: result.minutesRemaining,
       ledgerId:         result.ledgerId,
     })
+  // ADMIN SPLIT 2026-09-01: was `{ error: e.message }`, which handed raw
+  // Postgres text to the browser. See fail() in lib/http.js.
+  // } catch (e) {
+  //   return NextResponse.json({ error: e.message }, { status: 500 })
+  // }
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return fail(e, 'admin/credits/grant')
   }
 }

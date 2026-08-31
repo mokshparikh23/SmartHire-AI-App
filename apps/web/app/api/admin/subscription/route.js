@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
 import { setSubscription } from '@/lib/metering'
 import { SUBSCRIPTION_DAYS } from 'smarthire-pricing'
+import { fail } from '@/lib/http'
 
 const KINDS = Object.keys(SUBSCRIPTION_DAYS)
 
@@ -71,7 +72,12 @@ export async function POST(request) {
       subscriptionKind: result.subscriptionKind,
       periodEnd:        result.periodEnd,
     })
+  // ADMIN SPLIT 2026-09-01: was `{ error: e.message }`, which handed raw
+  // Postgres text to the browser. See fail() in lib/http.js.
+  // } catch (e) {
+  //   return NextResponse.json({ error: e.message }, { status: 500 })
+  // }
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return fail(e, 'admin/subscription')
   }
 }

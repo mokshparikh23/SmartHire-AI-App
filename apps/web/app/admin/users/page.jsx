@@ -12,7 +12,11 @@ export default async function UsersPage() {
   // decided by the client-supplied `next-router-state-tree` header — so the
   // layout alone does not stop a crafted RSC request reaching this query, which
   // returns every account's email and licence key.
-  await requireAdminPage()
+  // ADMIN SPLIT 2026-09-01: the returned profile is now used, not discarded.
+  // UserActions needs to know which row is you so it can refuse to render
+  // "Remove admin" on it — see the affordance note there.
+  // await requireAdminPage()
+  const me = await requireAdminPage()
 
   // Service-role client so every account is visible, not just the caller's own.
   const supabase = createAdminClient()
@@ -25,6 +29,12 @@ export default async function UsersPage() {
     .order('created_at', { ascending: false })
 
   if (error) console.error('Admin users error:', error)
+
+  // Counted from the list already fetched rather than with a second query: this
+  // page selects every profile, so the number is free. It feeds the "this is the
+  // only admin" affordance in UserActions — the enforcing copy of the same rule
+  // lives in profile_set_role() and the profiles_keep_one_admin triggers.
+  const adminCount = users?.filter(u => u.role === 'admin').length ?? 0
 
   return (
     <div>
@@ -93,7 +103,13 @@ export default async function UsersPage() {
                         {new Date(u.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-3.5">
-                        <UserActions user={u} activeLicense={active} wallet={wallet} />
+                        <UserActions
+                          user={u}
+                          activeLicense={active}
+                          wallet={wallet}
+                          viewerId={me?.id}
+                          adminCount={adminCount}
+                        />
                       </td>
                     </tr>
                   )

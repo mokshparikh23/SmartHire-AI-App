@@ -3,6 +3,7 @@ import { requireAdminApi } from '@/lib/auth'
 import { ensureLicense } from '@/lib/license'
 import { grantMinutes, MAX_GRANT_MINUTES } from '@/lib/metering'
 import { MINUTES_PER_CREDIT, creditsToMinutes } from '@/lib/credits'
+import { fail } from '@/lib/http'
 
 /**
  * Issues an activation key, optionally funded.
@@ -72,8 +73,13 @@ export async function POST(request) {
     }
 
     return NextResponse.json({ ...license, minutesRemaining })
+  // ADMIN SPLIT 2026-09-01: fail() logs the same detail this already logged and
+  // returns a constant instead of e.message. See lib/http.js.
+  // } catch (e) {
+  //   console.error('Issue license error:', e)
+  //   return NextResponse.json({ error: e.message }, { status: 500 })
+  // }
   } catch (e) {
-    console.error('Issue license error:', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return fail(e, 'admin/licenses/issue')
   }
 }

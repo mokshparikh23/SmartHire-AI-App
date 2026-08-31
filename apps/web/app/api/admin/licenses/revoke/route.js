@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-server'
+import { fail } from '@/lib/http'
 
 export async function POST(request) {
   try {
@@ -26,8 +27,13 @@ export async function POST(request) {
     // Closing it from here as well would mean settling against this server's
     // clock rather than the database's, for the sake of at most twenty seconds.
     return NextResponse.json({ success: true })
+  // ADMIN SPLIT 2026-09-01: fail() logs the same detail this already logged and
+  // returns a constant instead of e.message. See lib/http.js.
+  // } catch (e) {
+  //   console.error('Revoke license error:', e)
+  //   return NextResponse.json({ error: e.message }, { status: 500 })
+  // }
   } catch (e) {
-    console.error('Revoke license error:', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return fail(e, 'admin/licenses/revoke')
   }
 }
