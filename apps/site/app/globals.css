@@ -1,0 +1,27 @@
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  apps/site — the marketing site's stylesheet.
+
+  Almost everything is in the shared import below. Read
+  packages/ui/src/styles/base.css first: it holds the @theme palette and font
+  tokens, the @theme static motion tokens, @layer base, the .display / .hl /
+  .display-italic / .eyebrow / .mono typography, and the shared half of the
+  reduced-motion block. It also carries the @source line that keeps the
+  package's own utility classes in this app's emitted CSS, and the font contract
+  that app/layout.js in BOTH apps has to honour.
+
+  ORDER IS LOAD-BEARING. "tailwindcss" first, base.css second, everything else
+  after — our @layer contributions have to join Tailwind's layers once Tailwind
+  has declared them.
+
+  STILL TO ARRIVE: the marketing motion — .u-draw, .reveal / .stagger,
+  .rail-fill, the ticker marquee, .wave, .pulse, .caret, plus the .marker /
+  .x-scroll-fade component classes and the .mark-strip reduced-motion carve-out.
+  Those live in apps/web/app/globals.css today, because app/page.jsx and
+  app/compare/page.jsx are still rendered from that app. They move here with the
+  components that use them, and are deleted from there in the same change —
+  moved once, never duplicated.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
+@import "tailwindcss";
+@import "smarthire-ui/styles/base.css";
