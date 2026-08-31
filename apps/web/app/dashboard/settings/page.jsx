@@ -166,7 +166,14 @@ export default async function SettingsPage() {
           // </Card>
         }
 
-        <Card className="mt-5 border-critical/20">
+        {/* CARD-TONE 2026-09-01: `tone`, not className. The old
+            `className="border-critical/20"` was measurably doing nothing — the
+            computed border came out --color-line — and this is the one card in
+            the app where that border is the ONLY thing marking it as dangerous.
+            See the note on CARD_TONES in packages/ui/src/index.jsx.
+
+            // <Card className="mt-5 border-critical/20"> */}
+        <Card tone="critical" className="mt-5">
           {/* id so the confirmation form below can be aria-labelledby it — the
               form is a step of this card, not a thing of its own. */}
           <h2 id="delete-account-heading" className="text-[15px] font-semibold text-ink">

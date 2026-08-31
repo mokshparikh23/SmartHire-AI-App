@@ -86,9 +86,19 @@ const BUTTON_VARIANTS = {
   const BUTTON_SIZES = {
     sm: 'h-9 px-3.5 text-[13px]',
     …
+
+  ROW-CHIP-PARITY 2026-09-01: xs drops again, 32px → 24px, to the height of a
+  Badge. Both numbers are below, so this is one decision recorded in two files:
+  a row that ends in Resume · PDF · Edit · bin has FOUR objects on one line, and
+  a button 7.5px taller than the chip beside it does not read as "the actionable
+  one" — it reads as a row that failed to line up. 24px is the WCAG 2.2 target
+  minimum (24×24 CSS px), which is the floor this can go to and the reason it
+  stops here rather than matching the chip's old 24.5 exactly.
+
+  xs: 'h-8 px-3 text-[12px]',
 */
 const BUTTON_SIZES = {
-  xs: 'h-8 px-3 text-[12px]',
+  xs: 'h-6 px-2.5 text-[12px]',
   sm: 'h-9 px-3.5 text-[13px]',
   md: 'h-11 px-5 text-sm',
   lg: 'h-12 px-6 text-[15px]',
@@ -109,7 +119,10 @@ const BUTTON_SIZES = {
   what a bin at the end of a row should be: it has no word to be wide for.
 */
 const BUTTON_ICON_SIZES = {
-  xs: 'h-8 w-8',
+  // ROW-CHIP-PARITY 2026-09-01: 24×24 with the rest of the row. Exactly the WCAG
+  // 2.2 minimum target, and the reason nothing here goes smaller.
+  // xs: 'h-8 w-8',
+  xs: 'h-6 w-6',
   sm: 'h-9 w-9',
   md: 'h-11 w-11',
   lg: 'h-12 w-12',
@@ -186,10 +199,41 @@ export function Button({
   return <Tag className={cls} {...(href ? { href } : null)} {...rest}>{body}</Tag>
 }
 
-export function Card({ children, className = '', as = 'div', padded = true }) {
+/*
+  CARD-TONE 2026-09-01: `tone` exists because `<Card className="border-critical/20">`
+  DOES NOTHING, and had been doing nothing at seven call sites.
+
+  Measured, not guessed: the computed border-color of that card is rgb(231,229,228)
+  — --color-line — not the red tint the class asks for. `border-line` is baked into
+  the base line below, so the element carries two border-color utilities, and
+  Tailwind v4 settles that by stylesheet order rather than by the order of the
+  class attribute. `.border-line` sorts after `.border-critical/20` and wins. This
+  is the same trap BUTTON_VARIANTS and TONES are each written out at length to
+  avoid; Card was simply the one that had no escape hatch, so callers reached for
+  className and got silence.
+
+  It was invisible at six of those seven sites because each also sets a
+  `bg-*-soft` tint and the border is not carrying the signal. The seventh is the
+  Delete account card, where the border IS the only signal — a destructive card
+  that looked exactly like the Profile card above it.
+
+  So the base line stops hard-coding a border colour and the tone supplies one.
+  `neutral` reproduces today's appearance byte for byte, which is why no existing
+  call site has to change.
+
+  // <Tag className={`rounded-2xl border border-line bg-paper ${padded ? 'p-6' : ''} ${className}`}>
+*/
+const CARD_TONES = {
+  neutral:  'border-line',
+  critical: 'border-critical/20',
+  warning:  'border-warning/30',
+  positive: 'border-positive/20',
+}
+
+export function Card({ children, className = '', as = 'div', padded = true, tone = 'neutral' }) {
   const Tag = as
   return (
-    <Tag className={`rounded-2xl border border-line bg-paper ${padded ? 'p-6' : ''} ${className}`}>
+    <Tag className={`rounded-2xl border ${CARD_TONES[tone] ?? CARD_TONES.neutral} bg-paper ${padded ? 'p-6' : ''} ${className}`}>
       {children}
     </Tag>
   )
@@ -220,12 +264,66 @@ const TONES = {
   ink:      'bg-ink text-paper',
 }
 
-export function Badge({ tone = 'neutral', children, className = '' }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${TONES[tone]} ${className}`}>
-      {children}
-    </span>
-  )
+/*
+  ROW-CHIP-PARITY 2026-09-01: an EXPLICIT height, and a little less of everything
+  else.
+
+  The chip had no height at all — `py-1` on 11px text, which the browser resolved
+  to 24.5px through the normal line box. A fractional height is why these never
+  sat crisply against anything: half a pixel of the pill lands on a device-pixel
+  boundary and the top and bottom edges antialias differently. h-6 pins it at 24
+  and hands the same number to Button's `xs`, which is what makes Resume, PDF,
+  Edit and the bin one row of equals rather than four sizes.
+
+  px-2.5 → px-2 and gap-1.5 → gap-1 are the "slightly big" half of the same note:
+  the height was close to right, the WIDTH was what made a two-word chip look
+  like a control. 4px comes off each chip, 5 off the ones carrying an icon.
+
+  Global, not a size prop on Badge. There is one chip in this design system and
+  it is worth keeping that true — the admin tables and the usage page get the
+  same 1px trim, which nothing there is measured against.
+
+  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium …`}>
+*/
+/*
+  ONE-RESUME-CHIP 2026-09-01: a chip can be a control now — `as="button"` plus
+  `interactive`, with everything else about it unchanged.
+
+  The interviews list needed a "Resume" chip that opens the stored PDF. The
+  alternative was to hand-write the pill in that component, and the geometry
+  above is exactly what must not be copied: h-6 is the number Button's `xs` was
+  matched to, so a second copy of it drifts the moment either is touched.
+
+  `interactive` rather than letting the caller pass hover classes. A hover on the
+  same property as the tone is safe in a way a base override is not — `:hover`
+  adds a pseudo-class, so `.hover\:bg-line:hover` outranks `.bg-canvas-2` on
+  specificity rather than on stylesheet order — but that reasoning belongs in
+  this file once, not in every caller that wants a clickable chip. The states are
+  tuned for `neutral`, which is the only tone anything clickable uses today.
+
+  `type` is NOT defaulted here. A <button> inside a form defaults to submit, and
+  a chip that quietly submits the form around it is a real bug — so callers pass
+  `type="button"` themselves, where a reader can see it.
+
+  export function Badge({ tone = 'neutral', children, className = '' }) {
+    return (
+      <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-medium …`}>
+*/
+export function Badge({
+  tone = 'neutral', as = 'span', interactive = false,
+  children, className = '', ...rest
+}) {
+  const Tag = as
+  const cls = [
+    'inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-medium',
+    TONES[tone],
+    interactive
+      ? 'transition duration-150 hover:bg-line hover:text-ink active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none'
+      : '',
+    className,
+  ].join(' ')
+
+  return <Tag className={cls} {...rest}>{children}</Tag>
 }
 
 /** Eyebrow + serif heading + optional lede, used to open every section. */
