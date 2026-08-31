@@ -30,6 +30,10 @@ import { scoreCompleteness, VERDICT } from '../src/utils/completeness/index.js'
 // SELF-VOICE 2026-08-31: the echo backstop. Pure and near-importless by design,
 // precisely so it can be driven here without a microphone.
 import { isEcho } from '../src/utils/speakerDedupe.js'
+// PREMIUM-UX 2026-08-31: the markdown parser is split out of Markdown.jsx for
+// exactly this — plain node cannot parse JSX, and the streaming behaviour is
+// where the risk is.
+import { parseBlocks, splitInline } from '../src/utils/markdown.js'
 
 /* ── virtual clock ───────────────────────────────────────────────────────── */
 
@@ -557,6 +561,99 @@ check('speaker dedupe drops an echo and keeps a genuine answer', () => {
 check('speaker dedupe does not fire on text too short to judge', () => {
   assert.equal(isEcho('ok', ['ok then']), false)
   assert.equal(isEcho('yes', ['yes, exactly right']), false)
+})
+
+/* PREMIUM-UX 2026-08-31 ─ the markdown parser, and the half-streamed cases ────
+   The reason this parser exists at all is that the answer arrives one token at a
+   time, so almost every intermediate state is invalid markdown. What must never
+   happen is the answer visibly REWRITING itself as the closing markers land —
+   asterisks appearing and then vanishing, three backticks becoming a code block.
+   These fixtures are that guarantee. */
+
+check('markdown: blocks parse to the right kinds', () => {
+  const blocks = parseBlocks(
+    '# Heading\nplain line\n- first\n- second\n1. step one\n> quoted\n---'
+  )
+  assert.deepEqual(blocks.map((b) => b.type),
+    ['h', 'p', 'li', 'li', 'oli', 'quote', 'hr'])
+  assert.equal(blocks[0].text, 'Heading')
+  assert.equal(blocks[4].n, '1')
+})
+
+check('markdown: an UNTERMINATED fence is a code block immediately', () => {
+  // Mid-stream: the closing ``` has not arrived. Rendering three literal
+  // backticks here and a block a second later is the reflow this prevents.
+  const blocks = parseBlocks('Here you go:\n```\nconst x = 1\nconst y = 2')
+  assert.equal(blocks[blocks.length - 1].type, 'pre')
+  assert.equal(blocks[blocks.length - 1].text, 'const x = 1\nconst y = 2')
+
+  // And the finished version parses to the same block.
+  const done = parseBlocks('Here you go:\n```\nconst x = 1\nconst y = 2\n```')
+  assert.equal(done[done.length - 1].type, 'pre')
+  assert.equal(done[done.length - 1].text, 'const x = 1\nconst y = 2')
+})
+
+check('markdown: a trailing unmatched marker is hidden, never printed', () => {
+  // The exact frame where "**Time complexity" has streamed but "**" has not.
+  const half = splitInline('The answer is **Time complexity')
+  assert.ok(!half.some((p) => p.text.includes('*')), `asterisk leaked: ${JSON.stringify(half)}`)
+  assert.deepEqual(half, [
+    { type: 'text', text: 'The answer is ' },
+    { type: 'strong', text: 'Time complexity' },
+  ])
+
+  // Same for an open backtick.
+  assert.deepEqual(splitInline('use `useMemo'), [
+    { type: 'text', text: 'use ' },
+    { type: 'code', text: 'useMemo' },
+  ])
+
+  // A lone marker with nothing after it yet emits nothing at all, rather than
+  // a stray asterisk that disappears one token later.
+  assert.deepEqual(splitInline('the answer is **'), [{ type: 'text', text: 'the answer is ' }])
+})
+
+check('markdown: inline runs resolve in the right order', () => {
+  assert.deepEqual(splitInline('a **b** c `d` e'), [
+    { type: 'text', text: 'a ' },
+    { type: 'strong', text: 'b' },
+    { type: 'text', text: ' c ' },
+    { type: 'code', text: 'd' },
+    { type: 'text', text: ' e' },
+  ])
+
+  // ** inside backticks is code, not emphasis — which is why `code` is checked
+  // first in INLINE_RULES.
+  assert.deepEqual(splitInline('call `a ** b` now'), [
+    { type: 'text', text: 'call ' },
+    { type: 'code', text: 'a ** b' },
+    { type: 'text', text: ' now' },
+  ])
+
+  // Plain text with no markers is one node, not a pile of empty ones.
+  assert.deepEqual(splitInline('nothing to mark up here'),
+    [{ type: 'text', text: 'nothing to mark up here' }])
+})
+
+check('markdown: growing text never loses what it already showed', () => {
+  /* The strongest property, asserted by construction: feed the answer one
+     character at a time and the visible text must only ever grow. If any
+     intermediate frame printed a marker that a later frame removed, the plain
+     text would shrink here. */
+  const full = 'Use **memoisation**. See `useMemo`:\n\n- it caches\n- it is cheap'
+  let previous = ''
+  for (let i = 1; i <= full.length; i++) {
+    const visible = parseBlocks(full.slice(0, i))
+      .flatMap((b) => (b.type === 'pre' ? [b.text] : splitInline(b.text).map((p) => p.text)))
+      .join('')
+    // Growth is monotonic in LENGTH; a marker being hidden then shown would dip.
+    assert.ok(visible.length >= previous.length - 1,
+      `visible text shrank at ${i}: "${previous}" -> "${visible}"`)
+    previous = visible
+  }
+  assert.ok(previous.includes('memoisation'))
+  assert.ok(previous.includes('useMemo'))
+  assert.ok(!previous.includes('*'), `a marker survived into the output: "${previous}"`)
 })
 
 console.log(failures === 0 ? '\nall green\n' : `\n${failures} failing\n`)

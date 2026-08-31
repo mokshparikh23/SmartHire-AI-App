@@ -70,7 +70,32 @@ async function loadRenderer(window) {
 // now (Answer ⌘↵ / Screenshot ⌘⇧↵ / Chat ⌘⇧J), which needs ~650px before the
 // capture toggles and End button; the taller box gives the Q/A card room.
 // const PANEL = { width: 560, height: 420 }
-const PANEL = { width: 720, height: 520 }
+// PREMIUM-UX 2026-08-31: 520 -> 545. The transcript bar goes from one line to
+// two so a long question is readable rather than horizontally scrolled off the
+// left edge, and this pays for it — the answer body still comes out marginally
+// TALLER than before (~317px against ~310px), not shorter.
+// const PANEL = { width: 720, height: 520 }
+const PANEL = { width: 720, height: 545 }
+
+/* PREMIUM-UX 2026-08-31 ─ focus mode ──────────────────────────────────────────
+   The answer body is about 310px, which is eleven lines at 13.5px/1.75 — and two
+   or three of those go to the question block above it. A 250-word answer to a
+   system-design question does not fit, and the panel has never been able to
+   resize: setResizable(false) while a session runs.
+
+   Three options were weighed and two rejected. AUTO-GROW is wrong because an
+   always-on-top window that changes height while you read is disorienting, can
+   slide over the interviewer's video mid-sentence, and would oscillate as turns
+   come and go — the one thing an overlay must not do is move on its own. A
+   RESIZE GRIP is worse: a candidate forty seconds into a hard question is not
+   going to find and drag a 6px corner.
+
+   So: one deliberate, reversible, single-keystroke trade of screen space for
+   reading room, made at the moment the candidate wants that trade. It grows
+   DOWNWARD only — x and the top edge stay fixed, so the toolbar does not jump
+   out from under the pointer — and is clamped to the display's work area. */
+const FOCUS_HEIGHT = 880
+const FOCUS_MARGIN = 96   // never fill the display edge to edge
 
 // Just the toolbar bar: 52px of content plus its 1px borders. Must stay above
 // PANEL_MIN.height or setBounds silently clamps the collapse back open.
@@ -91,7 +116,15 @@ const SETUP_MIN = { width: 420, height: 460 }
 const PANEL_MIN = { width: 420, height: COLLAPSED_HEIGHT }
 
 let sessionMode = false
+// PREMIUM-UX 2026-08-31: whether the panel is expanded for reading. Beside
+// sessionMode rather than inside the renderer, because both resize handlers have
+// to agree on what "open" means — a collapse taken while focused must expand
+// back to the focus height, not to the default one.
+let focusMode = false
 let savedBounds = null
+
+/** The height the panel should have when it is not collapsed. */
+const openHeight = () => (focusMode ? FOCUS_HEIGHT : PANEL.height)
 
 async function createMainWindow() {
   const { width } = screen.getPrimaryDisplay().workAreaSize
@@ -241,7 +274,11 @@ function enterSessionMode() {
   // Lower the minimums FIRST — setBounds is clamped by them, so without this
   // the panel would render at the setup window's 680x520.
   mainWindow.setMinimumSize(PANEL_MIN.width, PANEL_MIN.height)
-  mainWindow.setBounds(panelBounds(savedBounds), false)
+  // PREMIUM-UX 2026-08-31: a new session always starts unfocused, and the
+  // launcher -> panel jump animates rather than snapping.
+  focusMode = false
+  // mainWindow.setBounds(panelBounds(savedBounds), false)
+  mainWindow.setBounds(panelBounds(savedBounds), true)
   mainWindow.setResizable(false)
   // Native NSWindow buttons are painted on the frame, not by the page, so on a
   // transparent window they float as three loose dots over the user's call.
@@ -252,10 +289,13 @@ function enterSessionMode() {
 function exitSessionMode() {
   if (!mainWindow) return
   sessionMode = false
+  focusMode = false   // PREMIUM-UX 2026-08-31
   if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(true)
   mainWindow.setResizable(true)
   mainWindow.setMinimumSize(SETUP_MIN.width, SETUP_MIN.height)
-  if (savedBounds) mainWindow.setBounds(clampToVisible(savedBounds), false)
+  // PREMIUM-UX 2026-08-31: animate back too, so ending a session is not a snap.
+  // if (savedBounds) mainWindow.setBounds(clampToVisible(savedBounds), false)
+  if (savedBounds) mainWindow.setBounds(clampToVisible(savedBounds), true)
   savedBounds = null
 }
 
@@ -481,10 +521,39 @@ ipcMain.handle('overlay:exitSession',  () => { exitSessionMode();  return true }
 ipcMain.handle('overlay:setCollapsed', (_, collapsed) => {
   if (!mainWindow || !sessionMode) return false
   const bounds = mainWindow.getBounds()
-  const height = collapsed ? COLLAPSED_HEIGHT : PANEL.height
+  // PREMIUM-UX 2026-08-31: expanding out of a collapse must restore the height
+  // the panel actually had, which is the focus height when focus mode is on.
+  // const height = collapsed ? COLLAPSED_HEIGHT : PANEL.height
+  const height = collapsed ? COLLAPSED_HEIGHT : openHeight()
   // Keep x/y, so collapsing does not also move the panel out from under the
   // pointer that just clicked the button.
-  mainWindow.setBounds({ ...bounds, height }, false)
+  // PREMIUM-UX 2026-08-31: animate. macOS only — Windows ignores the flag, and
+  // the in-page transitions carry the effect there.
+  // mainWindow.setBounds({ ...bounds, height }, false)
+  mainWindow.setBounds({ ...bounds, height }, true)
+  return true
+})
+
+/**
+ * PREMIUM-UX 2026-08-31: focus mode. See FOCUS_HEIGHT at the top of this file
+ * for why this shape rather than auto-grow or a resize grip.
+ *
+ * Reuses overlay:setCollapsed's proven shape verbatim — that handler already
+ * resizes a window enterSessionMode() made non-resizable, which is the one risk
+ * this feature would otherwise be carrying on its own.
+ */
+ipcMain.handle('overlay:setFocus', (_, focus) => {
+  if (!mainWindow || !sessionMode) return false
+  focusMode = !!focus
+
+  const bounds = mainWindow.getBounds()
+  const area = screen.getDisplayMatching(bounds).workArea
+  const height = Math.min(openHeight(), area.height - FOCUS_MARGIN)
+  // Grows downward, so pull the top edge up only if the bottom would run off
+  // the display. The candidate should never have to hunt for the toolbar.
+  const y = Math.max(area.y, Math.min(bounds.y, area.y + area.height - height - 8))
+
+  mainWindow.setBounds({ ...bounds, y, height }, true)
   return true
 })
 ipcMain.handle('window:hide',    () => { if (mainWindow) mainWindow.hide() })

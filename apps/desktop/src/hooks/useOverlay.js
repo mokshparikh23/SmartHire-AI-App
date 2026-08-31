@@ -38,14 +38,14 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
 // closes the metered row and dismisses the panel. There was nothing at all that
 // stopped only the answer, so a runaway generation could only be waited out.
 // export function usePanelHotkeys({ onType, onStop, onCopy, onRetry, … }) {
+// PREMIUM-UX 2026-08-31: onFocus (⌘⇧F) and onEscape added.
 export function usePanelHotkeys({
-  onType, onStop, onCopy, onRetry, onStopGenerating,
+  onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape,
   onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
 }) {
   useEffect(() => {
     const onKeyDown = (e) => {
       const mod = e.metaKey || e.ctrlKey
-      if (!mod) return
 
       // ⌘← / ⌘→ mean line-start / line-end inside a text field, and ⌘⌫ means
       // delete-to-start. Never steal those from an input the user is typing in.
@@ -54,6 +54,23 @@ export function usePanelHotkeys({
         (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 
       const key = e.key.toLowerCase()
+
+      /* PREMIUM-UX 2026-08-31 ─ the one binding with no modifier ───────────────
+         Esc is checked BEFORE the `mod` gate, because Escape with a modifier is
+         not a thing anyone presses. It is the universal "back out of this", and
+         the panel had none at all — the only way out of focus mode or an open
+         drawer was to find the control that opened it.
+
+         The precedence chain lives in SessionPanel; it deliberately ends at
+         "nothing", never at ending the session. */
+      if (key === 'escape') {
+        if (typing) return   // the transcript input owns Esc while it is open
+        e.preventDefault()
+        onEscape?.()
+        return
+      }
+
+      if (!mod) return
 
       if (e.shiftKey) {
         /* PREMIUM-UX 2026-08-31 ─ the typing guard was never applied here ──────
@@ -73,6 +90,9 @@ export function usePanelHotkeys({
         else if (key === 'c')     { e.preventDefault(); onCopy?.() }
         else if (key === 'r')     { e.preventDefault(); onRetry?.() }
         else if (key === 'j')     { e.preventDefault(); onChat?.() }
+        // PREMIUM-UX 2026-08-31: focus mode — grow the panel to read a long
+        // answer. F for focus; ⌘⇧F is unbound elsewhere in the app.
+        else if (key === 'f')     { e.preventDefault(); onFocus?.() }
         else if (key === 'enter') { e.preventDefault(); onScreenshot?.() }
         else if (key === 'backspace') { e.preventDefault(); onClearTranscript?.() }
         return
@@ -91,7 +111,59 @@ export function usePanelHotkeys({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
     // onType, onStop, onCopy, onRetry,
-    onType, onStop, onCopy, onRetry, onStopGenerating,
+    onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape,
     onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
   ])
+}
+
+/* PREMIUM-UX 2026-08-31 ─ the overlay is keyboard-driven and could not scroll ──
+   Every action had a chord, and the one thing a candidate does most — read past
+   the eleventh line of an answer — required the trackpad. Bare keys, because
+   these are the keys that scroll everywhere else, and guarded by the same
+   `typing` test the chords use so j/k still type letters in the chat composer.
+
+   Setting scrollTop directly fires the element's own onScroll, which is what
+   maintains AnswerPanel's `pinned` ref — so following-the-stream keeps working
+   with no extra wiring. */
+const LINE_PX = 24      // ~13.5px at line-height 1.75
+const PAGE_OVERLAP = 40 // keep a little context across a page turn
+
+export function useAnswerScroll(bodyRef, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return
+
+    const onKeyDown = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      const target = e.target
+      if (target instanceof HTMLElement &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+
+      const el = bodyRef.current
+      if (!el) return
+
+      const page = Math.max(LINE_PX, el.clientHeight - PAGE_OVERLAP)
+      const key = e.key
+
+      let delta = null
+      if (key === 'PageDown') delta = page
+      else if (key === 'PageUp') delta = -page
+      else if (key === ' ') delta = e.shiftKey ? -page : page
+      else if (key === 'ArrowDown' || key === 'j') delta = LINE_PX
+      else if (key === 'ArrowUp' || key === 'k') delta = -LINE_PX
+      else if (key === 'Home') delta = -el.scrollHeight
+      else if (key === 'End') delta = el.scrollHeight
+
+      if (delta === null) return
+      e.preventDefault()
+      el.scrollTop += delta
+      // Not a smooth behaviour: a smooth scroll racing a streamed token produces
+      // a fight between the two.
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [bodyRef, enabled])
 }

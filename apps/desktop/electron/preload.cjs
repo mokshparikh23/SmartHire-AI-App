@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // REDESIGN 2026-08-29: the window shrinks with the collapsed panel, so the
   // hidden bars leave no invisible rectangle intercepting clicks.
   setOverlayCollapsed: (v) => ipcRenderer.invoke('overlay:setCollapsed', v),
+  // PREMIUM-UX 2026-08-31: focus mode grows the panel downward for reading a
+  // long answer. See the FOCUS_HEIGHT note in main.cjs for why this rather than
+  // auto-grow or a resize grip.
+  setOverlayFocus: (v)     => ipcRenderer.invoke('overlay:setFocus', v),
 
   // Kept: useVoice reports each transcript so the main process can react later.
   // The matching ai:answer/onAnswer bridge was removed — it had no ipcMain

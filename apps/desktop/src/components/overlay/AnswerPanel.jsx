@@ -2,7 +2,13 @@ import React, { useEffect, useLayoutEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import Icon from '../ui/Icon'
-import Kbd from './Kbd'
+import Kbd, { comboLabel } from './Kbd'
+// PREMIUM-UX 2026-08-31: PageUp/PageDown/j/k/Home/End over the answer body. The
+// overlay is otherwise entirely keyboard-driven and reading — the thing done
+// most — was trackpad-only.
+import { useAnswerScroll } from '../../hooks/useOverlay'
+// PREMIUM-UX 2026-08-31: streaming-safe markdown, no dependency. See its header.
+import Markdown from './Markdown'
 
 /**
  * The streaming answer body.
@@ -33,18 +39,32 @@ export default function AnswerPanel() {
   const bodyRef   = useRef(null)
   const pinnedRef = useRef(true)
 
+  // PREMIUM-UX 2026-08-31: mounted here rather than in SessionPanel because this
+  // is where bodyRef lives. Setting scrollTop fires the onScroll below, so
+  // pinnedRef stays correct and following-the-stream keeps working for free.
+  useAnswerScroll(bodyRef)
+
   // Follow the stream only while the user is already at the bottom. Scrolling
   // up to re-read must not be yanked back down on the next token.
   const handleScroll = () => {
     const el = bodyRef.current
     if (!el) return
-    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    pinnedRef.current = atEnd
+    /* PREMIUM-UX 2026-08-31: drives the bottom fade that says "there is more
+       below". Written straight onto the element, NOT through state — this fires
+       on every wheel tick, and this component is the one leaf that re-renders
+       per streamed token. A setState here would put a render on both paths. */
+    el.dataset.atEnd = String(atEnd)
   }
 
   useLayoutEffect(() => {
     if (pinnedRef.current && bodyRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
+    // PREMIUM-UX 2026-08-31: the answer growing can turn "at the end" into "not
+    // at the end", so the fade has to be re-evaluated as it streams.
+    handleScroll()
   }, [answer])
 
   /* PREMIUM-UX 2026-08-31 ─ do not yank a reader who scrolled away ────────────
@@ -124,12 +144,21 @@ export default function AnswerPanel() {
         {answer ? (
           <div className="ia-qa ia-qa--answer">
             <Icon name="sparkle" size={15} />
-            <p className="ia-answer">
-              {/* <span className="ia-qa-label">Answer:</span> */}
+            {/* PREMIUM-UX 2026-08-31: the answer was a bare React text child, so
+                every **bold** the model emitted shipped literal asterisks and
+                every "- item" was a hyphen mid-paragraph. See Markdown.jsx for
+                why this is hand-rolled and how it keeps — and improves on — the
+                one-leaf-render-per-token contract this file's header states.
+
+                The label moves out of the paragraph and into its own element:
+                baked in as an inline prefix it re-flowed with the body text on
+                every token, and it cannot prefix a bulleted list at all. */}
+            {/* <p className="ia-answer"><span className="ia-qa-label">{aLabel}</span>{answer}…</p> */}
+            <div className="ia-answer">
               <span className="ia-qa-label">{aLabel}</span>
-              {answer}
+              <Markdown text={answer} />
               {isThinking && <span className="ia-caret" />}
-            </p>
+            </div>
           </div>
         ) : blockedReason ? (
           /* Running out of credits is a state with an action, not a red string. */
@@ -206,8 +235,12 @@ export default function AnswerPanel() {
 // export function AnswerCardHead({
 //   children, onClear, onExpand, canClear, clearCombo = 'mod del', clearTitle = 'Clear the answer',
 // }) {
+// PREMIUM-UX 2026-08-31: `expanded` added — the expand button drives focus mode
+// now rather than the turn drawer, so it has a state to reflect.
+// export function AnswerCardHead({ children, onClear, onExpand, canClear, … }) {
 export function AnswerCardHead({
-  children, onClear, onExpand, canClear, clearCombo = 'mod del', clearTitle = 'Clear what is showing',
+  children, onClear, onExpand, expanded, canClear,
+  clearCombo = 'mod del', clearTitle = 'Clear what is showing',
 }) {
   return (
     <div className="ia-card-head">
@@ -216,8 +249,20 @@ export function AnswerCardHead({
       <button className="ia-pill" onClick={onClear} disabled={!canClear} title={clearTitle}>
         Clear <Kbd combo={clearCombo} />
       </button>
-      <button className="ia-btn ia-btn--ghost" onClick={onExpand} title="Expand">
-        <Icon name="expand" size={14} />
+      {/* PREMIUM-UX 2026-08-31: this said "Expand" and toggled the turn drawer.
+          It now grows the panel for reading, which is what the icon has always
+          promised — and it says which way it will go. The drawer is still one
+          click away on the pager beside it, which is where history belongs. */}
+      {/* <button className="ia-btn ia-btn--ghost" onClick={onExpand} title="Expand"> */}
+      <button
+        className="ia-btn ia-btn--ghost"
+        data-on={!!expanded}
+        onClick={onExpand}
+        title={expanded
+          ? `Back to the small panel (${comboLabel('mod shift f')})`
+          : `Make the panel taller to read (${comboLabel('mod shift f')})`}
+      >
+        <Icon name={expanded ? 'collapse' : 'expand'} size={14} />
       </button>
     </div>
   )

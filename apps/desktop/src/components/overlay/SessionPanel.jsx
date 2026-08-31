@@ -104,6 +104,31 @@ export default function SessionPanel({ session }) {
     })
   }, [])
 
+  /* PREMIUM-UX 2026-08-31 ─ focus mode ────────────────────────────────────────
+     The answer body is about eleven lines, and a long answer simply did not fit
+     — the panel has never been resizable during a session. ⌘⇧F (and the card
+     head's expand button, which finally does what its icon says) grows the
+     window downward for reading and Esc puts it back.
+
+     `data-focus` on the stage lets the CSS loosen the answer's line-height when
+     there is room, which is the whole point of having asked for the room. */
+  const [focused, setFocused] = useState(false)
+
+  const toggleFocus = useCallback(() => {
+    setFocused((v) => {
+      const next = !v
+      window.electronAPI?.setOverlayFocus?.(next)
+      return next
+    })
+  }, [])
+
+  const exitFocus = useCallback(() => {
+    setFocused((v) => {
+      if (v) window.electronAPI?.setOverlayFocus?.(false)
+      return false
+    })
+  }, [])
+
   // The Screen Recording grant can be revoked while the app is open, and
   // askForMediaAccess cannot request it — so read it on mount and let the
   // toggle offer System Settings when it is denied.
@@ -170,6 +195,17 @@ export default function SessionPanel({ session }) {
       const s = useSessionStore.getState()
       s.chatMode ? session.stopChat?.() : session.stopGenerating?.()
     },
+    onFocus: toggleFocus,
+    /* PREMIUM-UX 2026-08-31: the Esc precedence chain. Most-recently-opened
+       first, and it deliberately ends at "do nothing" — Esc must never be a
+       route to ending a paid session, however deep the chain gets. */
+    onEscape: () => {
+      if (typing)     { setTyping(false); return }
+      if (drawerOpen) { setDrawerOpen(false); return }
+      if (focused)    { exitFocus(); return }
+      if (arming)     { armedRef.current = false; setArming(false); return }
+      // Nothing to back out of.
+    },
     onScreenshot:      session.askAboutScreen,
     onChat:            () => useSessionStore.getState().toggleChat(),
     // onClearTranscript: () => useSessionStore.getState().clearTranscript(),
@@ -189,7 +225,10 @@ export default function SessionPanel({ session }) {
   const state = isThinking ? 'thinking' : micEnabled ? 'listening' : 'paused'
 
   return (
-    <div className="ia-stage" ref={stageRef}>
+    // PREMIUM-UX 2026-08-31: data-focus lets the CSS loosen the answer's
+    // line-height when focus mode has bought the room for it.
+    // <div className="ia-stage" ref={stageRef}>
+    <div className="ia-stage" ref={stageRef} data-focus={focused}>
       <div className="ia-glass ia-bar ia-bar--toolbar">
         <Toolbar
           session={session}
@@ -254,7 +293,17 @@ export default function SessionPanel({ session }) {
               clearTitle={chatMode
                 ? 'Clear the chat'
                 : followups ? 'Clear the suggestion' : 'Clear the answer'}
-              onExpand={() => setDrawerOpen((v) => !v)}
+              /* PREMIUM-UX 2026-08-31: this button carried the `expand` icon and
+                 the title "Expand" and toggled the turn DRAWER — while the
+                 identical icon and title on the transcript bar toggled the type
+                 input. Two unrelated behaviours behind one label, neither of
+                 which expanded anything.
+
+                 It now does what its icon says. The drawer is still one click
+                 away on the pager beside it, which is where history belongs. */
+              // onExpand={() => setDrawerOpen((v) => !v)}
+              onExpand={toggleFocus}
+              expanded={focused}
             >
               {!chatMode && (
                 <TurnPager

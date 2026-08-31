@@ -514,7 +514,39 @@
   /* padding: 13px 16px 15px; */
   padding: 14px 18px 16px;
   contain: layout paint;
+
+  /* PREMIUM-UX 2026-08-31 ─ "there is more below" ────────────────────────────
+     With a fixed frame the candidate had no way to know an answer continued —
+     it simply appeared to end at the eleventh line. A fade at the bottom edge,
+     removed the moment they reach the end.
+
+     A pseudo-element rather than a real one: this must not become another node
+     React reconciles on every streamed token. data-at-end is written
+     IMPERATIVELY from AnswerPanel's scroll handler, never through state — that
+     handler fires on every wheel tick and must not re-render the one leaf that
+     subscribes to currentAnswer. */
+  position: relative;
 }
+.ia-body::after {
+  content: '';
+  position: sticky;
+  bottom: -16px;              /* cancel the container's bottom padding */
+  left: 0; right: 0;
+  display: block;
+  height: 30px;
+  margin-top: -30px;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(10, 11, 13, 0), rgba(10, 11, 13, calc(var(--ia-alpha, 0.9) * 0.95)));
+  opacity: 1;
+  transition: opacity 140ms ease;
+}
+.ia-body[data-at-end='true']::after { opacity: 0; }
+
+/* PREMIUM-UX 2026-08-31: focus mode has bought vertical room, so spend a little
+   of it on legibility. Nothing structural moves — only the leading. */
+.ia-stage[data-focus='true'] .ia-answer { line-height: 1.85; }
+.ia-stage[data-focus='true'] .ia-body   { padding: 18px 22px 20px; }
 
 /* Labelled Question / Answer blocks. The reference uses 💬 and ⭐; these are
    line icons for the reason in components/ui/Icon.jsx. */
@@ -529,6 +561,89 @@
   margin-right: 6px;
 }
 
+/* PREMIUM-UX 2026-08-31: inside the answer the label is no longer an inline
+   prefix to a paragraph — it cannot prefix a bulleted list, and as an inline
+   span it re-flowed with the body on every streamed token. It becomes a small
+   header of its own, on its own line. */
+.ia-answer > .ia-qa-label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.50);
+  text-shadow: none;
+}
+
+/* PREMIUM-UX 2026-08-31 ─ markdown blocks. See components/overlay/Markdown.jsx.
+   Deliberately tight vertical rhythm: this is read mid-sentence in a ~310px box,
+   so document-like spacing would cost more lines than the structure buys. */
+.ia-md-p    { margin: 0; white-space: pre-wrap; }
+.ia-md-p + .ia-md-p { margin-top: 6px; }
+
+.ia-md-h {
+  margin: 10px 0 4px;
+  font-size: 13.5px; font-weight: 650; line-height: 1.5;
+  color: #fff;
+}
+.ia-md-h:first-child { margin-top: 0; }
+
+.ia-md-li {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  align-items: baseline;
+}
+.ia-md-li:first-child { margin-top: 0; }
+.ia-md-bullet,
+.ia-md-num {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.ia-md-quote {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.80);
+}
+
+.ia-md-pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.30);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  /* Wide code scrolls inside its own box; the panel body must never scroll
+     sideways. */
+  overflow-x: auto;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: none;
+  white-space: pre;
+}
+
+.ia-md-hr {
+  margin: 10px 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* A blank line between paragraphs, not a full line box. */
+.ia-md-gap { height: 6px; }
+
+.ia-answer code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.10);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-shadow: none;
+}
+.ia-answer strong { font-weight: 650; color: #fff; }
+.ia-answer em     { font-style: italic; color: rgba(255, 255, 255, 0.92); }
+
 .ia-question-text {
   font-size: 13.5px; line-height: 1.6;
   color: rgba(255, 255, 255, 0.95);
@@ -538,8 +653,18 @@
 
 .ia-answer {
   font-size: 13.5px; line-height: 1.75;
-  color: rgba(255, 255, 255, 0.88);
-  white-space: pre-wrap;
+  /* PREMIUM-UX 2026-08-31: 0.88 -> 0.94. backdrop-filter is inert on this window
+     (see the note at the top of this file), so the panel is a flat translucent
+     rectangle over whatever is behind it — and over a bright shared screen or a
+     white IDE the old value was not comfortably readable. The text-shadow is
+     what makes it survive a worst-case backdrop at any alpha. */
+  /* color: rgba(255, 255, 255, 0.88); */
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  /* PREMIUM-UX 2026-08-31: pre-wrap moves down onto .ia-md-p. Left here it
+     applied to the markdown container, so the newlines BETWEEN blocks rendered
+     as blank lines on top of the blocks' own margins. */
+  /* white-space: pre-wrap; */
   word-break: break-word;
   /* globals.css sets user-select:none on body; the answer must be selectable. */
   user-select: text;
@@ -736,12 +861,28 @@
 .ia-vote--down[data-on='true'] { color: #fca5a5; background: rgba(239, 68, 68, 0.14); }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
+/* PREMIUM-UX 2026-08-31: 4px with a fully transparent track was, in practice,
+   invisible. On a panel that shows about eleven lines of a longer answer, the
+   scrollbar is the PRIMARY signal that there is more below — the one affordance
+   telling the reader the answer did not simply end. 8px with a visible track. */
 /* .ia-panel ::-webkit-scrollbar { width: 4px; } */
-.ia-bar ::-webkit-scrollbar { width: 4px; }
-.ia-bar ::-webkit-scrollbar-track { background: transparent; }
+/* .ia-bar ::-webkit-scrollbar { width: 4px; }
+   .ia-bar ::-webkit-scrollbar-track { background: transparent; }
+   .ia-bar ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 2px; } */
+.ia-bar ::-webkit-scrollbar { width: 8px; }
+.ia-bar ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
 .ia-bar ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.ia-bar ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
+  background-clip: content-box;
 }
 
 .ia-bar ::selection { background: rgba(255, 255, 255, 0.22); color: #fff; }
