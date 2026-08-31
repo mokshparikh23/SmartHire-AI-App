@@ -86,6 +86,15 @@ async function applySubscription(admin, { userId, kind, status, periodEnd, custo
 
 /** Finds the account behind a subscription event, which may not carry metadata. */
 async function userForSubscription(admin, subscription) {
+  // DELETE-ACCOUNT 2026-09-01: the resolution below is unchanged, but its answer
+  // now goes through liveUser(). See the note there.
+  //
+  // const fromMeta = subscription?.metadata?.userId
+  // if (fromMeta) return fromMeta
+  return liveUser(admin, await resolveUserId(admin, subscription))
+}
+
+async function resolveUserId(admin, subscription) {
   const fromMeta = subscription?.metadata?.userId
   if (fromMeta) return fromMeta
 
@@ -100,6 +109,35 @@ async function userForSubscription(admin, subscription) {
       .eq('stripe_customer_id', subscription.customer).maybeSingle()
     if (byCustomer?.user_id) return byCustomer.user_id
   }
+  return null
+}
+
+/**
+ * DELETE-ACCOUNT 2026-09-01: an id that resolved is not the same as an account
+ * that exists, and this endpoint is shared by everyone.
+ *
+ * app/api/account/delete cancels the subscription and then destroys the account,
+ * so `customer.subscription.deleted` lands here seconds later. The id still
+ * resolves — checkout writes subscription_data.metadata.userId, which outlives
+ * the row it names — so without this we would hand a DEAD UUID to
+ * setSubscription(). That calls subscription_set(), whose first statement is
+ * `insert into credit_wallets (user_id) … on conflict do nothing`, and ON
+ * CONFLICT DO NOTHING does not suppress a foreign-key violation. The insert
+ * raises 23503, metering's rpc() throws by design, and the catch below answers
+ * 500.
+ *
+ * That 500 is the actual damage. Stripe retries with backoff for up to three
+ * days and disables endpoints that keep failing, and this is ONE endpoint for
+ * every customer — so one deleted account's unprocessable event degrades
+ * fulfilment for everybody. The comment on that catch says "everything above is
+ * idempotent, so a retry is safe", which assumes a retry can eventually succeed.
+ * For this event it never can.
+ */
+async function liveUser(admin, userId) {
+  if (!userId) return null
+  const { data } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle()
+  if (data?.id) return data.id
+  console.log('[stripe_webhook] event for a deleted account, ignored:', userId)
   return null
 }
 
@@ -211,6 +249,17 @@ export async function POST(request) {
         break
     }
   } catch (e) {
+    // DELETE-ACCOUNT 2026-09-01: a foreign-key violation is the one failure a
+    // retry can never fix. It means the row this event belongs to is gone —
+    // the account was deleted between Stripe sending and us reading — and
+    // answering 500 would put the endpoint into three days of backoff for
+    // everyone else's events. liveUser() above catches the known path; this is
+    // the net under every path we have not thought of.
+    if (e?.code === '23503' || /violates foreign key constraint/i.test(e?.message || '')) {
+      console.error(`Stripe webhook ${event.type} referenced a deleted account, dropped:`, e.message)
+      return Response.json({ received: true, dropped: 'deleted_account' })
+    }
+
     // 500 asks Stripe to retry. Everything above is idempotent, so a retry is
     // safe and is what we want when the database was briefly unavailable.
     console.error(`Stripe webhook ${event.type} failed:`, e)

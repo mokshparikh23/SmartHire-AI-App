@@ -49,6 +49,12 @@ const orderIdFrom = (entity) => entity?.notes?.orderId || null
  * silently dropping a renewal.
  */
 async function userForSubscription(admin, subscription) {
+  // DELETE-ACCOUNT 2026-09-01: the resolution below is unchanged, but its answer
+  // now goes through liveUser(). See the note there.
+  return liveUser(admin, await resolveUserId(admin, subscription))
+}
+
+async function resolveUserId(admin, subscription) {
   const fromNotes = subscription?.notes?.userId
   if (fromNotes) return fromNotes
 
@@ -69,6 +75,31 @@ async function userForSubscription(admin, subscription) {
     .from('credit_orders').select('user_id, subscription_kind')
     .eq('razorpay_subscription_id', subscription.id).maybeSingle()
   return byOrder?.user_id ?? null
+}
+
+/**
+ * DELETE-ACCOUNT 2026-09-01: an id that resolved is not the same as an account
+ * that exists, and this endpoint is shared by everyone.
+ *
+ * app/api/account/delete cancels the mandate and then destroys the account, so
+ * `subscription.cancelled` lands here seconds later. The id still resolves —
+ * `notes.userId` is set at checkout and outlives the row it names — so without
+ * this we would hand a DEAD UUID to setSubscription(). That calls
+ * subscription_set(), whose first statement is `insert into credit_wallets
+ * (user_id) … on conflict do nothing`, and ON CONFLICT DO NOTHING does not
+ * suppress a foreign-key violation. The insert raises 23503, metering's rpc()
+ * throws by design, and the catch below answers 500.
+ *
+ * That 500 is the actual damage: Razorpay retries and eventually disables an
+ * endpoint that keeps failing, and this is ONE endpoint for every customer. One
+ * deleted account's unprocessable event would degrade fulfilment for everybody.
+ */
+async function liveUser(admin, userId) {
+  if (!userId) return null
+  const { data } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle()
+  if (data?.id) return data.id
+  console.log('[razorpay_webhook] event for a deleted account, ignored:', userId)
+  return null
 }
 
 /**
@@ -222,6 +253,17 @@ export async function POST(request) {
         break
     }
   } catch (e) {
+    // DELETE-ACCOUNT 2026-09-01: a foreign-key violation is the one failure a
+    // retry can never fix. It means the row this event belongs to is gone — the
+    // account was deleted between Razorpay sending and us reading — and
+    // answering 500 would put the endpoint into retries and eventual disabling
+    // for everyone else's events. liveUser() above catches the known path; this
+    // is the net under every path we have not thought of.
+    if (e?.code === '23503' || /violates foreign key constraint/i.test(e?.message || '')) {
+      console.error(`Razorpay webhook ${type} referenced a deleted account, dropped:`, e.message)
+      return Response.json({ received: true, dropped: 'deleted_account' })
+    }
+
     // 500 asks Razorpay to retry. Everything above is idempotent, so a retry is
     // safe and is what we want when the database was briefly unavailable.
     console.error(`Razorpay webhook ${type} failed:`, e)

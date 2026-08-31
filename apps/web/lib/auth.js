@@ -1,7 +1,9 @@
 import { cache } from 'react'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase-server'
 import { safeNext } from '@/lib/next-url'
+import { AUTH_COOKIE } from '@/lib/auth-cookie'
 
 /**
  * The one authoritative auth gate for every server render.
@@ -62,6 +64,37 @@ export const getUser = cache(async () => {
 export async function requireUser({ next } = {}) {
   const user = await getUser()
   if (!user) {
+    /*
+      DELETE-ACCOUNT 2026-09-01 ─ a cookie that outlived its account.
+
+      This branch means the optimistic cookie check passed and the authoritative
+      network call disagreed. Until now every such request was sent to /login,
+      which works when the cookie is merely stale-looking — but not when the
+      cookie is still a VALID, unexpired JWT for a user that no longer exists.
+
+      That state is now reachable, and by design: app/api/account/delete clears
+      the cookies on ITS OWN response, which reaches exactly one browser. Every
+      other browser this account was signed in on — which is the whole thing the
+      Devices card exists to model — keeps a token that proxy.js accepts, because
+      proxy.js decides with getSession(), a cookie read with no network call
+      while the token is more than 90s from expiry. So: /dashboard passes the
+      proxy, this function redirects to /login, the proxy sees the session and
+      sends it back to /dashboard. A loop, for up to an hour, and unlike every
+      other cause there is no account left to sign back into.
+
+      /auth/device-signout is the route that already exists to break exactly this
+      cycle — a route handler, so it can actually clear the cookie, which a
+      Server Component cannot. Sending the request there instead of to /login
+      also closes the same latent loop for every OTHER way a session can die
+      server-side, not just deletion.
+
+      Only when a cookie is actually present. Without one there is nothing to
+      clear and /login is both correct and one hop shorter.
+    */
+    const jar = await cookies()
+    const hasAuthCookie = jar.getAll().some(c => AUTH_COOKIE.test(c.name) && c.value)
+    if (hasAuthCookie) redirect('/auth/device-signout')
+
     // Re-validated here rather than trusted from the caller: on the billing
     // page this string is built from a search param that started on another
     // origin. See lib/next-url.js.
