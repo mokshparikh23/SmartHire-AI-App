@@ -6,6 +6,9 @@ import { useSettingsStore } from '../../store/settingsStore'
 // wipe.
 import { usePanelOpacity, usePanelHotkeys, useStallWatch } from '../../hooks/useOverlay'
 import Notices from './Notices'
+// PREMIUM-UX 2026-08-31: rendered FROM the bindings list, so it cannot teach a
+// chord that no longer works.
+import HotkeySheet from './HotkeySheet'
 import Toolbar from './Toolbar'
 import TranscriptBar from './TranscriptBar'
 import AnswerPanel, { AnswerCardHead } from './AnswerPanel'
@@ -122,6 +125,21 @@ export default function SessionPanel({ session }) {
      `data-focus` on the stage lets the CSS loosen the answer's line-height when
      there is room, which is the whole point of having asked for the room. */
   const [focused, setFocused] = useState(false)
+  // PREMIUM-UX 2026-08-31: the shortcut sheet, opened by `?` or from the ⋮ menu.
+  const [helpOpen, setHelpOpen] = useState(false)
+
+  /* PLACEMENT 2026-09-01 ─ the six-zone picker ─────────────────────────────────
+     Held here rather than in Toolbar because ⌘⇧M is a GLOBAL shortcut: main
+     hears it whether or not this window has focus, focuses the window, and sends
+     overlay:movePicker. The panel is where that lands, and the Escape chain
+     below is where it has to be closed from. */
+  const [moveOpen, setMoveOpen] = useState(false)
+
+  useEffect(() => {
+    // Returns its own unsubscribe (see preload.cjs), so this removes exactly the
+    // listener it added.
+    return window.electronAPI?.onMovePicker?.(() => setMoveOpen(true))
+  }, [])
 
   const toggleFocus = useCallback(() => {
     setFocused((v) => {
@@ -206,10 +224,17 @@ export default function SessionPanel({ session }) {
     },
     onFocus: toggleFocus,
     onGoLive: goLive,
+    onHelp: () => setHelpOpen((v) => !v),
     /* PREMIUM-UX 2026-08-31: the Esc precedence chain. Most-recently-opened
        first, and it deliberately ends at "do nothing" — Esc must never be a
        route to ending a paid session, however deep the chain gets. */
     onEscape: () => {
+      // PLACEMENT 2026-09-01: first, because it is the most recently opened —
+      // ⌘⇧M can be pressed over anything else already on screen. MovePicker
+      // deliberately does not handle Escape itself; splitting the unwind order
+      // across two files is how that order silently goes wrong.
+      if (moveOpen)   { setMoveOpen(false); return }
+      if (helpOpen)   { setHelpOpen(false); return }
       if (typing)     { setTyping(false); return }
       if (drawerOpen) { setDrawerOpen(false); return }
       if (focused)    { exitFocus(); return }
@@ -264,6 +289,8 @@ export default function SessionPanel({ session }) {
     // line-height when focus mode has bought the room for it.
     // <div className="ia-stage" ref={stageRef}>
     <div className="ia-stage" ref={stageRef} data-focus={focused}>
+      {helpOpen && <HotkeySheet onClose={() => setHelpOpen(false)} />}
+
       {/* PREMIUM-UX 2026-08-31: above the toolbar and flex-shrink:0, so a notice
           never steals height from the answer and never covers a control. */}
       <Notices />
@@ -277,6 +304,9 @@ export default function SessionPanel({ session }) {
           onEnd={requestStop}
           endArming={arming}
           onToggleCollapse={toggleCollapsed}
+          onHelp={() => setHelpOpen(true)}
+          moveOpen={moveOpen}
+          onMoveOpenChange={setMoveOpen}
         />
       </div>
 
@@ -374,7 +404,11 @@ export default function SessionPanel({ session }) {
 
             {chatMode
               ? <ChatPanel onSend={session.sendChat} />
-              : <AnswerPanel onRetry={session.regenerate} readerPinnedRef={session.readerPinnedRef} />}
+              : <AnswerPanel
+                  onRetry={session.regenerate}
+                  onRefine={session.refine}
+                  readerPinnedRef={session.readerPinnedRef}
+                />}
           </div>
         </>
       )}

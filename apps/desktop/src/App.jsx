@@ -3,6 +3,17 @@ import MainApp from '@/pages/MainApp'
 import LicenseGate from '@/pages/LicenseGate'
 
 export default function App() {
+  /* PREMIUM-UX 2026-08-31: hold the boot screen back for 200ms. On a transparent
+     window a flash of NOTHING is invisible, whereas a flash of anything is a
+     strobe — and a licence check served from electron-store usually resolves
+     well inside this. */
+  const BOOT_PAINT_DELAY_MS = 200
+  const [showChecking, setShowChecking] = React.useState(false)
+  React.useEffect(() => {
+    const id = setTimeout(() => setShowChecking(true), BOOT_PAINT_DELAY_MS)
+    return () => clearTimeout(id)
+  }, [])
+
   const [licensed, setLicensed]   = useState(false)
   const [checking, setChecking]   = useState(true)
   const [licenseData, setLicenseData] = useState(null)
@@ -96,30 +107,40 @@ export default function App() {
     return () => clearInterval(id)
   }, [licensed, licenseKey])
 
-  // Loading screen
+  /* PREMIUM-UX 2026-08-31 ─ a white card, in a dark-glass app ─────────────────
+     This was a #fff card with a #e5e7eb border and an indigo-violet gradient
+     mark, flashed on every cold start of an application whose every other
+     surface is dark translucent glass. For a quarter of a second the app looked
+     like a different product.
+
+     Two changes. It uses .ia-glass and the existing .ia-gate-mark, so there is
+     one mark in the app rather than two. And it does not paint AT ALL for the
+     first 200ms: on a transparent window a flash of NOTHING is invisible,
+     whereas a flash of anything is a strobe — and a licence check that resolves
+     from electron-store usually finishes well inside that.
+
+     The string is fixed too. "Checking license..." used three ASCII dots where
+     every other wait in the app uses a real ellipsis.
+
   if (checking) {
     return (
-      <div style={{
-        width: '100%', height: '100vh',
-        background: '#fff', borderRadius: 16,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'Inter, sans-serif',
-        border: '1px solid #e5e7eb'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 12,
-            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 12px'
-          }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" fill="white"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <p style={{ fontSize: 12, color: '#9ca3af' }}>Checking license...</p>
+      <div style={{ width: '100%', height: '100vh', background: '#fff', borderRadius: 16, … }}>
+        …indigo gradient mark…
+        <p style={{ fontSize: 12, color: '#9ca3af' }}>Checking license...</p>
+      </div>
+    )
+  }  */
+  if (checking) {
+    if (!showChecking) return null
+    return (
+      <div className="ia-glass ia-boot">
+        <div className="ia-gate-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" fill="currentColor"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
         </div>
+        <p className="ia-boot-note">Checking your licence…</p>
       </div>
     )
   }

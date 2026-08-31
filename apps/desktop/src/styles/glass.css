@@ -279,3 +279,25 @@
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px; font-weight: 600;
 }
+
+/* PREMIUM-UX 2026-08-31 ─ the boot screen ────────────────────────────────────
+   Replaces a #fff card with a #e5e7eb border and an indigo-violet gradient mark
+   that flashed on every cold start of an app whose every other surface is dark
+   translucent glass — for a quarter of a second it looked like a different
+   product. It reuses .ia-gate-mark so there is one mark in the app, not two.
+
+   Not .ia-gate: that rule is `flex: 1` and expects the flex parent LicenseGate
+   gives it. This branch renders at the root, so it carries its own box. */
+.ia-boot {
+  position: fixed;
+  inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+  font-family: var(--ia-font);
+}
+
+.ia-boot-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.52);
+}

@@ -3,6 +3,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import Icon from '../ui/Icon'
 import Kbd, { comboLabel } from './Kbd'
+import MovePicker from './MovePicker'
 
 /**
  * REDESIGN 2026-08-29: the top bar.
@@ -18,7 +19,18 @@ import Kbd, { comboLabel } from './Kbd'
 // PREMIUM-UX 2026-08-31: `endArming` added. SessionPanel owns the two-step
 // state so the ⌘⇧X chord and this pill cannot get out of step with each other.
 // export default function Toolbar({ session, onEnd, onToggleCollapse }) {
-export default function Toolbar({ session, onEnd, endArming, onToggleCollapse }) {
+// PLACEMENT 2026-09-01: `moveOpen` / `onMoveOpenChange` are lifted to
+// SessionPanel rather than held here, because ⌘⇧M is a GLOBAL shortcut — main
+// hears it and sends overlay:movePicker, so the panel is where that arrives, and
+// the Escape chain that closes the picker lives there too.
+// PREMIUM-UX 2026-08-31: onHelp opens the shortcut sheet from the ⋮ menu, for
+// anyone who never discovers that `?` does it.
+// export default function Toolbar({
+//   session, onEnd, endArming, onToggleCollapse, moveOpen, onMoveOpenChange,
+// }) {
+export default function Toolbar({
+  session, onEnd, endArming, onToggleCollapse, moveOpen, onMoveOpenChange, onHelp,
+}) {
   const isThinking       = useSessionStore((s) => s.isThinking)
   const hasQuestion      = useSessionStore((s) => !!s.currentQuestion)
   const micEnabled       = useSessionStore((s) => s.micEnabled)
@@ -76,7 +88,11 @@ export default function Toolbar({ session, onEnd, endArming, onToggleCollapse })
         title={
           systemSource && screenDenied
             ? 'System audio needs Screen Recording permission — open System Settings'
-            : `${systemSource ? 'System audio' : 'Microphone'} ${micEnabled ? 'on' : 'off'} · ⌥click for ${systemSource ? 'microphone' : 'system audio'}`
+            // PLACEMENT 2026-09-01: ⌥ was hard-coded, so this tooltip told a
+            // Windows user to hold a key their keyboard does not have. comboLabel
+            // spells it Alt there. Same fix as Dashboard.jsx's ⌘⇧H title.
+            // : `… ⌥click for …`
+            : `${systemSource ? 'System audio' : 'Microphone'} ${micEnabled ? 'on' : 'off'} · ${comboLabel('alt')}click for ${systemSource ? 'microphone' : 'system audio'}`
         }
       >
         <Icon name={systemSource ? 'speaker' : 'mic'} size={15} />
@@ -85,18 +101,37 @@ export default function Toolbar({ session, onEnd, endArming, onToggleCollapse })
       {/* ── Actions ── */}
       {/* ANSWER-STYLE 2026-08-30: the button fires the same request in both
           modes — it is the word for what comes back that changes. */}
-      <button
-        className="ia-pill"
-        onClick={session.regenerate}
-        disabled={isThinking || !hasQuestion}
-        // title={hasQuestion ? `Answer again (${comboLabel('mod enter')})` : 'No question yet'}
-        title={hasQuestion
-          ? `${followups ? 'Suggest' : 'Answer'} again (${comboLabel('mod enter')})`
-          : 'No question yet'}
-      >
-        {/* Answer <Kbd combo="mod enter" /> */}
-        {followups ? 'Suggest' : 'Answer'} <Kbd combo="mod enter" />
-      </button>
+      {/* PREMIUM-UX 2026-08-31 ─ the same slot stops what it started ───────────
+          There was no way to stop a runaway answer at all: the only "stop" in
+          the UI was ⌘⇧X, which ends the whole billed interview. And this pill
+          was DISABLED while thinking — so at the exact moment the user most
+          wants to act, the most prominent button in the toolbar went dead.
+
+          It swaps in place rather than appearing beside: same slot, same width
+          class, no layout shift at the moment the panel is busiest. */}
+      {/* <button className="ia-pill" onClick={session.regenerate} disabled={isThinking || !hasQuestion}> */}
+      {isThinking ? (
+        <button
+          className="ia-pill ia-pill--stop"
+          onClick={() => (chatMode ? session.stopChat?.() : session.stopGenerating?.())}
+          title={`Stop generating (${comboLabel('mod .')})`}
+        >
+          Stop <Kbd combo="mod ." />
+        </button>
+      ) : (
+        <button
+          className="ia-pill"
+          onClick={session.regenerate}
+          disabled={!hasQuestion}
+          // title={hasQuestion ? `Answer again (${comboLabel('mod enter')})` : 'No question yet'}
+          title={hasQuestion
+            ? `${followups ? 'Suggest' : 'Answer'} again (${comboLabel('mod enter')})`
+            : 'No question yet'}
+        >
+          {/* Answer <Kbd combo="mod enter" /> */}
+          {followups ? 'Suggest' : 'Answer'} <Kbd combo="mod enter" />
+        </button>
+      )}
 
       <button
         className="ia-pill"
@@ -129,6 +164,11 @@ export default function Toolbar({ session, onEnd, endArming, onToggleCollapse })
         <Icon name="move" size={14} />
       </span>
 
+      {/* PLACEMENT 2026-09-01: the picker needs its own trigger. The handle above
+          cannot double as one — .ia-btn--move is -webkit-app-region: drag, and a
+          drag region swallows the click before it ever becomes an onClick. */}
+      <MoveButton open={moveOpen} onOpenChange={onMoveOpenChange} />
+
       <button
         className="ia-btn ia-btn--ghost"
         onClick={onToggleCollapse}
@@ -137,7 +177,14 @@ export default function Toolbar({ session, onEnd, endArming, onToggleCollapse })
         <Icon name="collapse" size={14} />
       </button>
 
-      <OverflowMenu session={session} />
+      {/* PREMIUM-UX 2026-08-31: the meter, on a metered product ────────────────
+          Elapsed time and credits remaining were two clicks deep in the ⋮ menu,
+          on a product billed by the minute. They belong where they can be
+          glanced at, and the balance turns amber before it becomes a problem
+          rather than after. */}
+      <SessionMeter />
+
+      <OverflowMenu session={session} onMove={() => onMoveOpenChange?.(true)} onHelp={onHelp} />
 
       {/* BUGFIX 2026-08-30: onClick={onEnd} handed React's SyntheticEvent to
           stop(), whose first parameter is the END REASON — and preload passes
@@ -172,7 +219,72 @@ export default function Toolbar({ session, onEnd, endArming, onToggleCollapse })
  * not need to be one click away: the timer, the credit balance, and Retry/Copy,
  * which the old footer carried before the feedback row took its place.
  */
-function OverflowMenu({ session }) {
+/**
+ * PLACEMENT 2026-09-01 ─ the picker's trigger and anchor.
+ *
+ * Its own component only so the popover has an .ia-menu-wrap to position
+ * against, the same way OverflowMenu below anchors the ⋮ menu. The open state
+ * belongs to SessionPanel — see the note on Toolbar's signature.
+ */
+function MoveButton({ open, onOpenChange }) {
+  return (
+    <span className="ia-menu-wrap">
+      <button
+        className="ia-btn ia-btn--ghost"
+        data-active={!!open}
+        onClick={() => onOpenChange?.(!open)}
+        title={`Move window (${comboLabel('mod shift m')})`}
+      >
+        {/* Not `move` — that is the drag handle immediately to the left, and two
+            identical glyphs side by side would read as one control that had
+            grown a second half. `grid` is the picker's own six cells. */}
+        <Icon name="grid" size={14} />
+      </button>
+
+      {open && <MovePicker onClose={() => onOpenChange?.(false)} />}
+    </span>
+  )
+}
+
+// PLACEMENT 2026-09-01: `onMove` added — the picker is also reachable from here,
+// for anyone who never finds the chord.
+/* PREMIUM-UX 2026-08-31 ─ elapsed and balance, in the toolbar ─────────────────
+   Subscribes to three values that change at most once a second and once a
+   heartbeat, never per token — so this re-renders on its own and never drags
+   the rest of the toolbar with it.
+
+   The amber threshold is the point. A balance that only tells you it is gone
+   when it is gone is not a meter; five minutes is enough to finish a thought and
+   decide whether to top up. */
+const LOW_MINUTES = 5
+
+function SessionMeter() {
+  const elapsed          = useSessionStore((s) => s.elapsed)
+  const unlimited        = useSessionStore((s) => s.unlimited)
+  const minutesRemaining = useSessionStore((s) => s.minutesRemaining)
+
+  const mm = Math.floor(elapsed / 60).toString().padStart(2, '0')
+  const ss = (elapsed % 60).toString().padStart(2, '0')
+  const low = !unlimited && minutesRemaining != null && minutesRemaining <= LOW_MINUTES
+
+  return (
+    <span className="ia-meter" data-low={low} title={unlimited
+      ? 'Elapsed · unlimited plan'
+      : `Elapsed · ${minutesRemaining ?? '—'} minutes of credit left`}>
+      <span className="ia-meter-time">{mm}:{ss}</span>
+      {!unlimited && minutesRemaining != null && (
+        <span className="ia-meter-left">{minutesRemaining}m</span>
+      )}
+    </span>
+  )
+}
+
+// PREMIUM-UX 2026-08-31: onHelp added. The timer and balance also moved out to
+// SessionMeter above and are kept here too, since the menu has room to spell
+// them out.
+// function OverflowMenu({ session }) {
+// function OverflowMenu({ session, onMove }) {
+function OverflowMenu({ session, onMove, onHelp }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -246,9 +358,21 @@ function OverflowMenu({ session }) {
             <span>{followups ? 'Copy suggestion' : 'Copy answer'}</span>
             <Kbd combo="mod shift c" />
           </button>
+          {/* PLACEMENT 2026-09-01: beside Hide, because the two are the same
+              kind of thing — the panel is in the way, and this is the answer
+              that does not cost you sight of it. */}
+          <button onClick={() => { onMove?.(); setOpen(false) }}>
+            <Icon name="grid" size={13} /><span>Move window</span>
+            <Kbd combo="mod shift m" />
+          </button>
           <button onClick={() => { window.electronAPI?.toggleOverlay?.(); setOpen(false) }}>
             <Icon name="eyeOff" size={13} /><span>Hide window</span>
             <Kbd combo="mod shift h" />
+          </button>
+          {/* PREMIUM-UX 2026-08-31: the way in for anyone who never finds `?`. */}
+          <button onClick={() => { onHelp?.(); setOpen(false) }}>
+            <Icon name="keyboard" size={13} /><span>Keyboard shortcuts</span>
+            <Kbd combo="?" />
           </button>
         </div>
       )}

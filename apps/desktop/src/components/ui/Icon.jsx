@@ -50,6 +50,11 @@ const PATHS = {
   chat:       <><path d="M20.5 12.5a7.5 7.5 0 0 1-10.9 6.7L4 20.5l1.4-5.4A7.5 7.5 0 1 1 20.5 12.5z" /></>,
   move:       <><path d="M12 3v18" /><path d="M3 12h18" /><path d="m9 6 3-3 3 3" /><path d="m9 18 3 3 3-3" /><path d="m6 9-3 3 3 3" /><path d="m18 9 3 3-3 3" /></>,
   collapse:   <><path d="M4 9h5V4" /><path d="M20 9h-5V4" /><path d="M4 15h5v5" /><path d="M20 15h-5v5" /></>,
+  /* PLACEMENT 2026-09-01: the move picker's own six cells, three over two — the
+     same shape as the grid it opens, so the button previews its popover. It is
+     deliberately not `move`, which sits immediately beside it as the drag
+     handle; two arrow-crosses in a row read as one control split in half. */
+  grid:       <><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="M9 4.5v15" /><path d="M15 4.5v15" /><path d="M3 12h18" /></>,
   expand:     <><path d="M9 4H4v5" /><path d="M15 4h5v5" /><path d="M9 20H4v-5" /><path d="M15 20h5v-5" /></>,
   dots:       <><circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" /></>,
   thumbUp:    <><path d="M7 10.5v9" /><path d="M11 3.5 9.5 8.2a2 2 0 0 1-.4.8L7 10.5v9h9.6a2.5 2.5 0 0 0 2.4-1.9l1.4-6a2 2 0 0 0-2-2.5H14V5.5a2 2 0 0 0-3-2z" /></>,

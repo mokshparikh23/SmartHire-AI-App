@@ -113,7 +113,14 @@
    .ia-btn--move, which is what the drag affordance is for. */
 .ia-body, .ia-answer, .ia-question-text, .ia-qa,
 .ia-chat-log, .ia-msg, .ia-words, .ia-live, .ia-committed, .ia-word,
-.ia-error, .ia-blocked, .ia-empty, .ia-drawer, .ia-waiting {
+.ia-error, .ia-blocked, .ia-empty, .ia-drawer, /* PREMIUM-UX 2026-08-31 ─ the contrast floor ─────────────────────────────────
+   backdrop-filter is inert on this window — the note at the top of this file
+   says so outright: Chromium cannot blur the desktop through a transparent
+   window. So the "glass" is a flat translucent rectangle over whatever is
+   behind it, and over a bright shared screen or a white IDE the dimmer text
+   alphas were not readable at all. Each of the values below was chosen against
+   a dark backdrop and never re-checked against a light one. */
+.ia-waiting {
   -webkit-app-region: no-drag;
 }
 
@@ -177,6 +184,19 @@
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
+/* PREMIUM-UX 2026-08-31 ─ the two red dots ────────────────────────────────────
+   A 7px #ef4444 dot on every toggle that is on — and micEnabled and
+   screenEnabled BOTH default to true, so two of them sat on the candidate's
+   screen for the whole interview.
+
+   The overlay is excluded from screen capture, so nobody on the call ever saw
+   them. The candidate did, and anyone sitting beside them did, and what they say
+   is "this is recording you" — which is the wrong thing for this panel to be
+   saying about itself, continuously, for an hour.
+
+   "On" is already carried by the background and the colour on the rule above;
+   a ring states it without the alarm.
+
 .ia-toggle[data-on='true']::after {
   content: '';
   position: absolute; top: 1px; right: 1px;
@@ -184,6 +204,11 @@
   background: #ef4444;
   border: 1.5px solid rgba(12, 13, 15, 0.9);
 }
+*/
+.ia-toggle[data-on='true'] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55); }
+
+/* [data-denied] keeps its colour. Red there is CORRECT — it means something is
+   actually broken, which is the one thing the dot above never meant. */
 .ia-toggle[data-denied='true'] { color: rgba(252, 165, 165, 0.75); }
 .ia-toggle:disabled { opacity: 0.35; cursor: default; }
 
@@ -387,6 +412,94 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* ── Move picker ──────────────────────────────────────────────────────────────
+   PLACEMENT 2026-09-01. Deliberately the same surface as .ia-menu above — same
+   radius, border, background and shadow — because it opens from the button
+   immediately beside the ⋮ that opens that one. Two popovers a few pixels apart
+   with different chrome would read as two different applications.
+
+   The grid mirrors the six zones in electron/main.cjs: three columns over two
+   rows, laid out the way the display is, so the cell you click is in the corner
+   the panel will go to. That spatial correspondence is the entire affordance —
+   without it this is six buttons with words on them. */
+.ia-move {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  top: 36px; right: 0;
+  z-index: 20;
+  width: 268px;
+  padding: 9px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 23, 26, 0.98);
+  box-shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.8);
+}
+/* tabIndex={-1} makes this focusable so Escape does not arrive with an INPUT as
+   its target; the focus ring itself is noise on a popover that is already the
+   only lit thing on screen. */
+.ia-move:focus { outline: none; }
+
+.ia-move-head {
+  padding: 1px 3px 8px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px; font-weight: 650;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+
+.ia-move-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.ia-move-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  height: 54px;
+  padding: 6px 7px;
+  border-radius: 8px;
+  /* Dashed, like the reference's drop zones — it reads as "a place something
+     can go" rather than as a button that does something to the thing under it. */
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: inherit;
+  text-align: left;
+}
+.ia-move-zone:hover { background: rgba(255, 255, 255, 0.07); }
+
+/* Hover and keyboard selection are the SAME state on purpose. The mouse sets
+   `selected` on enter, so moving the pointer and pressing Enter cannot disagree
+   about which zone is armed. */
+.ia-move-zone[data-selected='true'] {
+  border-style: solid;
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fff;
+}
+
+.ia-move-zone-num {
+  font-size: 10.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.35);
+}
+.ia-move-zone[data-selected='true'] .ia-move-zone-num { color: #fcd34d; }
+
+.ia-move-zone-label {
+  font-size: 11px; font-weight: 600; line-height: 1.25;
+}
+
+.ia-move-hint {
+  display: flex; align-items: center; gap: 3px; flex-wrap: wrap;
+  padding: 9px 3px 1px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 10.5px; font-weight: 600;
+}
+
 /* ── Turn pager ───────────────────────────────────────────────────────────── */
 .ia-pager {
   -webkit-app-region: no-drag;
@@ -501,7 +614,7 @@
 
 .ia-words--waiting,
 .ia-waiting {
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.58);
   font-size: 12.5px; font-weight: 500;
   padding-left: 2px;
 }
@@ -778,8 +891,14 @@
 
 .ia-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; gap: 9px;
-  color: rgba(255, 255, 255, 0.3);
+  /* PREMIUM-UX 2026-08-31: height:100% inside a body with 14px/18px/16px of
+     padding overflows its own scroll container by 30px, by construction. */
+  /* height: 100%; gap: 9px; */
+  min-height: 100%; gap: 9px;
+  /* PREMIUM-UX 2026-08-31: 0.30 -> 0.52. See the contrast note above .ia-waiting
+     — at 0.30 over a bright shared screen this line was simply not there. */
+  /* color: rgba(255, 255, 255, 0.3); */
+  color: rgba(255, 255, 255, 0.52);
   font-size: 12px;
 }
 
@@ -921,7 +1040,7 @@
 }
 .ia-meta {
   font-size: 10px; font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.56);
   font-variant-numeric: tabular-nums;
 }
 .ia-action {
@@ -954,6 +1073,35 @@
 .ia-vote:disabled { opacity: 0.28; cursor: default; }
 .ia-vote[data-on='true'] { color: #34d399; background: rgba(52, 211, 153, 0.14); }
 .ia-vote--down[data-on='true'] { color: #fca5a5; background: rgba(239, 68, 68, 0.14); }
+
+/* PREMIUM-UX 2026-08-31 ─ focus rings ────────────────────────────────────────
+   There were none. A grep for :focus-visible in this file returned nothing, and
+   the only two `outline` declarations were `outline: none` — on a panel that is
+   almost entirely keyboard-driven.
+
+   White rather than a hue: on dark glass over an arbitrary shared screen, a
+   coloured ring is the one that disappears. */
+.ia-stage :focus-visible,
+.ia-launcher :focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.62);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* PREMIUM-UX 2026-08-31 ─ structural changes used to pop ─────────────────────
+   Three keyframes existed and all three were on 4-6px elements, so everything
+   that actually moves — the two ⋮ menus, the turn drawer — appeared and
+   disappeared in a single frame with no transition at all. */
+.ia-menu {
+  animation: ia-menu-in 120ms ease;
+  transform-origin: top right;
+}
+@keyframes ia-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ia-drawer { animation: ia-fade-in 160ms ease; }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
 /* PREMIUM-UX 2026-08-31: 4px with a fully transparent track was, in practice,
@@ -1108,3 +1256,127 @@
   .ia-live-chip, .ia-live-chip[data-streaming='true'] .ia-live-dot,
   .ia-notice, .ia-held-hint { animation: none; }
 }
+
+/* PREMIUM-UX 2026-08-31: the Stop pill. It occupies the Answer slot while an
+   answer is streaming, so it has to read as "interrupt", not as a second
+   affirmative action sitting where the first one was. */
+.ia-pill--stop {
+  background: rgba(251, 191, 36, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.34);
+  color: #fbbf24;
+}
+.ia-pill--stop:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.26);
+  color: #fbbf24;
+}
+.ia-pill--stop .ia-kbd {
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(251, 191, 36, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.28);
+}
+
+/* PREMIUM-UX 2026-08-31: the footer's refine chips, in the space the two dead
+   thumbs occupied. Quiet by default — they are offers, not the main action. */
+.ia-action {
+  -webkit-app-region: no-drag;
+  height: 26px; padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit; font-size: 11.5px; font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.ia-action:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); color: #fff; }
+.ia-action:disabled { opacity: 0.32; cursor: default; }
+
+/* ── Hotkey sheet ─────────────────────────────────────────────────────────── */
+/* PREMIUM-UX 2026-08-31: see components/overlay/HotkeySheet.jsx. An in-panel
+   overlay rather than a second window — one more window over a live call is one
+   more thing to get out of the way. */
+.ia-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.42);
+  animation: ia-fade-in 120ms ease;
+}
+
+.ia-sheet {
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  max-height: 100%;
+  border-radius: 16px;
+  background: rgba(16, 17, 20, 0.98);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 24px 64px -12px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.ia-sheet-head {
+  display: flex; align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  height: 42px;
+  flex-shrink: 0;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+  font-size: 12.5px; font-weight: 650;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ia-sheet-body {
+  overflow-y: auto;
+  padding: 10px 14px 14px;
+}
+
+.ia-sheet-group + .ia-sheet-group { margin-top: 12px; }
+
+.ia-sheet-group h4 {
+  margin: 0 0 4px;
+  font-size: 10.5px; font-weight: 650;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.ia-sheet-row {
+  display: flex; align-items: center;
+  gap: 10px;
+  height: 26px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* The one row that is a warning rather than an offer. */
+.ia-sheet-row[data-danger='true'] { color: rgba(252, 165, 165, 0.9); }
+
+/* PREMIUM-UX 2026-08-31: the toolbar meter. Tabular figures so the seconds do
+   not shuffle the layout every tick. */
+.ia-meter {
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11.5px; font-weight: 650;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: rgba(255, 255, 255, 0.62);
+  white-space: nowrap;
+}
+.ia-meter-left { color: rgba(255, 255, 255, 0.44); }
+
+.ia-meter[data-low='true'] {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
+.ia-meter[data-low='true'] .ia-meter-left { color: #fbbf24; }

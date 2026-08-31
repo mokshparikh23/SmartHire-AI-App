@@ -47,9 +47,14 @@ const MENU_SELECT = {
 const MENU_OPTION = { color: '#000' }
 
 export default function Launcher({ session, licenseData, onLogout }) {
-  const setInterviewContext = useSettingsStore((s) => s.setInterviewContext)
-  const interviewContext    = useSettingsStore((s) => s.interviewContext)
-  const setAnswerStyle      = useSettingsStore((s) => s.setAnswerStyle)
+  const setInterviewContext   = useSettingsStore((s) => s.setInterviewContext)
+  // QUICK-START 2026-09-01: start() can now run with no profile picked, and
+  // setInterviewContext MERGES. Without an explicit clear, a blank start would
+  // silently inherit the last interview's company and role from the persisted
+  // blob. See the branch in start() below.
+  const clearInterviewContext = useSettingsStore((s) => s.clearInterviewContext)
+  const interviewContext      = useSettingsStore((s) => s.interviewContext)
+  const setAnswerStyle        = useSettingsStore((s) => s.setAnswerStyle)
 
   const [profiles, setProfiles] = useState([])
   const [selected, setSelected] = useState(null)
@@ -80,6 +85,36 @@ export default function Launcher({ session, licenseData, onLogout }) {
 
   useEffect(() => { load() }, [load])
 
+  /* PREMIUM-UX 2026-08-31 ─ the Start button's chip was a lie ─────────────────
+     The button has rendered `Start Session ⌘↵` since the redesign, and this
+     screen registered exactly one listener: a `mousedown` for closing the ⋮
+     menu. Pressing ⌘↵ did nothing at all.
+
+     Implemented rather than removed — the affordance is the right one, and a
+     chip that works is better than one less chip. Guarded the same way the
+     button is (`selected && !starting`) so the chord and the click cannot
+     disagree, and it stays off any focused form control so it does not steal
+     Enter from the ⋮ menu's selects. */
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return
+      const el = e.target
+      if (el instanceof HTMLElement &&
+          (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) {
+        return
+      }
+      // QUICK-START 2026-09-01: `selectedRef.current` dropped from this guard.
+      // The button below no longer requires a selection either, and the point of
+      // the original guard was that the chord and the click must not disagree.
+      // if (!selectedRef.current || startingRef.current) return
+      if (startingRef.current) return
+      e.preventDefault()
+      startRef.current?.()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   /*
     ANSWER-STYLE 2026-08-30 ─ the per-candidate default, and what beats it.
 
@@ -108,6 +143,15 @@ export default function Launcher({ session, licenseData, onLogout }) {
     answer_style column arrives as undefined and lands on 'plain'. There is no
     null branch here on purpose.
   */
+  /* Read by the ⌘↵ listener above. Refs rather than dependencies: rebinding a
+     window listener every time the list refreshes or the pick changes is churn
+     for no gain, and `start` is redefined on every render. */
+  const selectedRef = useRef(selected)
+  const startingRef = useRef(starting)
+  const startRef = useRef(null)
+  selectedRef.current = selected
+  startingRef.current = starting
+
   const seededForRef = useRef(null)
 
   useEffect(() => {
@@ -120,8 +164,18 @@ export default function Launcher({ session, licenseData, onLogout }) {
 
   const start = async () => {
     const profile = profiles.find((p) => p.id === selected)
-    if (!profile) return
 
+    /* QUICK-START 2026-09-01 ─ starting with nothing set up.
+       `if (!profile) return` used to sit here, and with the footer button also
+       requiring a selection it meant a brand-new user — no interviews on the web
+       yet — had no working action on this screen at all. The empty state told
+       them to go to the dashboard and come back.
+
+       The clear is load-bearing, not tidiness. setInterviewContext MERGES
+       (store/settingsStore.js) and interviewContext is persisted, so without it
+       a blank start would quietly reuse the previous interview's company and
+       role — wrong on screen and wrong in the prompt. The résumé fields cannot
+       leak this way (partialize blanks them), but company and role can. */
     // Copy the chosen profile into the store buildSystemPrompt() reads. The
     // résumé and its consent flag travel together — a résumé without its flag
     // would be treated as unconsented, which is the safe direction but not the
@@ -144,16 +198,20 @@ export default function Launcher({ session, licenseData, onLogout }) {
     //   company: profile.company, role: profile.role, resume: profile.resume,
     //   resumeConsent: profile.resumeConsent, jobDescription: profile.jobDescription,
     // })
-    setInterviewContext({
-      company:        profile.company,
-      companyDomain:  profile.companyDomain || '',
-      role:           profile.role,
-      candidateName:  profile.candidateName || '',
-      resume:         profile.resume,
-      resumeBrief:    profile.resumeBrief || '',
-      resumeConsent:  profile.resumeConsent,
-      jobDescription: profile.jobDescription,
-    })
+    if (profile) {
+      setInterviewContext({
+        company:        profile.company,
+        companyDomain:  profile.companyDomain || '',
+        role:           profile.role,
+        candidateName:  profile.candidateName || '',
+        resume:         profile.resume,
+        resumeBrief:    profile.resumeBrief || '',
+        resumeConsent:  profile.resumeConsent,
+        jobDescription: profile.jobDescription,
+      })
+    } else {
+      clearInterviewContext()
+    }
 
     setStarting(true)
     setError(null)
@@ -168,6 +226,8 @@ export default function Launcher({ session, licenseData, onLogout }) {
       )
     }
   }
+
+  startRef.current = start
 
   const openWeb = (path = '/dashboard/interviews') => {
     if (webUrl) window.electronAPI?.openExternal?.(`${webUrl}${path}`)
@@ -215,11 +275,24 @@ export default function Launcher({ session, licenseData, onLogout }) {
         ) : profiles.length === 0 ? (
           <div className="ia-lempty">
             <Icon name="inbox" size={22} strokeWidth={1.4} />
-            <strong>No interviews set up</strong>
+            {/* QUICK-START 2026-09-01: this said "Add a candidate on the web —
+                name, role, résumé — then pick them here when the interview
+                starts", which is the interviewer's voice in a candidate product,
+                and it was a dead end: the only action was to leave. */}
+            <strong>Nothing set up yet</strong>
             <span>
-              Add a candidate on the web — name, role, résumé — then pick them here
-              when the interview starts.
+              That is fine — you can start now and the copilot works from the
+              conversation alone. Add an interview on the web when you want
+              company- and CV-aware answers.
             </span>
+            <button
+              className="ia-pill"
+              onClick={() => { if (!starting) start() }}
+              disabled={starting}
+              style={{ marginTop: 4 }}
+            >
+              {starting ? 'Starting…' : 'Start without an interview'}
+            </button>
             <button className="ia-pill" onClick={() => openWeb()} style={{ marginTop: 4 }}>
               Open the web dashboard
             </button>
@@ -281,7 +354,11 @@ export default function Launcher({ session, licenseData, onLogout }) {
         <button
           className="ia-lstart"
           onClick={start}
-          disabled={!selected || starting}
+          // QUICK-START 2026-09-01: was `disabled={!selected || starting}`. With
+          // zero interviews that was the dead end — the primary action on the
+          // screen was inert and nothing on the screen could make it live.
+          // start() handles the no-profile case now.
+          disabled={starting}
           style={{ flex: 'none', minWidth: 190 }}
         >
           {starting ? 'Starting…' : <>Start Session <Kbd combo="mod enter" /></>}

@@ -18,7 +18,12 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
     const el = panelRef.current
     if (!el) return
     // Clamped: fully opaque stops reading as glass, too sheer is unreadable.
-    const alpha = Math.min(0.95, Math.max(0.55, (overlayOpacity ?? 90) / 100))
+    /* PREMIUM-UX 2026-08-31: floor 0.55 -> 0.68. backdrop-filter is inert on
+       this window, so below about 0.68 the panel is genuinely see-through and
+       body text over a bright shared screen is unreadable at ANY text alpha.
+       The slider was offering the user a setting that breaks the product. */
+    // const alpha = Math.min(0.95, Math.max(0.55, (overlayOpacity ?? 90) / 100))
+    const alpha = Math.min(0.95, Math.max(0.68, (overlayOpacity ?? 90) / 100))
     el.style.setProperty('--ia-alpha', alpha.toFixed(3))
   }, [panelRef, overlayOpacity])
 }
@@ -40,7 +45,7 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
 // export function usePanelHotkeys({ onType, onStop, onCopy, onRetry, … }) {
 // PREMIUM-UX 2026-08-31: onFocus (⌘⇧F) and onEscape added.
 export function usePanelHotkeys({
-  onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive,
+  onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive, onHelp,
   onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
 }) {
   useEffect(() => {
@@ -67,6 +72,16 @@ export function usePanelHotkeys({
         if (typing) return   // the transcript input owns Esc while it is open
         e.preventDefault()
         onEscape?.()
+        return
+      }
+
+      /* PREMIUM-UX 2026-08-31: `?` opens the shortcut sheet. Bare, like Esc, and
+         for the same reason — it is what every other keyboard-driven surface
+         uses, and it is not a chord anyone has to be told about twice. Guarded
+         on `typing`, since it is a character. */
+      if (e.key === '?' && !typing) {
+        e.preventDefault()
+        onHelp?.()
         return
       }
 
@@ -113,10 +128,57 @@ export function usePanelHotkeys({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
     // onType, onStop, onCopy, onRetry,
-    onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive,
+    onType, onStop, onCopy, onRetry, onStopGenerating, onFocus, onEscape, onGoLive, onHelp,
     onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
   ])
 }
+
+/* PREMIUM-UX 2026-08-31 ─ one list, read by the bindings AND by the sheet ─────
+   Nothing in this app told the user what any of these were. Every chord lived
+   only in the switch below, most appeared in no tooltip, and ⌘⇧X — which ends a
+   paid interview — appeared nowhere at all.
+
+   Exported so components/overlay/HotkeySheet.jsx renders FROM the same array
+   the handler reads. A sheet maintained separately is a sheet that goes out of
+   date the first time a binding moves, which is worse than no sheet: it teaches
+   a chord that does not work.
+
+   `destructive` is the one flag the sheet needs — it marks the thing you want
+   to warn about rather than advertise. */
+export const HOTKEYS = [
+  { group: 'Reading', combo: 'pgdn',        label: 'Down a page', bare: true },
+  { group: 'Reading', combo: 'pgup',        label: 'Up a page', bare: true },
+  { group: 'Reading', combo: 'j',           label: 'Down a line', bare: true },
+  { group: 'Reading', combo: 'k',           label: 'Up a line', bare: true },
+  { group: 'Reading', combo: 'end',         label: 'Jump to the end', bare: true },
+  { group: 'Reading', combo: 'mod down',    label: 'Back to the newest answer' },
+  { group: 'Reading', combo: 'mod shift f', label: 'Taller panel for reading' },
+
+  { group: 'Asking',  combo: 'mod enter',       label: 'Answer now / answer again' },
+  { group: 'Asking',  combo: 'mod shift enter', label: 'Screenshot and ask about it' },
+  { group: 'Asking',  combo: 'mod shift k',     label: 'Type a question' },
+  { group: 'Asking',  combo: 'mod shift j',     label: 'Chat' },
+
+  { group: 'Managing', combo: 'mod .',          label: 'Stop generating' },
+  { group: 'Managing', combo: 'mod shift r',    label: 'Retry' },
+  { group: 'Managing', combo: 'mod shift c',    label: 'Copy the answer' },
+  { group: 'Managing', combo: 'mod del',        label: 'Clear what the card shows' },
+  { group: 'Managing', combo: 'mod shift del',  label: 'Clear the question' },
+  { group: 'Managing', combo: 'mod left',       label: 'Previous turn' },
+  { group: 'Managing', combo: 'mod right',      label: 'Next turn' },
+
+  { group: 'Window', combo: 'mod shift h', label: 'Hide and show the panel' },
+  // PLACEMENT 2026-09-01: this no longer advances a hidden index — it opens the
+  // six-zone picker, and the label has to say so or the sheet teaches the old
+  // behaviour. The "then 1–6" is here rather than as its own row because those
+  // keys exist only while the picker is open; a bare `1` chip in a list of
+  // always-live chords would read as a global binding.
+  // { group: 'Window', combo: 'mod shift m', label: 'Move to the next corner' },
+  { group: 'Window', combo: 'mod shift m', label: 'Choose where the panel sits (then 1–6)' },
+  { group: 'Window', combo: 'esc',         label: 'Back out of whatever is open', bare: true },
+
+  { group: 'Session', combo: 'mod shift x', label: 'End the session (press twice)', destructive: true },
+]
 
 /* PREMIUM-UX 2026-08-31 ─ "still waiting on the server" is its own state ──────
    Between sending a request and the first token there was one indistinguishable

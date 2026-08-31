@@ -648,6 +648,42 @@ export function useInterviewSession() {
     if (currentQuestion) generate(currentQuestion, source)
   }, [generate])
 
+  /* PREMIUM-UX 2026-08-31 ─ the three things a candidate actually wants next ───
+     The card footer held two thumbs that went nowhere — sessionStore's own
+     comment says "SESSION-LOCAL ONLY. There is no table and no endpoint for
+     this, so it dies with the session." On a paid product a control that does
+     nothing is worse than no control, so that space now carries the three
+     follow-ups people actually reach for mid-interview.
+
+     Each re-asks the SAME question with a modifier and the previous answer
+     attached, so the model is refining rather than starting over. The answer is
+     passed as context rather than trusted as fact: the prompt's [TYPED] rules
+     already tell it to answer what was asked.
+
+     Not hotkeys. Under pressure you point at a thing; you do not recall a chord
+     you have never used. */
+  const REFINE = {
+    shorter: 'Same question, shorter. Give me the answer in one or two lines, nothing else.',
+    deeper:  'Same question, more depth. Add the detail and the reasoning you left out.',
+    example: 'Same question — give me one concrete example that makes it land.',
+  }
+
+  const refine = useCallback((kind) => {
+    const instruction = REFINE[kind]
+    if (!instruction) return
+    const { currentQuestion, currentAnswer } = useSessionStore.getState()
+    if (!currentQuestion) return
+
+    /* Sent as a TYPED turn, deliberately. It is the candidate asking us
+       something directly, not a line overheard in the room — and the prompt
+       branches on exactly that distinction. */
+    const content = currentAnswer
+      ? `${instruction}\n\nThe question was: ${currentQuestion}\n\nYou answered:\n${currentAnswer}`
+      : `${instruction}\n\nThe question was: ${currentQuestion}`
+
+    generate(currentQuestion, 'manual', content)
+  }, [generate])
+
   /* PIPELINE 2026-08-31 ─ three controls that could not actually stop anything ─
      abortRef lives here and the store cannot reach it, so every "stop" in the UI
      stopped only the WRITES. Three consequences, all user-visible:
@@ -1090,7 +1126,7 @@ export function useInterviewSession() {
     // no way out of this hook.
     levelRef, partialRef, heldRef, readerPinnedRef,
     live: !liveFailed, discardHeld, flushHeld,
-    start, stop, askManual, regenerate, askAboutScreen, sendChat,
+    start, stop, askManual, regenerate, refine, askAboutScreen, sendChat,
     stopGenerating, stopChat, clearAnswer, clearChat,
   }
 }

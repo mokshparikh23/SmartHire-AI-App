@@ -10,7 +10,23 @@ import React from 'react'
  * hard-coded — otherwise every chip in the app would lie on those platforms.
  */
 
-const IS_MAC = (globalThis.navigator?.platform || '').toLowerCase().includes('mac')
+/* PLACEMENT 2026-09-01 ─ ask the process, not the user agent ──────────────────
+   navigator.platform is deprecated and is being frozen by browsers: Chromium
+   already reduces it under user-agent reduction, and the string it returns is a
+   compatibility artefact rather than a fact about the machine. Every chip in the
+   app is rendered from this one boolean, so when it eventually stops saying
+   "MacIntel" the whole toolbar starts telling macOS users to press Ctrl.
+
+   preload.cjs has exposed `platform: process.platform` all along and nothing
+   used it. That value comes from Node in the main process and cannot be spoofed
+   or reduced. The old read stays as the fallback for the one case the preload
+   bridge is absent — a renderer opened outside Electron, which is how the panel
+   is inspected in a plain browser during development.
+
+   const IS_MAC = (globalThis.navigator?.platform || '').toLowerCase().includes('mac') */
+const IS_MAC = globalThis.electronAPI?.platform
+  ? globalThis.electronAPI.platform === 'darwin'
+  : (globalThis.navigator?.platform || '').toLowerCase().includes('mac')
 
 const GLYPH = {
   mod:    IS_MAC ? '⌘' : 'Ctrl',   // ⌘
@@ -24,6 +40,11 @@ const GLYPH = {
   // pinned. Without a glyph, `down` would render as the literal word DOWN.
   down:   '↓',                     // ↓
   up:     '↑',                     // ↑
+  // PREMIUM-UX 2026-08-31: the bare reading keys the hotkey sheet lists.
+  pgup:   '⇞',
+  pgdn:   '⇟',
+  end:    'End',
+  home:   'Home',
   esc:    'Esc',
 }
 

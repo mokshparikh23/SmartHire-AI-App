@@ -29,7 +29,7 @@ import Markdown from './Markdown'
 // question may take the card. Props rather than store reads, so this leaf keeps
 // its single-subscription discipline.
 // export default function AnswerPanel() {
-export default function AnswerPanel({ onRetry, readerPinnedRef }) {
+export default function AnswerPanel({ onRetry, onRefine, readerPinnedRef }) {
   /* PREMIUM-UX 2026-08-31 ─ pinned reading, and why it is CHEAPER ─────────────
      While a past turn is pinned, the live stream is irrelevant to this leaf.
      Selecting '' in that case means zustand's equality check bails out and a
@@ -244,27 +244,47 @@ export default function AnswerPanel({ onRetry, readerPinnedRef }) {
         </span>
         <span className="ia-spacer" />
 
-        {/* Feedback is session-local — no table, no endpoint. Only a committed
-            turn can carry it, so this is inert while an answer streams. */}
-        <button
-          className="ia-vote"
-          data-on={feedback === 'up'}
-          disabled={!activeTurnId || !answer}
-          onClick={() => setFeedback(activeTurnId, 'up')}
-          // title="Good answer"
-          title={followups ? 'Good suggestion' : 'Good answer'}
-        >
+        {/* PREMIUM-UX 2026-08-31 ─ two controls that did nothing, replaced ─────
+            Feedback is session-local — sessionStore's own comment says "there is
+            no table and no endpoint for this, so it dies with the session". On a
+            paid product a control that pretends to record something is worse
+            than no control at all, and this is prime space: the footer of the
+            thing the candidate is reading.
+
+            The three that replace them are what people actually want next
+            mid-interview. setFeedback stays in the store per the convention in
+            this repo; if feedback is ever persisted, this is where it comes
+            back — alongside these rather than instead of them.
+
+        <button className="ia-vote" data-on={feedback === 'up'} … >
           <Icon name="thumbUp" size={13} />
         </button>
-        <button
-          className="ia-vote ia-vote--down"
-          data-on={feedback === 'down'}
-          disabled={!activeTurnId || !answer}
-          onClick={() => setFeedback(activeTurnId, 'down')}
-          // title="Bad answer"
-          title={followups ? 'Bad suggestion' : 'Bad answer'}
-        >
+        <button className="ia-vote ia-vote--down" data-on={feedback === 'down'} … >
           <Icon name="thumbDown" size={13} />
+        </button>  */}
+        <button
+          className="ia-action"
+          disabled={!answer || isThinking || !!pinned}
+          onClick={() => onRefine?.('shorter')}
+          title="Ask for the same answer in one or two lines"
+        >
+          Shorter
+        </button>
+        <button
+          className="ia-action"
+          disabled={!answer || isThinking || !!pinned}
+          onClick={() => onRefine?.('deeper')}
+          title="Ask for the detail and reasoning this left out"
+        >
+          Deeper
+        </button>
+        <button
+          className="ia-action"
+          disabled={!answer || isThinking || !!pinned}
+          onClick={() => onRefine?.('example')}
+          title="Ask for one concrete example"
+        >
+          Example
         </button>
       </div>
     </>
