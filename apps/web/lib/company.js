@@ -35,7 +35,7 @@ export const companyLookupEnabled = () => Boolean(CLIENT_ID)
 /**
  * A stable logo URL for a stored domain.
  *
- * fallback=404 so an unknown domain fails the <img> and hits CompanyLogo's
+ * /fallback/404/ so an unknown domain fails the <img> and hits CompanyLogo's
  * initial-letter placeholder, instead of rendering Brandfetch's own substitute
  * glyph next to a candidate's name — which looks like our bug, not their miss.
  *
@@ -45,8 +45,23 @@ export const companyLookupEnabled = () => Boolean(CLIENT_ID)
  */
 export function logoUrl(domain, px = 64) {
   if (!domain || !CLIENT_ID) return null
+  /* BUGFIX 2026-09-01: `fallback` is a PATH segment, never a query parameter.
+     Sitting in the query string it was silently ignored — Brandfetch documents
+     that "an unrecognized fallback value becomes the default" — so an unknown
+     domain answered 200 with a blank white icon rather than the 404 this
+     function has always meant to ask for. The <img> therefore never fired
+     onError, CompanyLogo's initial-letter placeholder was unreachable, and the
+     row showed an empty box beside the company name: exactly the "our bug, not
+     their miss" outcome the note above exists to prevent.
+
+     Brandfetch's own search results are what give the correct shape away —
+     their icons come back as .../w/128/h/128/fallback/lettermark/icon.webp.
+     Verified against the CDN: the path form 404s on an unknown domain, the
+     query form returns a 318-byte blank. */
+  // return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}` +
+  //        `/w/${px}/h/${px}/icon?c=${encodeURIComponent(CLIENT_ID)}&fallback=404`
   return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}` +
-         `/w/${px}/h/${px}/icon?c=${encodeURIComponent(CLIENT_ID)}&fallback=404`
+         `/w/${px}/h/${px}/fallback/404/icon?c=${encodeURIComponent(CLIENT_ID)}`
 }
 
 /**
