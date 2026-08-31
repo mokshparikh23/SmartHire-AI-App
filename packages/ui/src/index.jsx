@@ -14,7 +14,20 @@ const BUTTON_VARIANTS = {
   // Primary is ink, not a gradient. This is the single biggest reason the page
   // reads as considered rather than templated.
   primary: 'bg-ink text-paper hover:bg-ink-soft',
-  secondary: 'bg-paper text-ink border border-line hover:border-ink/30 hover:bg-canvas',
+  /*
+    PREMIUM-LIST 2026-09-01: the hover tint goes one step darker, canvas →
+    canvas-2.
+
+    Not a taste change. `bg-canvas` is exactly the colour an interview row takes
+    when the pointer is over it, so the Edit button inside that row hovered to
+    the same value as its own background — the button's fill vanished under the
+    pointer and the only thing that answered was the border. A hover state that
+    disappears at the moment it fires is worse than none. canvas-2 is the tint
+    used for pressed/selected surfaces elsewhere and reads on both grounds.
+
+    secondary: 'bg-paper text-ink border border-line hover:border-ink/30 hover:bg-canvas',
+  */
+  secondary: 'bg-paper text-ink border border-line hover:border-ink/30 hover:bg-canvas-2',
   ghost: 'text-ink-soft hover:text-ink hover:bg-canvas-2',
   danger: 'bg-critical-soft text-critical border border-critical/20 hover:bg-critical hover:text-paper',
   /*
@@ -42,22 +55,104 @@ const BUTTON_VARIANTS = {
     page is already leaving; a hover response would invite a second click.
   */
   positive: 'bg-positive text-paper',
+  /*
+    PREMIUM-LIST 2026-09-01: a destructive action that is not the point of the
+    row it sits in — the bin at the end of an interview in the list.
+
+    `ghost` is too present for it. Ghost is ink-soft, the same weight as the
+    Edit button beside it, so the two read as a pair of equals and the darker,
+    heavier one is the one that destroys something. This starts at faint, where
+    a bin belongs when you are scanning a list, and only finds its colour under
+    the pointer — at which point the red says plainly what the click does.
+
+    A VARIANT, not `variant="ghost" className="text-faint hover:text-critical"`,
+    for the reason spelled out under `inverse`: that puts two `color` utilities
+    on one element and Tailwind v4 picks the winner by stylesheet order rather
+    than by the order of the class attribute.
+  */
+  quiet: 'text-faint hover:bg-critical-soft hover:text-critical',
 }
 
+/*
+  PREMIUM-LIST 2026-09-01: `xs` added — 32px, for a control that lives INSIDE a
+  row of a list rather than under a heading of its own.
+
+  `sm` was the floor until now, and it is a page-level size: 36px tall with 14px
+  of side padding, which is what a "Replace" or a "Download" button wants when it
+  is the only thing on its line. Dropped into an interview row it competes with
+  the row — the Edit pill ended up taller than the interview's own name is tall,
+  so the eye landed on a button that does the same thing as clicking the row.
+
+  const BUTTON_SIZES = {
+    sm: 'h-9 px-3.5 text-[13px]',
+    …
+*/
 const BUTTON_SIZES = {
+  xs: 'h-8 px-3 text-[12px]',
   sm: 'h-9 px-3.5 text-[13px]',
   md: 'h-11 px-5 text-sm',
   lg: 'h-12 px-6 text-[15px]',
 }
 
+/*
+  The same four heights as SQUARES, for `iconOnly` — a button whose whole label
+  is a glyph.
+
+  A separate table rather than `BUTTON_SIZES[size] + ' w-8 px-0'`, because that
+  puts `px-3` and `px-0` on one element and Tailwind v4 settles same-property
+  collisions by stylesheet order, not by the order of your class attribute —
+  `.px-0` is emitted before `.px-3`, so the padding you asked to remove wins and
+  the button stays a lopsided pill. Same trap the `inverse` variant exists to
+  avoid; see BUTTON_VARIANTS above.
+
+  With `rounded-full` from the base classes these come out as circles, which is
+  what a bin at the end of a row should be: it has no word to be wide for.
+*/
+const BUTTON_ICON_SIZES = {
+  xs: 'h-8 w-8',
+  sm: 'h-9 w-9',
+  md: 'h-11 w-11',
+  lg: 'h-12 w-12',
+}
+
 export function Button({
   as = 'button', href, variant = 'primary', size = 'md',
-  icon, iconRight, className = '', children, ...rest
+  // iconOnly: the children are a glyph and nothing else. Pair it with an
+  // aria-label — a button with no text has no accessible name otherwise.
+  icon, iconRight, iconOnly = false, className = '', children, ...rest
 }) {
-  const cls = [
+  /*
+    PREMIUM-LIST 2026-09-01: two additions to the base line, and one property
+    widened.
+
+    `active:scale-[0.97]` — the press. Colour alone is a poor acknowledgement on
+    a trackpad, where the pointer does not move and the hover state is already
+    showing before the click; a 3% dip is the cheapest way for the button to
+    answer the finger. It is small on purpose: at 0.95 a 32px control visibly
+    jumps, and the row it sits in appears to move with it.
+
+    `transition` rather than `transition-colors`, because the scale above is a
+    transform and `transition-colors` does not carry transforms — the press
+    would snap in and ease out, which reads as a glitch rather than as a press.
+    Reduced-motion readers get all of it flattened by the global rule in
+    packages/ui/src/styles/base.css.
+
+    `select-none` — these are pressed, not read. Without it a double click on
+    Edit leaves the word highlighted in the row.
+
+    The pointer cursor is NOT here. It is a base-layer rule in base.css, because
+    v4's preflight dropped it for every button in the app rather than just for
+    this component; the note there has the detail.
+
     'inline-flex items-center justify-center gap-2 rounded-full font-medium',
     'transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none',
-    BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className,
+  */
+  const cls = [
+    'inline-flex select-none items-center justify-center gap-2 rounded-full font-medium',
+    'transition duration-150 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none',
+    BUTTON_VARIANTS[variant],
+    iconOnly ? BUTTON_ICON_SIZES[size] : BUTTON_SIZES[size],
+    className,
   ].join(' ')
 
   const body = (
@@ -204,7 +299,7 @@ export const TH =
   'px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint'
 
 /**
- * Labelled form field. Was local to InterviewProfiles; the résumé editor and the
+ * Labelled form field. Was local to InterviewProfiles; the resume editor and the
  * company combobox need it too, which is the same "copied verbatim into four
  * files" trigger that put CONTROL and TH here.
  *
@@ -233,12 +328,42 @@ export function Field({ label, hint, required, htmlFor, children }) {
 }
 
 /** Page title block for dashboard and admin screens. */
-export function PageHeader({ title, lede, action }) {
+/* BACK-ARROW 2026-09-01: `onBack` added.
+
+   Here rather than hand-rolled at the call site, so every back arrow in the
+   dashboard is one glyph at one size in one position — the thing a design
+   system is for. Passing it does NOT make this a client component and must not:
+   the root export deliberately has no 'use client' (see package.json), so a
+   handler can only come from a caller that is already one. Same rule `action`
+   and Button's onClick have always lived under.
+
+   In flow, not absolutely positioned into the left gutter. The gutter is
+   px-8 — 32px — and this needs 48, so an absolute arrow would hang outside a
+   `main` that scrolls, and buy a horizontal scrollbar on any window narrow
+   enough to hit the padding. The cost is that the title sits 48px right when
+   the arrow is there, which is a shift between two different screens rather
+   than a jump within one. */
+export function PageHeader({ title, lede, action, onBack, backLabel = 'Back' }) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="display text-[2rem] text-ink">{title}</h1>
-        {lede && <p className="mt-1.5 text-[14px] text-muted">{lede}</p>}
+      {/* items-start, and h-9 against a 2rem/1.14 title: the button is 36px and
+          the title's line box is 36.5, so the arrow centres on the title and
+          stays there when the lede below it wraps to two lines. */}
+      <div className="flex items-start gap-3">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={backLabel}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-canvas-2 hover:text-ink"
+          >
+            <Icon name="arrowLeft" size={20} />
+          </button>
+        )}
+        <div>
+          <h1 className="display text-[2rem] text-ink">{title}</h1>
+          {lede && <p className="mt-1.5 text-[14px] text-muted">{lede}</p>}
+        </div>
       </div>
       {action}
     </div>

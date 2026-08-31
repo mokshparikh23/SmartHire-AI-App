@@ -235,6 +235,39 @@
     outline-offset: 2px;
     border-radius: 2px;
   }
+
+  /*
+    ── THE POINTER ON BUTTONS ──────────────────────────────────────────────────
+    PREMIUM-LIST 2026-09-01.
+
+    Tailwind v4 DROPPED preflight's `button, [role="button"] { cursor: pointer }`.
+    It is verifiable in this very tree, because the repo has both versions
+    installed: node_modules/tailwindcss (3.4, hoisted for the desktop app) still
+    carries the rule under the comment "Set the default cursor for buttons";
+    apps/web/node_modules/tailwindcss (4.3, what these two apps actually build
+    with) has no cursor rule for buttons at all.
+
+    Without it the UA default applies — `cursor: default`, the plain arrow. So
+    every <button> in both apps stopped saying it was clickable. Anchors were
+    never affected, which is why this reads as random rather than as a setting:
+    "Get started" in the site nav is a link and shows a hand, while Edit in the
+    interview list is a button and does not.
+
+    HERE, not `cursor-pointer` on the Button component. Button is not the only
+    button — the bare <button> elements in ResumeDropzone, CompanyCombobox,
+    PillTabs, the sidebar and the auth forms all need this too, and one of them
+    will always be the one nobody remembered to add the class to.
+
+    :not(:disabled) is doing real work: v4 dropped `:disabled { cursor: default }`
+    along with the rule above, so without the guard a disabled button would
+    advertise a click that goes nowhere. (Button itself also sets
+    disabled:pointer-events-none, but that is one component's choice, not a rule
+    the whole app follows.)
+  */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 @layer components {

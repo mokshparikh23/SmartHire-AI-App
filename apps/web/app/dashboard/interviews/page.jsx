@@ -1,5 +1,5 @@
 import { requireUser, getSupabase } from '@/lib/auth'
-import { PageHeader } from 'smarthire-ui'
+// import { PageHeader } from 'smarthire-ui'   // BACK-ARROW 2026-09-01 — see below
 import PageTransition from '@/components/ui/PageTransition'
 import InterviewProfiles from '@/components/dashboard/InterviewProfiles'
 
@@ -18,7 +18,7 @@ export const metadata = { title: 'Interviews — Smart Hire AI' }
  * `candidate_name` is still the column, and the note in InterviewProfiles.jsx
  * says why.
  *
- * The résumé checkbox came with it. It is asked here, at the moment the résumé
+ * The resume checkbox came with it. It is asked here, at the moment the resume
  * is added, rather than before every session — which is the whole point of the
  * move. The gate that acts on the answer stays in buildSystemPrompt() on the
  * desktop.
@@ -36,11 +36,19 @@ export default async function InterviewsPage() {
   return (
     <PageTransition>
       <div>
-        <PageHeader
-          title="Interviews"
-          // lede="Set up a candidate here once. The desktop app just picks one and starts."
-          lede="Set an interview up here once. The desktop app just picks one and starts."
-        />
+        {/* BACK-ARROW 2026-09-01: the header moved INTO InterviewProfiles.
+
+            It is not decoration any more — it carries the back arrow out of the
+            interview form, and both the title and the lede change when the form
+            is open. All three depend on `editing`, which is state inside that
+            client component, so the header has to live where the state does.
+            The strings are at the top of InterviewProfiles.jsx under HEADINGS.
+
+            <PageHeader
+              title="Interviews"
+              // lede="Set up a candidate here once. The desktop app just picks one and starts."
+              lede="Set an interview up here once. The desktop app just picks one and starts."
+            /> */}
         <InterviewProfiles initialProfiles={profiles ?? []} userId={user.id} />
       </div>
     </PageTransition>
