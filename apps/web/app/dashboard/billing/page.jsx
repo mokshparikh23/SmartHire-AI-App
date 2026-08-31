@@ -8,7 +8,7 @@ import {
   resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency, formatMoney,
   // SPLIT 2026-09-01: for validating ?plan= and deciding which tab it belongs to.
   PACK_BY_ID, SUBSCRIPTION_TIERS,
-} from '@/lib/pricing'
+} from 'smarthire-pricing'
 import PricingPlans from '@/components/marketing/PricingPlans'
 import Icon from '@/components/ui/Icon'
 import { Card, Badge, Button, PageHeader, EmptyState, TH } from '@/components/ui'
@@ -40,7 +40,7 @@ export default async function BillingPage({ searchParams }) {
     it from there. A pack ID is all that travels. Never a currency, never an
     amount: resolveCurrency() below reads THIS request's geo headers, exactly as
     /api/checkout does, so the two still cannot disagree. See the SECURITY note
-    in lib/pricing.js.
+    in packages/pricing.
 
     Validated against PACK_BY_ID and dropped silently when unknown — a stale
     link or a mistyped ID should fall back to the normal page, not to an error.

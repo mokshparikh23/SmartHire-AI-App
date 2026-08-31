@@ -29,11 +29,11 @@
  *   Live transcription     useVoice.js acquire('system' | mic) → Whisper
  *   Résumé context         /api/resume/parse, gated in buildSystemPrompt()
  *   No practice mode       nothing in apps/desktop runs without a live session
- *   Credits never expire   lib/pricing.js, and the FAQ on the landing page
+ *   Credits never expire   packages/pricing, and the FAQ on the landing page
  *   Pay-per-use            CREDIT_PACKS exist alongside SUBSCRIPTION_TIERS
  *   Free to try            supabase signup trigger grants 10 minutes
  *
- * Prices for our own column are NOT in this file. They come from lib/pricing.js
+ * Prices for our own column are NOT in this file. They come from packages/pricing
  * through the page, because that is the only place prices are allowed to live —
  * a second copy here is how the comparison page and checkout start disagreeing.
  */
@@ -72,7 +72,7 @@ export const COLUMNS = [
     // tagline: 'Suggests what to ask next',
     side: 'both',
     tagline: 'Answers the question you were asked',
-    /* Price comes from lib/pricing.js at render time — see the note above. */
+    /* Price comes from packages/pricing at render time — see the note above. */
     priceNote: 'one hour, no subscription',
     us: true,
   },
@@ -324,7 +324,7 @@ export const FEATURE_GROUPS = [
           meaningless now. It is replaced by the row we plainly lose — there is no
           practice mode anywhere in apps/desktop. Pricing advertised "unlimited
           mock interviews" for a while without one existing; that string is gone
-          from lib/pricing.js and PricingPlans.jsx as of 2026-08-30, and this
+          from packages/pricing and PricingPlans.jsx as of 2026-08-30, and this
           cell is what stops it coming back by the side door.
 
           { label: 'Scores or ranks the candidate', values: { [US]: 'no', parakeet: 'na', … } },

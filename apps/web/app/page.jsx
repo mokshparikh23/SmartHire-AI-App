@@ -13,7 +13,7 @@ import FaqAccordion from '@/components/marketing/FaqAccordion'
 import { createClient } from '@/lib/supabase-server'
 import {
   resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency,
-} from '@/lib/pricing'
+} from 'smarthire-pricing'
 
 /*
   REDESIGN 2026-08-30: rebuilt against the reference design supplied by the user

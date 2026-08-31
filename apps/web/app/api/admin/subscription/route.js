@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
 import { setSubscription } from '@/lib/metering'
-import { SUBSCRIPTION_DAYS } from '@/lib/pricing'
+import { SUBSCRIPTION_DAYS } from 'smarthire-pricing'
 
 const KINDS = Object.keys(SUBSCRIPTION_DAYS)
 

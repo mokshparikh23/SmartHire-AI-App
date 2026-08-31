@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { priceOf } from '@/lib/pricing'
+import { priceOf } from 'smarthire-pricing'
 
 /**
  * Razorpay, for the INR half of checkout.
@@ -13,7 +13,7 @@ import { priceOf } from '@/lib/pricing'
  * part a hand-rolled version usually gets wrong.
  *
  * MONEY UNITS. Razorpay takes amounts in the minor unit (paise), which is what
- * lib/pricing.js already stores. No conversion happens anywhere in this file,
+ * packages/pricing already stores. No conversion happens anywhere in this file,
  * deliberately: a `/100` here is how a customer gets charged a hundredth of the
  * price, and the absence of one is easier to review than its correctness.
  *
@@ -23,10 +23,24 @@ import { priceOf } from '@/lib/pricing'
 
 const API = 'https://api.razorpay.com/v1'
 
-/** Is the INR gateway configured on this deployment? */
-export function razorpayConfigured() {
-  return !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
-}
+/*
+  SPLIT 2026-09-01: razorpayConfigured() moved to packages/pricing/gateway and
+  is called razorpayLive() there.
+
+  Its only caller was gatewayFor(), and gatewayFor() had to move: /compare now
+  renders on the marketing deployment, which has no checkout and must not hold
+  RAZORPAY_KEY_SECRET just to decide whether a table row says "UPI" or "not
+  yet". The replacement answers from the keys where they exist and from a plain
+  flag where they do not — the reasoning is written out in that file.
+
+  Nothing here needs it back. auth() below is the real guard on every REST call,
+  and it throws with the variable names in the message rather than returning a
+  boolean nobody checked.
+
+  // export function razorpayConfigured() {
+  //   return !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+  // }
+*/
 
 function auth() {
   const id = process.env.RAZORPAY_KEY_ID
@@ -138,11 +152,11 @@ export function planIdFor(kind) {
 }
 
 /**
- * Reads a plan back and refuses it if its amount disagrees with lib/pricing.js.
+ * Reads a plan back and refuses it if its amount disagrees with packages/pricing.
  *
  * THIS IS THE POINT OF THE FUNCTION. A Razorpay plan carries its own amount, set
  * in their dashboard, so for the first time in this codebase a price exists
- * somewhere other than lib/pricing.js — exactly the drift lib/stripe.js avoids by
+ * somewhere other than packages/pricing — exactly the drift lib/stripe.js avoids by
  * sending inline price_data. There is no way to avoid it (Subscriptions require
  * a plan), so it is checked instead: one extra API call per subscription
  * checkout, and a loud failure rather than a customer charged an amount the site
@@ -159,7 +173,7 @@ export async function assertPlanMatchesPricing(planId, { kind, currency }) {
 
   if (typeof actual !== 'number' || actual !== expected) {
     throw new Error(
-      `Razorpay plan ${planId} is ${actual} ${plan?.item?.currency} but lib/pricing.js ` +
+      `Razorpay plan ${planId} is ${actual} ${plan?.item?.currency} but packages/pricing ` +
       `says the ${kind} tier is ${expected} ${currency}. Fix one of them before charging anyone.`,
     )
   }

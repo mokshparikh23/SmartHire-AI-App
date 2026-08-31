@@ -8,7 +8,7 @@ import Stripe from 'stripe'
  * set. Checkout is the only thing that needs one, and it fails loudly at request
  * time instead.
  *
- * Prices are NOT stored in Stripe. lib/pricing.js is the single source of truth
+ * Prices are NOT stored in Stripe. packages/pricing is the single source of truth
  * and every Checkout Session is created with inline price_data, so changing a
  * number there does not mean editing a Stripe dashboard or keeping a set of
  * price IDs in sync. The cost is that Stripe's own reporting groups by product

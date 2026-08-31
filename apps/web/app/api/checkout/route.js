@@ -5,10 +5,10 @@ import { getStripe, siteUrl } from '@/lib/stripe'
 import {
   createPaymentLink, createSubscription, planIdFor, assertPlanMatchesPricing,
 } from '@/lib/razorpay'
-import { gatewayFor } from '@/lib/gateway'
+import { gatewayFor } from 'smarthire-pricing/gateway'
 import {
   PACK_BY_ID, SUBSCRIPTION_TIERS, resolveCurrency, priceOf, PRICE_TABLE,
-} from '@/lib/pricing'
+} from 'smarthire-pricing'
 import { MINUTES_PER_CREDIT } from '@/lib/credits'
 
 export const runtime = 'nodejs'
@@ -27,7 +27,7 @@ const INTERVAL = {
  *
  * SECURITY, and the whole reason this route reads so defensively: the body
  * carries a pack ID and NOTHING ELSE. Amount and currency are resolved
- * server-side — the amount from lib/pricing.js, the currency from the request's
+ * server-side — the amount from packages/pricing, the currency from the request's
  * geo headers. If either could be named by the client, anyone would post
  * `currency: 'INR'` or `amount: 100` and pay whatever they liked.
  *
@@ -36,7 +36,7 @@ const INTERVAL = {
  *
  * RAZORPAY 2026-08-30: two gateways now, chosen by the currency this route
  * already resolved — INR to Razorpay for UPI and net banking, everything else to
- * Stripe. See lib/gateway.js for why that is derived from the currency rather
+ * Stripe. See packages/pricing/gateway for why that is derived from the currency rather
  * than sent by the client.
  *
  * WHAT DELIBERATELY DID NOT CHANGE: the response is still `{ url }`, and the
@@ -135,9 +135,9 @@ export async function POST(request) {
       if (isSubscription) {
         const planId = planIdFor(subscriptionKind)
 
-        // Fails closed if the Razorpay dashboard and lib/pricing.js disagree
+        // Fails closed if the Razorpay dashboard and packages/pricing disagree
         // about what this tier costs. A plan is the one place in this codebase
-        // where a price lives outside lib/pricing.js, so it is checked rather
+        // where a price lives outside packages/pricing, so it is checked rather
         // than trusted — see the long note on this function.
         await assertPlanMatchesPricing(planId, { kind: subscriptionKind, currency })
 

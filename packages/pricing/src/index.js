@@ -1,3 +1,19 @@
+/*
+  SPLIT 2026-09-01: this was apps/web/lib/pricing.js. It moved here unchanged.
+
+  WHY IT IS A PACKAGE AND NOT A SECOND COPY. The line below says this file is
+  the only place prices live. The marketing site is a separate deployment on a
+  separate domain now — it quotes a price, and apps/web charges one. A copied
+  file would keep that comment technically present and actually false: two price
+  tables that agree until the day somebody edits one of them, and the way you
+  find out is a customer being charged something other than the number they read.
+
+  ZERO DEPENDENCIES AND ZERO PEER DEPENDENCIES, deliberately. No react, no next,
+  nothing. That is what would let apps/desktop — React 18 and Vite, pinned there
+  on purpose; see the version note in the root README — import this one day
+  without npm resolving a second React into the tree.
+*/
+
 /**
  * What Smart Hire AI sells, and for how much.
  *
@@ -119,6 +135,30 @@ export function resolveCountry(headers) {
  *
  * A VPN still defeats geo-pricing. That is accepted, and true of every
  * geo-priced product.
+ *
+ * SPLIT 2026-09-01 ─ THE INVARIANT NOW SPANS TWO DEPLOYMENTS.
+ *
+ * "Both the pricing page and /api/checkout call this, so the two cannot
+ * disagree" was a statement about one server. The pricing page is on
+ * smarthire.ai and the checkout route is on app.smarthire.ai, and each resolves
+ * from its OWN request's headers. That is still correct — same visitor, same
+ * visit, same country — but only while three things hold:
+ *
+ *   1. BOTH APPS ON THE SAME PLATFORM. This function reads x-nf-geo first, then
+ *      x-vercel-ip-country, then cf-ipcountry. Site on Netlify and app on Vercel
+ *      means two different geo databases, and a border case shows one currency
+ *      and charges the other.
+ *   2. THE SAME EDGE IN FRONT OF BOTH. x-vercel-ip-country is checked BEFORE
+ *      cf-ipcountry, so one host proxied through Cloudflare and one not means
+ *      Vercel geolocating Cloudflare's edge IP on one of them and winning the
+ *      precedence order with it.
+ *   3. NO SHARED CACHING ON ANY PAGE THAT CALLS THIS. Reading headers() forces
+ *      dynamic rendering today, which is what keeps it honest. A marketing site
+ *      is exactly where somebody adds `export const revalidate` or an s-maxage
+ *      header for Core Web Vitals — and then one country's price is served to
+ *      another while checkout charges the real one. If a page here ever needs
+ *      caching, Vary on the geo header or move the price into a per-request
+ *      island. Do not cache the page.
  */
 export function resolveCurrency(headers) {
   const country = resolveCountry(headers)

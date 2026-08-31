@@ -30,7 +30,7 @@ import { Badge, Button } from '@/components/ui'
  * WHAT DID NOT CHANGE, deliberately: buy(), the signed-out routing, and the fact
  * that prices arrive already resolved and formatted from the server. The client
  * never picks a currency, because a client that could pick its currency could
- * pick the cheaper one — see the SECURITY note in lib/pricing.js.
+ * pick the cheaper one — see the SECURITY note in packages/pricing.
  */
 /*
   SPLIT 2026-09-01: initialPlanId / initialMode.
@@ -64,7 +64,7 @@ export default function PricingPlans({
 
   /*
     Note credit_1 cannot match here: the single credit lives in `singlePack`,
-    outside the `packs` ladder, exactly as lib/pricing.js intends. So
+    outside the `packs` ladder, exactly as packages/pricing intends. So
     ?plan=credit_1 opens the Credits tab on the featured pack with the single
     credit still offered on the line underneath — which is the right landing for
     it, and better than preselecting the deliberately-worst per-hour rate.
@@ -444,7 +444,7 @@ function Options({ name, items, selected, onSelect }) {
 
 /* ─────────────────────────────────────────────────────────────── meters */
 
-/** Monthly-equivalent cost in minor units. Mirrors resolveTier() in lib/pricing. */
+/** Monthly-equivalent cost in minor units. Mirrors resolveTier() in packages/pricing. */
 function perMonthMinor(tier) {
   if (!tier) return null
   if (tier.kind === 'weekly') return Math.round(tier.amountMinor * 52 / 12)

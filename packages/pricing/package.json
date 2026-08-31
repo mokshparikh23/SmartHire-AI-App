@@ -1,0 +1,12 @@
+{
+  "name": "smarthire-pricing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What Smart Hire AI sells and for how much. Shared by apps/web and apps/site so a price cannot differ between the page that quotes it and the route that charges it.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.js",
+    "./gateway": "./src/gateway.js"
+  }
+}

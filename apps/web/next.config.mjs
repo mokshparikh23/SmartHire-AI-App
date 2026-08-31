@@ -8,6 +8,22 @@ const nextConfig = {
     optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr']
   },
 
+  /* SPLIT 2026-09-01 ────────────────────────────────────────────────────────
+     The shared workspace packages ship RAW source — plain ESM, and JSX once
+     packages/ui lands. There is no build step for them and there should not be:
+     nothing in this repo orchestrates one, and pre-bundling is the standard way
+     to lose a 'use client' directive on the way through.
+
+     Next 16's own docs say Turbopack transpiles npm-workspace packages
+     automatically under both routers, so this is probably redundant today. It
+     is listed anyway, for two reasons: the behaviour should not depend on which
+     bundler happens to run, and when a "unexpected token" on JSX inside
+     node_modules eventually appears, this is the line to point at.
+
+     Nothing here may also appear in serverExternalPackages below — Next throws
+     at build start if a package is in both. There is no overlap with unpdf. */
+  transpilePackages: ['smarthire-pricing'],
+
   /* RESUME-UPLOAD 2026-08-30 ──────────────────────────────────────────────────
      unpdf is left to Node at runtime instead of being traced by the bundler.
 

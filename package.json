@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Smart Hire AI — Electron desktop app and its Next.js licensing backend",
+  "_comment_workspaces": "SPLIT 2026-09-01: packages/* are listed FIRST so npm links them before the apps that depend on them. smarthire-pricing has no dependencies and no peer dependencies at all — that is what keeps apps/desktop (React 18, Tailwind 3, pinned deliberately; see the version note in the README) able to consume it one day without npm resolving a second React into the tree.",
   "workspaces": [
+    "packages/*",
     "apps/desktop",
     "apps/web"
   ],

@@ -5,8 +5,8 @@ import { SiteNav, SiteFooter } from '@/components/marketing/SiteChrome'
 import SectionMark from '@/components/marketing/SectionMark'
 import Reveal, { ScrollProgress } from '@/components/marketing/Reveal'
 import ComparisonTable from '@/components/marketing/ComparisonTable'
-import { resolveCurrency, singlePackForCurrency } from '@/lib/pricing'
-import { gatewayFor } from '@/lib/gateway'
+import { resolveCurrency, singlePackForCurrency } from 'smarthire-pricing'
+import { gatewayFor } from 'smarthire-pricing/gateway'
 import {
   COLUMNS, COMPETITORS, featureGroupsFor, US,
   SOURCE_DATE, SOURCE_LABEL, SOURCE_URL, competitorPrice,
@@ -43,7 +43,7 @@ import {
   (the app also runs the interviewer's side) and one we lose outright (there is no
   practice mode). That is a weaker argument than the old one. It is also true.
 
-  Our prices are NOT duplicated here. They come through lib/pricing.js in the
+  Our prices are NOT duplicated here. They come through packages/pricing in the
   visitor's own currency, the same call the landing page and /api/checkout make,
   so this page cannot quote a number that checkout will not honour.
 */
@@ -122,7 +122,7 @@ export default async function ComparePage() {
   const featureGroups = featureGroupsFor({ upiLive: gatewayFor('INR') === 'razorpay' })
 
   // The one place our price enters the comparison data. Everything else about
-  // our column lives in lib/comparison.js; the number lives in lib/pricing.js.
+  // our column lives in lib/comparison.js; the number lives in packages/pricing.
   const priceFor = (col) =>
     col.key === US
       ? { display: single.price, listedInInr: false }
