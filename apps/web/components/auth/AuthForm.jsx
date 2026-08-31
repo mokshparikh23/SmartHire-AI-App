@@ -93,6 +93,16 @@ export default function AuthForm({ mode }) {
   // Set by /auth/device-signout when this browser was signed out from elsewhere.
   const signedOutByDevice = searchParams.get('signed_out') === 'device'
 
+  // DELETE-ACCOUNT 2026-09-01: set by DeleteAccountForm, which hard-navigates
+  // here the instant the account is gone. Read the same way as the line above,
+  // for the reason that line's own render note gives: landing on a bare form with
+  // nothing said reads as the app losing your session rather than as the thing
+  // you just asked for having worked.
+  //
+  // The two cannot co-occur — different navigations write different URLs — so
+  // neither needs to suppress the other. Both are suppressed by a real error.
+  const accountDeleted = searchParams.get('deleted') === '1'
+
   /*
     SPLIT 2026-09-01: where to go after this form succeeds.
 
@@ -381,6 +391,32 @@ export default function AuthForm({ mode }) {
           Suppressed once a real error is showing: "you were signed out" above
           "wrong password" is two explanations for one empty form.
         */}
+        {/*
+          DELETE-ACCOUNT 2026-09-01: the same neutral treatment as the device
+          notice below, so the login page has one visual language for "here is why
+          you are looking at this form".
+
+          A `check` in text-faint rather than text-positive: this is "done", not
+          "good news". Nobody wants to be congratulated on leaving.
+
+          The <span> the device notice does without is needed here because this
+          message wraps to two lines, and `mt-px shrink-0` on the icon only
+          behaves against a single flex sibling.
+
+          Deliberately does NOT promise the address can be reused for a new
+          account. That is true of a hard delete and this one is hard — but it is
+          the route's decision to keep, not this component's to advertise.
+        */}
+        {accountDeleted && !error && (
+          <p className="flex items-start gap-2.5 rounded-xl bg-canvas-2 px-3.5 py-3 text-[13px] leading-relaxed text-ink-soft">
+            <Icon name="check" size={15} className="mt-px shrink-0 text-faint" />
+            <span>
+              Your account has been deleted, along with your interview profiles, resumes,
+              devices and balance. Only the receipts for anything you paid for are kept.
+            </span>
+          </p>
+        )}
+
         {signedOutByDevice && !error && (
           <p className="flex items-start gap-2 rounded-xl bg-canvas-2 px-3.5 py-3 text-[13px] text-ink-soft">
             <Icon name="shield" size={15} className="mt-px shrink-0 text-faint" />
