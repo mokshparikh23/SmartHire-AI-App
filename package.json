@@ -3,23 +3,27 @@
   "version": "1.0.0",
   "private": true,
   "description": "Smart Hire AI — Electron desktop app and its Next.js licensing backend",
-  "_comment_workspaces": "SPLIT 2026-09-01: packages/* are listed FIRST so npm links them before the apps that depend on them. smarthire-pricing has no dependencies and no peer dependencies at all — that is what keeps apps/desktop (React 18, Tailwind 3, pinned deliberately; see the version note in the README) able to consume it one day without npm resolving a second React into the tree.",
+  "_comment_workspaces": "SPLIT 2026-09-01: packages/* are listed FIRST so npm links them before the apps that depend on them. smarthire-pricing has no dependencies and no peer dependencies at all — that is what keeps apps/desktop (React 18, Tailwind 3, pinned deliberately; see the version note in the README) able to consume it one day without npm resolving a second React into the tree. ADMIN SPLIT 2026-09-01: apps/* is NOT globbed, so apps/admin had to be added by hand here — without this entry npm links nothing into apps/admin/node_modules, `npm run dev:admin` does not exist, and the failure looks like a broken script rather than a missing workspace.",
   "workspaces": [
     "packages/*",
     "apps/desktop",
     "apps/site",
-    "apps/web"
+    "apps/web",
+    "apps/admin"
   ],
-  "_comment_dev": "SPLIT 2026-09-01: `dev` keeps meaning \"everything\", which is now three processes. `dev:front` is the loop most work actually needs — site on 3002 and app on 3000, without Electron — because three Next/Vite/Electron processes under the 512MB cap is heavy. The ports are not interchangeable: apps/desktop/.env points WEB_URL at 127.0.0.1:3000, so if the site could take that port the desktop would silently talk to it.",
+  "_comment_dev": "SPLIT 2026-09-01: `dev` keeps meaning \"everything\", which is now FOUR processes. `dev:front` is the loop most work actually needs, and it deliberately does NOT include admin: three Next servers plus Electron under the 512MB cap is heavy, and most work touches the site and the app. Reach for `dev:console` when the work is on admin — it runs the app beside it, which is what you want, because the two share a Supabase project and the cookie-isolation check (sign in at 3000, open 3003, it must still ask you to sign in) needs both. The ports are not interchangeable: apps/desktop/.env points WEB_URL at 127.0.0.1:3000, so if another app could take that port the desktop would silently talk to it.",
   "scripts": {
-    "dev": "concurrently -n site,web,desktop -c green,cyan,magenta \"npm run dev:site\" \"npm run dev:web\" \"npm run dev:desktop\"",
+    "dev": "concurrently -n site,web,admin,desktop -c green,cyan,yellow,magenta \"npm run dev:site\" \"npm run dev:web\" \"npm run dev:admin\" \"npm run dev:desktop\"",
     "dev:front": "concurrently -n site,web -c green,cyan \"npm run dev:site\" \"npm run dev:web\"",
+    "dev:console": "concurrently -n web,admin -c cyan,yellow \"npm run dev:web\" \"npm run dev:admin\"",
     "dev:site": "npm run dev --workspace apps/site",
     "dev:web": "npm run dev --workspace apps/web",
+    "dev:admin": "npm run dev --workspace apps/admin",
     "dev:desktop": "npm run dev --workspace apps/desktop",
     "build": "npm run build --workspace apps/desktop",
     "build:site": "npm run build --workspace apps/site",
     "build:web": "npm run build --workspace apps/web",
+    "build:admin": "npm run build --workspace apps/admin",
     "build:mac": "npm run build:mac --workspace apps/desktop",
     "build:win": "npm run build:win --workspace apps/desktop",
     "build:all": "npm run build:all --workspace apps/desktop"

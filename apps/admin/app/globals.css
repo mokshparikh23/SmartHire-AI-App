@@ -1,0 +1,31 @@
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  apps/admin — the admin console's stylesheet, and it is two lines on purpose.
+
+  ADMIN SPLIT 2026-09-01. The design system lives in
+  packages/ui/src/styles/base.css: the @theme palette and font tokens, the
+  @theme static motion tokens, @layer base, the .display / .hl / .eyebrow / .mono
+  typography, and the shared half of the reduced-motion block. Read its header
+  before adding anything here — in particular the @source line, which is what
+  makes Tailwind scan the package's own JSX from THIS app's cwd.
+
+  What the other two apps keep locally, and why this app needs neither:
+
+    apps/web/app/globals.css     the view transitions, driven by
+                                 components/ui/PageTransition.jsx. That component
+                                 is imported by eleven files, every one of them
+                                 under app/dashboard, and none of them moved here.
+
+    apps/site/app/globals.css    the marketing motion (.u-draw, .reveal,
+                                 .rail-fill, the ticker marquee) and the .marker /
+                                 .x-scroll-fade classes. Nothing on an admin
+                                 screen animates.
+
+  ORDER IS LOAD-BEARING. "tailwindcss" first, base.css second — our @layer
+  contributions have to join Tailwind's layers once Tailwind has declared them,
+  which is what keeps them beating preflight. Swapping these two lines produces a
+  green build and an unstyled app.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
+@import "tailwindcss";
+@import "smarthire-ui/styles/base.css";
