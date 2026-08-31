@@ -50,6 +50,19 @@ export const useSessionStore = create((set, get) => ({
      Renaming it would have touched SessionPanel's state calculation and the
      Toolbar toggle for no behavioural gain. */
   captureSource: 'system',   // 'system' | 'mic'
+
+  /* PIPELINE 2026-08-31 ─ "the user wants capture" is not "capture is running" ─
+     micEnabled is set by a toolbar click and by nothing else. It knew nothing
+     about whether acquire() succeeded, so the panel painted a green "listening"
+     chip over dead capture in three separate paths: acquire throwing in either
+     hook, and useVoice exhausting MAX_RESTARTS.
+
+     captureError is a SEPARATE field from `error` for the same reason chatError
+     is (see its note below): `error` is cleared by setQuestion and clearAnswer,
+     so "your microphone is dead" was wiped without trace by the next thing
+     anyone said. A capture failure has to outlive the next question. */
+  captureState: 'idle',      // 'idle' | 'live' | 'failed'
+  captureError: null,
   // On by default so Screenshot is usable without a preparatory click. The
   // mount check in SessionPanel forces this back off when the grant is missing,
   // so "on" never means "on but silently broken".
@@ -99,6 +112,10 @@ export const useSessionStore = create((set, get) => ({
       chatMessages: [],
       chatStreaming: false,
       chatError: null,
+      // PIPELINE 2026-08-31: a capture failure from the previous session must
+      // not be showing over a fresh one.
+      captureState: 'idle',
+      captureError: null,
       turns: [],
       activeTurnId: null,
     })
@@ -179,16 +196,33 @@ export const useSessionStore = create((set, get) => ({
     const { currentQuestion, currentAnswer, source, turns, error } = get()
     if (!currentQuestion) return set({ isThinking: false })
 
+    /* PIPELINE 2026-08-31 ─ a completion that streamed nothing showed nothing ──
+       If the provider sends zero content deltas — the exact Gemini-3
+       thinking-budget failure documented in apps/web/lib/ai.js — pumpStream
+       returns normally, this commits a turn with a: '', and AnswerPanel falls
+       through EVERY branch to null: the question header, a completely blank
+       body, no error, no retry, no explanation. The user sees the app answer
+       with silence and has nothing to press.
+
+       Fixed here rather than in the panel so every caller is covered at once,
+       and so the turn still lands in turns[] with a reason attached —
+       turns[].error already exists and selectTurn already restores it. */
+    const failed = error || (!currentAnswer
+      ? 'The model returned nothing. Retry the question.'
+      : null)
+
     const turn = {
       id: `${turns.length}-${currentQuestion.slice(0, 24)}`,
       q: currentQuestion,
       a: currentAnswer,
       ts: Date.now(),      // wall clock — Dashboard renders this as a time of day
       source,
-      error,
+      // error,
+      error: failed,
       feedback: null,      // REDESIGN 2026-08-29: 'up' | 'down' from the card footer
     }
-    set({ isThinking: false, turns: [...turns, turn], activeTurnId: turn.id })
+    // set({ isThinking: false, turns: [...turns, turn], activeTurnId: turn.id })
+    set({ isThinking: false, error: failed, turns: [...turns, turn], activeTurnId: turn.id })
   },
 
   /**
@@ -223,8 +257,18 @@ export const useSessionStore = create((set, get) => ({
   },
 
   /* REDESIGN 2026-08-29 ─ capture toggles in the new toolbar ───────────────── */
-  setMicEnabled:      (v) => set({ micEnabled: v }),
-  setCaptureSource:   (v) => set({ captureSource: v }),
+  /* PIPELINE 2026-08-31: toggling the source or re-enabling capture is the user
+     explicitly asking for another attempt, so both clear the failed state. If
+     the retry fails too, the hooks write it straight back. */
+  // setMicEnabled:      (v) => set({ micEnabled: v }),
+  // setCaptureSource:   (v) => set({ captureSource: v }),
+  setMicEnabled:      (v) => set({ micEnabled: v, captureState: 'idle', captureError: null }),
+  setCaptureSource:   (v) => set({ captureSource: v, captureState: 'idle', captureError: null }),
+
+  /** PIPELINE 2026-08-31: 'live' once acquire() returns, 'failed' with a reason
+   *  at every site that gives up. Deliberately NOT cleared by setQuestion or
+   *  clearAnswer — that is the whole point of it being its own field. */
+  setCaptureState: (s, err = null) => set({ captureState: s, captureError: err }),
   setScreenEnabled:   (v) => set({ screenEnabled: v }),
   setScreenPermission: (p) => set({
     screenPermission: p,
@@ -240,7 +284,22 @@ export const useSessionStore = create((set, get) => ({
   /* REDESIGN 2026-08-29 ─ the two Clear buttons in the new chrome ──────────── */
 
   /** Transcript bar's Clear (⌘⇧⌫) — drops the heard question, keeps the answer. */
-  clearTranscript: () => set({ currentQuestion: '', source: 'voice' }),
+  /* PIPELINE 2026-08-31 ─ this silently deleted the turn ──────────────────────
+     Blanking currentQuestion mid-stream meant that when the stream finished,
+     setAnswerDone hit its `if (!currentQuestion) return set({isThinking:false})`
+     guard and never pushed the turn. The answer stayed on screen with no
+     question header, absent from turns[], absent from the pager, and gone the
+     moment anything else was asked.
+
+     commitInterrupted is the action written for exactly this ordering trap —
+     rescue the live pair BEFORE the thing that makes it unrecoverable. It
+     returns early unless a live uncommitted pair exists, so this is a no-op in
+     the ordinary case and cannot double-push. */
+  // clearTranscript: () => set({ currentQuestion: '', source: 'voice' }),
+  clearTranscript: () => {
+    get().commitInterrupted()
+    set({ currentQuestion: '', source: 'voice' })
+  },
 
   /** Answer card's Clear (⌘⌫) — empties the card without touching the log. */
   clearAnswer: () =>
@@ -296,7 +355,19 @@ export const useSessionStore = create((set, get) => ({
       return { chatMessages: next }
     }),
 
-  setChatDone:  () => set({ chatStreaming: false }),
+  /* PIPELINE 2026-08-31: same empty-completion case as setAnswerDone, one
+     surface over. A chat turn that streamed nothing left a permanently blank
+     assistant bubble with no reason. failChatTurn already knows how to drop an
+     empty bubble and set chatError, so delegate rather than repeat it. */
+  // setChatDone:  () => set({ chatStreaming: false }),
+  setChatDone: () => {
+    const { chatMessages } = get()
+    const last = chatMessages[chatMessages.length - 1]
+    if (last && last.role === 'assistant' && last.content === '') {
+      return get().failChatTurn('The model returned nothing. Send it again.')
+    }
+    set({ chatStreaming: false })
+  },
   // clearChat: () => set({ chatMessages: [], chatStreaming: false }),
   clearChat:    () => set({ chatMessages: [], chatStreaming: false, chatError: null }),
 

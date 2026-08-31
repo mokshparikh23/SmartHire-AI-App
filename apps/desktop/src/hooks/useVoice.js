@@ -127,6 +127,30 @@ const RESTART_DELAY_MS = 500
 const MAX_RESTARTS     = 5
 const RESTART_RESET_MS = 30000  // capture alive this long clears the budget
 
+/* PIPELINE 2026-08-31 ─ the serial chain had no way to fail ──────────────────
+   Serialising transcription (see the note at transcribeChain below) is correct,
+   but the chain had no deadline and no bound. transcribe() passed no signal at
+   all, so ONE never-settling upload — dead Wi-Fi, a server holding the socket —
+   blocked every later segment for the rest of the session. The .catch there
+   handles a rejection; nothing handles a promise that never settles. The
+   segmented path simply went mute, permanently, with no error anywhere.
+
+   TRANSCRIBE_TIMEOUT_MS: the request carries at most 12s of 32 kbps opus (~48
+   KB) and turns around in ~0.5-2s measured. The server's own retry budget on
+   that route is ~25s, so at 20s we may abandon a request it would eventually
+   have answered — that is the right trade. A transcript landing 25s after it
+   was spoken is useless mid-interview, and the NEXT segment matters more.
+
+   MAX_PENDING_TRANSCRIPTS: with the timeout above this caps worst-case lag at
+   3 x 20s and lets the queue self-drain instead of growing without bound.
+
+   MAX_TRANSCRIBE_FAILURES: handleUtterance only console.error'd, so a
+   consistently failing upload path was invisible. Consecutive, so a single blip
+   stays quiet. */
+const TRANSCRIBE_TIMEOUT_MS    = 20000
+const MAX_PENDING_TRANSCRIPTS  = 3
+const MAX_TRANSCRIBE_FAILURES  = 3
+
 /* SYSTEM-AUDIO 2026-08-30 ─────────────────────────────────────────────────────
    Which audio this hook listens to. Everything below acquire() is identical for
    both sources: the VAD, the recorder and the transcription path never learn
@@ -228,7 +252,14 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
         // the single most likely first-run failure was also the most invisible.
         console.error(`[voice] ${source} capture unavailable:`, e.message)
         if (!cancelled) {
-          useSessionStore.getState().setError(
+          /* PIPELINE 2026-08-31: setError -> setCaptureState. `error` is cleared
+             by the next setQuestion and by clearAnswer, so this message — the
+             single most likely first-run failure on macOS — was wiped by the
+             next thing that happened, leaving a green "listening" chip over a
+             capture that had never started. captureState survives, and it is
+             what the panel now reads to say "deaf" instead of "listening". */
+          // useSessionStore.getState().setError(…)
+          useSessionStore.getState().setCaptureState('failed',
             source === 'system'
               ? `System audio could not be captured. ${e.message}`
               : `The microphone could not be opened. ${e.message}`
@@ -242,6 +273,10 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
         return
       }
       own.stream = stream
+      // PIPELINE 2026-08-31: capture is genuinely running. Nothing confirmed
+      // this before, which is why the meter chip could read green over a dead
+      // device for a whole interview.
+      useSessionStore.getState().setCaptureState('live')
 
       /* SYSTEM-AUDIO 2026-08-30 ─ the track outliving the device ───────────────
          Plugging headphones in or out re-routes system output, and the loopback
@@ -261,7 +296,12 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
           // on its own after a newer one is already live.
           if (cancelled || restartTimer || myRun !== runSeq) return
           if (restarts >= MAX_RESTARTS) {
-            useSessionStore.getState().setError(
+            // PIPELINE 2026-08-31: same reason as the acquire() failure above —
+            // this is the point where capture is permanently dead for the rest
+            // of the session, and it was reported into a field the next question
+            // silently cleared.
+            // useSessionStore.getState().setError(…)
+            useSessionStore.getState().setCaptureState('failed',
               'Audio capture keeps dropping. Check the output device and restart the session.'
             )
             return
@@ -310,6 +350,10 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
          split across a pause would be assembled backwards. One chain, so the
          aggregator sees fragments in the order they were spoken. */
       let transcribeChain = Promise.resolve()
+      // PIPELINE 2026-08-31: how many uploads are queued or in flight, and how
+      // many have failed back to back. See the constants at the top of the file.
+      let pendingTranscripts = 0
+      let transcribeFailures = 0
 
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
 
@@ -331,10 +375,23 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
         if (cancelled || myRun !== runSeq) return
 
         // if (worthSending) handleUtterance(blob)
-        if (worthSending) {
+        // if (worthSending) {
+        //   transcribeChain = transcribeChain
+        //     .then(() => handleUtterance(blob, meta))
+        //     .catch(() => { /* one failed utterance must not break the chain */ })
+        // }
+        /* PIPELINE 2026-08-31: bound the queue. Above the cap the newest blob is
+           dropped rather than queued — with a 20s deadline on each upload, a
+           backlog deeper than this is a network that is not coming back, and
+           queueing more only pushes every later fragment further out of date. */
+        if (worthSending && pendingTranscripts >= MAX_PENDING_TRANSCRIPTS) {
+          log('transcribe-drop', { pending: pendingTranscripts, bytes: blob.size })
+        } else if (worthSending) {
+          pendingTranscripts++
           transcribeChain = transcribeChain
             .then(() => handleUtterance(blob, meta))
             .catch(() => { /* one failed utterance must not break the chain */ })
+            .finally(() => { pendingTranscripts-- })
         }
 
         // Straight back to recording. The gap between stop and start is the only
@@ -351,8 +408,22 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
           // at call time, NOT taken as a prop — a changing prop would tear down
           // and re-acquire the microphone mid-session.
           const { sessionId } = useSessionStore.getState()
-          const text = await transcribe(blob, 'audio.webm', sessionId)
+          // PIPELINE 2026-08-31: a deadline, so one hung upload cannot hold the
+          // whole serial chain — and every segment behind it — forever.
+          // const text = await transcribe(blob, 'audio.webm', sessionId)
+          const guard = new AbortController()
+          const timer = setTimeout(() => guard.abort(), TRANSCRIBE_TIMEOUT_MS)
+          let text
+          try {
+            text = await transcribe(blob, 'audio.webm', sessionId, guard.signal)
+          } finally {
+            clearTimeout(timer)
+          }
           if (cancelled) return
+
+          // PIPELINE 2026-08-31: a success clears the streak, so a single blip
+          // never accumulates toward the warning below.
+          transcribeFailures = 0
 
           const clean = text?.trim()
           // SEGMENTATION 2026-08-30: the length floor and the filler gate moved
@@ -365,6 +436,16 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
           aggRef?.current?.pushFragment(clean, meta)
         } catch (e) {
           console.error('[voice] transcription failed:', e.message)
+          /* PIPELINE 2026-08-31: this used to be console.error and nothing else,
+             so a transcription path that was failing every single time looked
+             exactly like a room where nobody was talking. Surface it once the
+             streak makes it a real fault rather than a blip. */
+          transcribeFailures++
+          if (!cancelled && transcribeFailures >= MAX_TRANSCRIBE_FAILURES) {
+            useSessionStore.getState().setCaptureState('failed',
+              'Speech could not be transcribed. Check the connection — questions are not being picked up.'
+            )
+          }
         }
       }
 

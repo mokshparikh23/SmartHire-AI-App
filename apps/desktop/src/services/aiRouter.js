@@ -81,11 +81,16 @@ export function askAIStream(transcript, onChunk, onDone, model, sessionId, signa
  * @param {Blob} audioBlob
  * @returns {Promise<string>}
  */
+// PIPELINE 2026-08-31: `signal` threaded, so useVoice can put a deadline on an
+// upload that could otherwise block its whole serial transcription chain.
 // export function transcribe(audioBlob, fileName) {
 //   return backendTranscribe(audioBlob, fileName)
 // }
-export function transcribe(audioBlob, fileName, sessionId) {
-  return backendTranscribe(audioBlob, fileName, sessionId)
+// export function transcribe(audioBlob, fileName, sessionId) {
+//   return backendTranscribe(audioBlob, fileName, sessionId)
+// }
+export function transcribe(audioBlob, fileName, sessionId, signal) {
+  return backendTranscribe(audioBlob, fileName, sessionId, signal)
 }
 
 /**
@@ -97,6 +102,11 @@ export function transcribe(audioBlob, fileName, sessionId) {
  * @param {string} sessionId
  * @returns {Promise<{ok: boolean, answer: string, callId: string|null}>}
  */
-export function openRealtimeCall(sdp, sessionId) {
-  return backendOpenRealtimeCall(sdp, sessionId)
+// PIPELINE 2026-08-31: `signal` threaded, so a hung SDP exchange can be given a
+// deadline instead of stranding the capture path for the whole session.
+// export function openRealtimeCall(sdp, sessionId) {
+//   return backendOpenRealtimeCall(sdp, sessionId)
+// }
+export function openRealtimeCall(sdp, sessionId, signal) {
+  return backendOpenRealtimeCall(sdp, sessionId, signal)
 }

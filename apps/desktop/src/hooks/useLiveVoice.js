@@ -73,6 +73,18 @@ const log = createLogger('vad-live')
 // show anyone — just a reason to use the other path.
 const UNSUPPORTED = 'realtime_unsupported'
 
+/* PIPELINE 2026-08-31 ─ two hangs that had no deadline ───────────────────────
+   ICE_TIMEOUT_MS: oniceconnectionstatechange below only handed over on
+   'failed'. On a restrictive network ICE sits in 'checking' indefinitely and
+   never reaches 'failed' at all — a silent, permanent hang with the panel still
+   reading "listening" and no audio path running anywhere.
+
+   REALTIME_TIMEOUT_MS: openRealtimeCall had no timeout either, so a hung SDP
+   POST left run() awaiting forever with own.pc set. The abort lands in the
+   catch below, which already calls giveUp — exactly the right handover. */
+const ICE_TIMEOUT_MS = 8000
+const REALTIME_TIMEOUT_MS = 10000
+
 // export function useLiveVoice({
 //   enabled, source = 'system', onQuestion, onPartial, onUnsupported, levelRef,
 // }) {
@@ -86,12 +98,18 @@ export function useLiveVoice({
     // SEGMENTATION 2026-08-30: ctx/raf/silence moved into the shared detector,
     // which owns the AudioContext and its own teardown.
     // const own = { stream: null, pc: null, ctx: null, raf: 0, silence: null }
-    const own = { stream: null, pc: null, vad: null }
+    // PIPELINE 2026-08-31: iceTimer joins the bag so release() can clear it on
+    // every exit path, including the effect teardown.
+    // const own = { stream: null, pc: null, vad: null }
+    const own = { stream: null, pc: null, vad: null, iceTimer: 0 }
 
     /** Text accumulated from deltas since the last segment closed. */
     let pending = ''
 
     const release = () => {
+      // PIPELINE 2026-08-31: an armed ICE timer that outlives the connection
+      // would call giveUp() on a session that had already moved on.
+      if (own.iceTimer) { clearTimeout(own.iceTimer); own.iceTimer = 0 }
       own.vad?.stop()
       own.vad = null
       try { own.pc?.close() } catch { /* already closed */ }
@@ -145,20 +163,42 @@ export function useLiveVoice({
       try {
         stream = await acquire(source)
       } catch (e) {
-        // Capture failing is NOT a reason to fall back — useVoice would fail on
-        // exactly the same call. Report it the way useVoice does and stop.
+        /* PIPELINE 2026-08-31 ─ this `return` left the session completely deaf ──
+           The reasoning below — "useVoice would fail on exactly the same call" —
+           holds only for a permission denial. It is false for getDisplayMedia
+           resolving with no audio track (that throw is loopback-specific and
+           lives in useVoice's own acquire), for a transient NotReadableError
+           while another app holds the device, and for an AbortError.
+
+           And the cost of being wrong was total: returning without calling
+           onUnsupported leaves liveFailed false, so useInterviewSession keeps
+           this hook "enabled" having done nothing, and useVoice — gated on
+           liveFailed being TRUE — never starts either. The result is a running,
+           billing session with NO audio path at all and a green meter chip,
+           recoverable only by ending the interview.
+
+           Even when the failure genuinely is identical, handing over costs one
+           extra acquire() and then sets the same error string. Strictly better
+           than a dead session. */
+        // console.error(`[live] ${source} capture unavailable:`, e.message)
+        // if (!cancelled) { useSessionStore.getState().setError(…) }
+        // return
         console.error(`[live] ${source} capture unavailable:`, e.message)
         if (!cancelled) {
-          useSessionStore.getState().setError(
+          useSessionStore.getState().setCaptureState('failed',
             source === 'system'
               ? `System audio could not be captured. ${e.message}`
               : `The microphone could not be opened. ${e.message}`
           )
         }
+        giveUp('capture failed', e)
         return
       }
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
       own.stream = stream
+      // PIPELINE 2026-08-31: capture is genuinely running, so the panel may say
+      // "listening" honestly. Before this, nothing ever confirmed it.
+      useSessionStore.getState().setCaptureState('live')
 
       // The loopback track dies when the output device changes. Same failure and
       // same fix as useVoice, but here the peer connection dies with it, so the
@@ -192,14 +232,43 @@ export function useLiveVoice({
           }
         }
 
+        /* PIPELINE 2026-08-31: 'checking' is not a terminal state and never
+           becomes 'failed' on some networks, so waiting only for 'failed' meant
+           waiting forever. Arm a deadline and disarm it the moment the
+           connection is genuinely up. */
+        // pc.oniceconnectionstatechange = () => {
+        //   if (pc.iceConnectionState === 'failed') giveUp('ice failed')
+        // }
+        own.iceTimer = setTimeout(() => {
+          own.iceTimer = 0
+          giveUp(`ice stuck in ${pc.iceConnectionState}`)
+        }, ICE_TIMEOUT_MS)
+
         pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === 'failed') giveUp('ice failed')
+          const state = pc.iceConnectionState
+          if (state === 'connected' || state === 'completed') {
+            if (own.iceTimer) { clearTimeout(own.iceTimer); own.iceTimer = 0 }
+            return
+          }
+          if (state === 'failed') giveUp('ice failed')
         }
 
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
-        const { answer } = await openRealtimeCall(offer.sdp, useSessionStore.getState().sessionId)
+        // PIPELINE 2026-08-31: a deadline on the SDP exchange. Aborting here
+        // lands in the catch below, which already hands over.
+        // const { answer } = await openRealtimeCall(offer.sdp, useSessionStore.getState().sessionId)
+        const sdpGuard = new AbortController()
+        const sdpTimer = setTimeout(() => sdpGuard.abort(), REALTIME_TIMEOUT_MS)
+        let answer
+        try {
+          ;({ answer } = await openRealtimeCall(
+            offer.sdp, useSessionStore.getState().sessionId, sdpGuard.signal,
+          ))
+        } finally {
+          clearTimeout(sdpTimer)
+        }
         if (cancelled) return
         await pc.setRemoteDescription({ type: 'answer', sdp: answer })
       } catch (e) {

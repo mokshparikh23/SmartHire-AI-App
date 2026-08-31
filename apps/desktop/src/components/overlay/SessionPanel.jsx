@@ -27,6 +27,11 @@ export default function SessionPanel({ session }) {
   // Narrow subscriptions only. currentAnswer is subscribed inside AnswerPanel,
   // so a streamed token re-renders that leaf and nothing else.
   const question     = useSessionStore((s) => s.currentQuestion)
+  /* PIPELINE 2026-08-31: a BOOLEAN, deliberately. It flips at most once per
+     turn — when the first token lands — so this costs one panel render per
+     answer, not one per token. Subscribing to currentAnswer itself here would
+     break the contract this file's header states. */
+  const hasAnswer    = useSessionStore((s) => !!s.currentAnswer)
   const source       = useSessionStore((s) => s.source)
   const isThinking   = useSessionStore((s) => s.isThinking)
   const turns        = useSessionStore((s) => s.turns)
@@ -119,6 +124,19 @@ export default function SessionPanel({ session }) {
     session.askManual(text)
   }, [session])
 
+  /* PIPELINE 2026-08-31 ─ one handler for Clear-transcript, not two ────────────
+     The ⌘⇧⌫ hotkey called clearTranscript() bare while the transcript bar's own
+     Clear button also called discardHeld() and blanked partialRef. So the chord
+     wiped the committed question but left the HELD fragment alive — and it
+     repainted itself a frame later and was still answered once its hold expired.
+     That is the exact bug the button's own comment says was fixed; the keyboard
+     path simply never got the fix. */
+  const clearTranscript = useCallback(() => {
+    session.discardHeld?.()
+    if (session.partialRef) session.partialRef.current = ''
+    useSessionStore.getState().clearTranscript()
+  }, [session])
+
   const stepTurn = useCallback((delta) => {
     const { turns: list, activeTurnId: active } = useSessionStore.getState()
     if (!list.length) return
@@ -137,14 +155,32 @@ export default function SessionPanel({ session }) {
     onRetry: session.regenerate,
     onCopy:  () => copy(useSessionStore.getState().currentAnswer),
 
-    onAnswer:          session.regenerate,
+    /* PIPELINE 2026-08-31: ⌘↵ was regenerate, which re-sends the COMMITTED
+       question — useless during a hold, which is exactly the moment the user is
+       staring at unmoving text wondering whether the app has died. If something
+       is held, release it; otherwise behave as before. */
+    // onAnswer:          session.regenerate,
+    onAnswer: () => {
+      if (session.heldRef?.current) { session.flushHeld?.(); return }
+      session.regenerate()
+    },
+    // PIPELINE 2026-08-31: ⌘. is the macOS "stop". It stops the ANSWER; ⌘⇧X
+    // (two-step, above) is what stops the session.
+    onStopGenerating: () => {
+      const s = useSessionStore.getState()
+      s.chatMode ? session.stopChat?.() : session.stopGenerating?.()
+    },
     onScreenshot:      session.askAboutScreen,
     onChat:            () => useSessionStore.getState().toggleChat(),
-    onClearTranscript: () => useSessionStore.getState().clearTranscript(),
+    // onClearTranscript: () => useSessionStore.getState().clearTranscript(),
+    onClearTranscript: clearTranscript,
     // ⌘⌫ clears whatever the card is showing, matching the chip in its head.
+    // PIPELINE 2026-08-31: through the hook's aborting versions — the store's
+    // clearAnswer left the stream running and the text grew straight back.
+    // onClearAnswer: () => { const s = …; s.chatMode ? s.clearChat() : s.clearAnswer() },
     onClearAnswer:     () => {
       const s = useSessionStore.getState()
-      s.chatMode ? s.clearChat() : s.clearAnswer()
+      s.chatMode ? session.clearChat?.() : session.clearAnswer?.()
     },
     onPrev:            () => stepTurn(-1),
     onNext:            () => stepTurn(1),
@@ -179,18 +215,17 @@ export default function SessionPanel({ session }) {
             partialRef={session.partialRef}
             onSubmit={submitTyped}
             onCancelTyping={() => setTyping(false)}
-            onClear={() => {
-              // LIVE CAPTION 2026-08-30: the live caption lives in a ref, so
-              // clearTranscript() alone would wipe the committed question and
-              // leave a half-spoken sentence painted over the top of it.
-              // SEGMENTATION 2026-08-30: and the ref is no longer the whole
-              // story — a held fragment would repaint itself a frame later and,
-              // worse, still be answered once its hold expired. Clearing the
-              // transcript has to drop what is held, not just what is drawn.
-              session.discardHeld?.()
-              if (session.partialRef) session.partialRef.current = ''
-              useSessionStore.getState().clearTranscript()
-            }}
+            // LIVE CAPTION 2026-08-30: the live caption lives in a ref, so
+            // clearTranscript() alone would wipe the committed question and
+            // leave a half-spoken sentence painted over the top of it.
+            // SEGMENTATION 2026-08-30: and the ref is no longer the whole
+            // story — a held fragment would repaint itself a frame later and,
+            // worse, still be answered once its hold expired.
+            // PIPELINE 2026-08-31: hoisted to one `clearTranscript` handler
+            // above, so the ⌘⇧⌫ chord runs exactly the same three steps this
+            // button always did rather than only the last of them.
+            // onClear={() => { session.discardHeld?.(); … }}
+            onClear={clearTranscript}
             onExpand={() => setTyping((v) => !v)}
           />
 
@@ -199,10 +234,16 @@ export default function SessionPanel({ session }) {
                 page turns you cannot see and clear an answer you are not looking
                 at, so the head swaps to the chat's own clear. */}
             <AnswerCardHead
-              onClear={() => chatMode
-                ? useSessionStore.getState().clearChat()
-                : useSessionStore.getState().clearAnswer()}
-              canClear={chatMode ? chatCount > 0 : !!question}
+              // PIPELINE 2026-08-31: through the hook, which aborts the stream.
+              // The store's clearAnswer blanked the card and the answer visibly
+              // grew back on the next frame.
+              // onClear={() => chatMode ? …clearChat() : …clearAnswer()}
+              onClear={() => chatMode ? session.clearChat?.() : session.clearAnswer?.()}
+              // PIPELINE 2026-08-31: gated on `question`, so after ⌘⇧⌫ cleared
+              // the transcript the Clear that would remove the still-visible
+              // ANSWER was disabled. Either one showing is reason enough.
+              // canClear={chatMode ? chatCount > 0 : !!question}
+              canClear={chatMode ? chatCount > 0 : (!!question || hasAnswer)}
               // Same key in both modes — it clears whatever the card is showing.
               // ⌘⇧⌫ is the transcript bar's, which stays visible in chat mode,
               // so reusing it here would give one chord two meanings on screen.

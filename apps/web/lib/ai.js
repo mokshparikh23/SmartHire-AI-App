@@ -287,6 +287,13 @@ export async function requireLicense(licenseKey) {
   return { ok: true, license: result }
 }
 
+/* PIPELINE 2026-08-31: how long the metering gate may hold a request before we
+   call it stuck. It sits ahead of the provider call on every single answer, so
+   this is time the user spends staring at three dots before generation has even
+   started. A healthy heartbeat is one Supabase round trip; 4s is already far
+   outside that, and the 503 it returns is retryable. */
+const GATE_TIMEOUT_MS = 4000
+
 /**
  * Gate for /api/ai/chat and /api/ai/transcribe.
  *
@@ -323,10 +330,33 @@ export async function requireSession(licenseKey, sessionId) {
 
   let beat
   try {
-    beat = await heartbeatSession({ sessionId, licenseKey, aiRequest: true })
+    /* PIPELINE 2026-08-31 ─ the gate had no deadline, and it is a LOCK ─────────
+       session_heartbeat takes SELECT … FOR UPDATE on the session row, reads the
+       licence, updates ai_requests and calls session_settle — which on a metered
+       account writes the wallet — all inside one transaction, and all before the
+       provider is called. Every chat, voice and transcribe request for one
+       session therefore serialises on that single row.
+
+       So a slow request does not just delay itself: it directly lengthens the
+       time-to-first-token of everything queued behind it, including
+       transcription, which is the latency the segmentation layer is budgeting
+       against. And with no deadline, a stuck lock hung the route until the
+       platform killed the function at maxDuration.
+
+       Bounded, NOT bypassed. The billing semantics documented above are
+       deliberate and are not changed here: on timeout we return the same shape
+       this function already returns for a database failure, so the client sees a
+       retryable 503 instead of a hang. Shortening the lock itself — or splitting
+       "check" from "advance" — is a billing change and needs its own pass. */
+    // beat = await heartbeatSession({ sessionId, licenseKey, aiRequest: true })
+    beat = await Promise.race([
+      heartbeatSession({ sessionId, licenseKey, aiRequest: true }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('the meter did not respond in time')), GATE_TIMEOUT_MS)),
+    ])
   } catch (e) {
     // A database failure is not a verdict. 503 tells the client to retry.
-    return { ok: false, status: 503, reason: `Could not verify the session: ${e.message}` }
+    return { ok: false, status: 503, code: 'meter_busy', reason: `Could not verify the session: ${e.message}` }
   }
 
   if (!beat?.ok) {

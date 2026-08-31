@@ -287,7 +287,25 @@ export function useInterviewSession() {
     })
   }
 
-  const onLiveUnsupported = useCallback(() => {
+  /* PIPELINE 2026-08-31 ─ one bad handshake used to cost the whole interview ───
+     setLiveFailed(false) existed in exactly one place: start(). So a single
+     transient SDP failure, ICE hiccup or device blip pinned the session to the
+     segmented path — slower, and with no live caption — for the rest of the
+     interview, with no way back short of ending it.
+
+     Retry on the two gestures that already mean "try capture again": switching
+     the source, and re-enabling capture. Both are explicit user actions and both
+     already re-acquire the device.
+
+     The latch is what keeps that from being a loop. giveUp() already passes a
+     reason to onUnsupported and this callback simply threw it away; a 501 from
+     our own backend means the server is on Gemini and realtime will NEVER work
+     for this deploy, so that one reason sticks and the rest do not. */
+  const liveUnsupportedRef = useRef(false)
+
+  // const onLiveUnsupported = useCallback(() => {
+  const onLiveUnsupported = useCallback((reason) => {
+    if (reason === 'provider does not support realtime') liveUnsupportedRef.current = true
     // Clear any half-written caption before the other path takes over, or it
     // would sit on screen as a question nobody asked.
     // SEGMENTATION 2026-08-30: the half-written part is the DELTAS, which die
@@ -299,6 +317,15 @@ export function useInterviewSession() {
     partialRef.current = heldRef.current
     setLiveFailed(true)
   }, [])
+
+  /* PIPELINE 2026-08-31: the retry, gated on the latch above. isRunning is in
+     the deps so a source switch made between sessions cannot fire this at a
+     moment when there is nothing to re-acquire. */
+  useEffect(() => {
+    if (!isRunning) return
+    if (liveUnsupportedRef.current) return
+    setLiveFailed(false)
+  }, [isRunning, captureSource, micEnabled])
 
   useLiveVoice({
     enabled: isRunning && micEnabled && !liveFailed,
@@ -336,6 +363,48 @@ export function useInterviewSession() {
     if (currentQuestion) generate(currentQuestion, source)
   }, [generate])
 
+  /* PIPELINE 2026-08-31 ─ three controls that could not actually stop anything ─
+     abortRef lives here and the store cannot reach it, so every "stop" in the UI
+     stopped only the WRITES. Three consequences, all user-visible:
+
+       - Clear (⌘⌫) called sessionStore.clearAnswer, which touches neither genRef
+         nor abortRef. The stream kept running, so appendAnswer repainted the
+         card on the very next frame: the panel blanked and the answer visibly
+         grew back.
+       - There was no stop-generating at all. usePanelHotkeys' onStop is
+         session.stop, which ends the whole billed interview — so a runaway
+         answer could only be waited out.
+       - sendChat passed no signal whatsoever, so a chat request could not be
+         cancelled by anything, including this hook's own unmount cleanup. */
+
+  const clearAnswer = useCallback(() => {
+    genRef.current++
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+    bufRef.current = ''
+    abortRef.current?.abort()
+    abortRef.current = null
+    useSessionStore.getState().clearAnswer()
+  }, [])
+
+  /**
+   * Stops the answer without ending the session, keeping whatever arrived.
+   *
+   * Ordering is load-bearing. genRef is bumped BEFORE the abort so the in-flight
+   * generation's own finally sees `gen !== genRef.current` and skips its
+   * setAnswerDone — otherwise the turn commits twice. flush() runs before the
+   * abort so the last frame's buffered tokens are not thrown away: a stopped
+   * answer is still an answer worth keeping.
+   */
+  const stopGenerating = useCallback(() => {
+    if (!useSessionStore.getState().isThinking) return
+    genRef.current++
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+    flush()
+    abortRef.current?.abort()
+    abortRef.current = null
+    useSessionStore.getState().setAnswerDone()
+  }, [flush])
+
   /* SESSION GATE 2026-08-29 ────────────────────────────────────────────────────
      The session has to be OPEN before the panel appears, because every AI call
      is gated on its id. Starting the UI first and the session second would give
@@ -368,6 +437,10 @@ export function useInterviewSession() {
     // WITHOUT emitting it — a half-question from the last interview must not be
     // the first thing this one answers.
     aggRef.current?.reset()
+    // PIPELINE 2026-08-31: clear the realtime-unsupported latch too. start()
+    // already gave every session a fresh attempt at the live path; the latch
+    // must not be the thing that quietly takes that away.
+    liveUnsupportedRef.current = false
     setLiveFailed(false)
 
     useSessionStore.getState().startSession(result)
@@ -541,6 +614,11 @@ export function useInterviewSession() {
   const chatGenRef = useRef(0)
   const chatBufRef = useRef('')
   const chatRafRef = useRef(0)
+  // PIPELINE 2026-08-31: chat had no AbortController at all — chatGenRef only
+  // discarded the tokens while the socket stayed open and the request stayed
+  // billed. The composer is disabled while streaming, so this mattered most on
+  // teardown: signing out left a chat request running.
+  const chatAbortRef = useRef(null)
 
   const flushChat = useCallback(() => {
     chatRafRef.current = 0
@@ -555,10 +633,20 @@ export function useInterviewSession() {
     if (!message) return
 
     const gen = ++chatGenRef.current
+    // PIPELINE 2026-08-31: supersede an in-flight chat request rather than
+    // leaving it running and merely ignoring what it sends back.
+    chatAbortRef.current?.abort()
+    const controller = new AbortController()
+    chatAbortRef.current = controller
     const store = useSessionStore.getState()
     store.startChatTurn(message)
     chatBufRef.current = ''
     let failure = null
+    // PIPELINE 2026-08-31: an abort is neither a success nor a failure, and the
+    // finally below has to be able to tell. Returning from the catch would not
+    // do it — finally still runs, and setChatDone would then read the empty
+    // assistant bubble as "the model returned nothing".
+    let aborted = false
 
     // The full thread, so the model has the conversation — minus the empty
     // assistant turn startChatTurn just pushed for the reply to stream into.
@@ -588,8 +676,15 @@ export function useInterviewSession() {
         null,
         useSettingsStore.getState().model,
         useSessionStore.getState().sessionId,
+        // PIPELINE 2026-08-31: the signal parameter askAIStream has always had
+        // on the voice path, finally passed here too.
+        controller.signal,
       )
     } catch (e) {
+      // PIPELINE 2026-08-31: an abort is a supersede, not a failure — the same
+      // reasoning generate() applies. Without this, cancelling a chat request
+      // paints a red error under the message that replaced it.
+      if (e?.name === 'AbortError') aborted = true
       // BUGFIX 2026-08-30: reportFailure writes to `error`, which only
       // AnswerPanel renders — in chat mode that meant a silent failure and a
       // blank assistant bubble. Route chat failures to the chat's own field.
@@ -603,7 +698,13 @@ export function useInterviewSession() {
         // is still empty after this.
         flushChat()
 
-        if (failure) {
+        /* PIPELINE 2026-08-31: a cancelled request is neither. Keep whatever
+           streamed, stop the spinner, and say nothing — failChatTurn would paint
+           an error the user caused on purpose, and setChatDone would call an
+           empty bubble a model failure. */
+        if (aborted) {
+          useSessionStore.setState({ chatStreaming: false })
+        } else if (failure) {
           // Out of credits is session-wide, so it still sets blockedReason —
           // the thread reads that to offer a top-up instead of an error line.
           if (failure.status === 402) {
@@ -626,8 +727,30 @@ export function useInterviewSession() {
     genRef.current++
     chatGenRef.current++
     abortRef.current?.abort()
+    // PIPELINE 2026-08-31: the chat request was the one this cleanup could not
+    // reach — it had no controller at all, so signing out mid-reply left it
+    // running and billed.
+    chatAbortRef.current?.abort()
     aggRef.current?.dispose()
   }, [])
+
+  /* PIPELINE 2026-08-31: the chat mirror of stopGenerating. Same ordering, same
+     reason — bump the counter first so the in-flight request's finally skips
+     its own bookkeeping, then abort, then settle the thread here. */
+  const stopChat = useCallback(() => {
+    if (!useSessionStore.getState().chatStreaming) return
+    chatGenRef.current++
+    if (chatRafRef.current) { cancelAnimationFrame(chatRafRef.current); chatRafRef.current = 0 }
+    flushChat()
+    chatAbortRef.current?.abort()
+    chatAbortRef.current = null
+    useSessionStore.setState({ chatStreaming: false })
+  }, [flushChat])
+
+  const clearChat = useCallback(() => {
+    stopChat()
+    useSessionStore.getState().clearChat()
+  }, [stopChat])
 
   // return { levelRef, start, stop, askManual, regenerate }
   // return { levelRef, start, stop, askManual, regenerate, askAboutScreen, sendChat }
@@ -639,8 +762,21 @@ export function useInterviewSession() {
   // aggregator still held the text and answered it a second later.
   const discardHeld = useCallback(() => { aggRef.current?.reset() }, [])
 
+  /* PIPELINE 2026-08-31: flushHeld releases what the aggregator is holding, on
+     demand. flush() already existed on the aggregator and had zero callers — so
+     during a hold of up to several seconds there was nothing at all the user
+     could press: regenerate only re-sends the already-COMMITTED question, which
+     is precisely the thing that does not exist yet while a fragment is held. */
+  const flushHeld = useCallback(() => { aggRef.current?.flush('user') }, [])
+
   return {
-    levelRef, partialRef, live: !liveFailed, discardHeld,
+    // levelRef, partialRef, live: !liveFailed, discardHeld,
+    // start, stop, askManual, regenerate, askAboutScreen, sendChat,
+    // PIPELINE 2026-08-31: heldRef is handed down so the transcript bar can show
+    // that a hold is deliberate; the rest are the cancellation controls that had
+    // no way out of this hook.
+    levelRef, partialRef, heldRef, live: !liveFailed, discardHeld, flushHeld,
     start, stop, askManual, regenerate, askAboutScreen, sendChat,
+    stopGenerating, stopChat, clearAnswer, clearChat,
   }
 }

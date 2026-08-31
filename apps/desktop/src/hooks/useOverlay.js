@@ -34,8 +34,12 @@ export function usePanelOpacity(panelRef, overlayOpacity) {
 // The reference design shows Chat on ⌘⇧⌫, which is also its transcript Clear.
 // Chat is ⌘⇧J here so the two do not collide.
 // export function usePanelHotkeys({ onType, onStop, onCopy, onRetry }) {
+// PIPELINE 2026-08-31: onStopGenerating added. `onStop` is the SESSION — it
+// closes the metered row and dismisses the panel. There was nothing at all that
+// stopped only the answer, so a runaway generation could only be waited out.
+// export function usePanelHotkeys({ onType, onStop, onCopy, onRetry, … }) {
 export function usePanelHotkeys({
-  onType, onStop, onCopy, onRetry,
+  onType, onStop, onCopy, onRetry, onStopGenerating,
   onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
 }) {
   useEffect(() => {
@@ -75,6 +79,10 @@ export function usePanelHotkeys({
       }
 
       if (key === 'enter')          { e.preventDefault(); onAnswer?.() }
+      // PIPELINE 2026-08-31: ⌘. — the macOS convention for "stop what you are
+      // doing", and unbound here. Safe while typing: it is not a text-editing
+      // key, and stopping a runaway answer is exactly as useful mid-typing.
+      else if (key === '.')         { e.preventDefault(); onStopGenerating?.() }
       else if (key === 'backspace') { if (!typing) { e.preventDefault(); onClearAnswer?.() } }
       else if (key === 'arrowleft') { if (!typing) { e.preventDefault(); onPrev?.() } }
       else if (key === 'arrowright'){ if (!typing) { e.preventDefault(); onNext?.() } }
@@ -82,7 +90,8 @@ export function usePanelHotkeys({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
-    onType, onStop, onCopy, onRetry,
+    // onType, onStop, onCopy, onRetry,
+    onType, onStop, onCopy, onRetry, onStopGenerating,
     onAnswer, onScreenshot, onChat, onClearTranscript, onClearAnswer, onPrev, onNext,
   ])
 }
