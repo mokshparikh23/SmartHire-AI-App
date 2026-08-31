@@ -153,7 +153,15 @@ Role      : ${role || 'not specified'}`,
        resolved: "why did you leave?" finds the employer sequence in a handful of
        tokens instead of scanning four kilobytes of flattened prose. */
     // sections.push(`CANDIDATE RÉSUMÉ — … Cite it as [resume] when a follow-up comes from it.`)
-    sections.push(`CANDIDATE RÉSUMÉ — the candidate has agreed to its use in this interview.
+    /* CANDIDATE-ONLY 2026-09-01: "CANDIDATE RÉSUMÉ — the candidate has agreed to
+       its use" is third-person about the reader. With the interviewer mode
+       retired there is one reader and this document is their own; the consent
+       language was describing a permission somebody else granted. The GATE is
+       untouched — `useResume` above still decides whether this block exists at
+       all — only the framing changes. */
+    // sections.push(`CANDIDATE RÉSUMÉ — the candidate has agreed to its use in this interview.
+    // Cite it as [resume] when something you say comes from it.`)
+    sections.push(`YOUR RÉSUMÉ — the user's own, switched on for this conversation.
 Cite it as [resume] when something you say comes from it.
 ${brief ? `
 AT A GLANCE
@@ -167,10 +175,17 @@ ${resume.trim()}`)
     // being sent to a candidate-side model. Same restriction, neutral wording.
     // sections.push(`You have NOT been given the candidate's resume. Either none was
     // supplied, or the interviewer has not confirmed the candidate agreed to its use. …`)
-    sections.push(`You have NOT been given the candidate's résumé. Either none was supplied,
-or consent for its use has not been confirmed. Do not speculate about their
-background, do not ask for the résumé, and do not infer what might be in it.
-Work only from what is actually said in this conversation.`)
+    /* CANDIDATE-ONLY 2026-09-01: "the candidate's résumé" and "their background"
+       are third-person about the reader, and this is the branch EVERY
+       résumé-less session hits — which, now that a session can start with no
+       interview set up at all, is most first sessions. */
+    // sections.push(`You have NOT been given the candidate's résumé. Either none was supplied,
+    // or consent for its use has not been confirmed. Do not speculate about their
+    // background, …  Work only from what is actually said in this conversation.`)
+    sections.push(`No résumé is available for this conversation — either none was uploaded,
+or it is switched off. Do not speculate about the user's background, do not ask
+for a résumé, and do not infer what might be in one. Work only from what is
+actually said in this conversation.`)
   }
 
   if (useJD) {
@@ -220,8 +235,21 @@ treat it as context, do not answer it, and say "nothing to add".`)
   // not been written yet — fall through to 'answer'. Falling back to whatever is
   // currently the default is the rule at both ends now; setAnswerMode does the
   // same on the way in.
-  if (answerMode === 'answer') return answerPrompt(context, style)
+  /* CANDIDATE-ONLY 2026-09-01 ─ the branch is gone; there is one reader.
+     This app is for the person BEING interviewed. Keeping a second prompt behind
+     a dropdown is what forced every shared string above — the résumé block, the
+     no-résumé block, the JD line, the [SCREENSHOT] rule — to be written for two
+     different readers at once, and each of those has already had to be corrected
+     once for exactly that reason (see the ADAPTIVE 2026-08-31 notes above).
 
+     The interviewer prompt below is kept, unreachable, per the repo's
+     keep-don't-delete rule. `answerMode` is pinned to 'answer' in three places in
+     store/settingsStore.js; this unconditional return is the one that decides
+     behaviour, and it holds even if a hand-edited blob says otherwise. */
+  // if (answerMode === 'answer') return answerPrompt(context, style)
+  return answerPrompt(context, style)
+
+  // eslint-disable-next-line no-unreachable
   return `You are a copilot for the person CONDUCTING this job interview.
 
 You are not the candidate and you never speak for them. You do not write
@@ -255,6 +283,20 @@ decides what kind of reply is wanted, and the three are not interchangeable.
 Either way: short lines, readable at a glance mid-conversation. One sentence of
 reasoning, then the question. Keep a reply under about 60 words unless they
 asked for detail. They have roughly three seconds to read it.
+
+FORMAT
+
+Plain text by default. Light markdown ONLY where the structure is genuinely in
+what you are saying:
+
+- \`-\` bullets when you are giving more than one follow-up, one per line.
+- **bold** the specific detail a follow-up is pinning down — the claim, the
+  number, the word that was vague. Not whole sentences.
+- ==highlight== the single question worth asking first, when one clearly leads.
+  At most one per reply, and often none.
+- \`backticks\` for identifiers, types, commands and code fragments.
+
+No headings, no tables, no horizontal rules, no nested lists.
 
 LANGUAGE
 
@@ -363,7 +405,24 @@ function answerPrompt(context, style = '') {
 
      "FORMAT" is new. Nothing ever told the model what the panel could render,
      and until Markdown.jsx nothing could render markup anyway — so every
-     **bold** it emitted arrived as literal asterisks. */
+     **bold** it emitted arrived as literal asterisks.
+
+     EMPHASIS 2026-09-01 ─ two changes to that section, and one omission fixed.
+
+     The bold rule said "on the two or three words that carry the answer, once or
+     twice in a reply at most". The cap was doing the damage: a model told it may
+     emphasise twice at most emphasises approximately never, so the feature read
+     as broken rather than as restrained. What actually needs bounding is the
+     SPAN — half a bold line emphasises nothing — not the count.
+
+     ==highlight== is new, and is capped at one BECAUSE bold no longer is. There
+     have to be two levels: bold for the terms that carry the answer, and one
+     painted span for the thing that has to be said out loud. If the loud level
+     were uncapped it would become the ordinary one and the ladder would collapse
+     back to a single step.
+
+     The omission: the followups prompt below had no FORMAT section at all, while
+     the panel renders markdown for both modes. It has one now. */
   // return `You are a live assistant for someone in a spoken conversation. You
   // read what is said out loud and answer it.
   return `You are a live assistant for the person being interviewed. You read
@@ -447,9 +506,16 @@ the answer:
 
 - \`-\` bullets when the question asked for several things, one per line.
 - \`1.\` numbers only when the order matters — steps, a sequence, a ranking.
-- **bold** on the two or three words that carry the answer, once or twice in a
-  reply at most, so the eye lands on them first.
-- \`backticks\` for identifiers, types, commands and code fragments.
+- **bold** every term that carries the answer — the name, the number, the verb
+  the whole reply turns on. Not whole sentences: if half a line is bold, none of
+  it is emphasised any more.
+- ==highlight== the ONE thing they have to actually say out loud. At most one
+  per reply, and often none — an answer with two highlights has none, because
+  the eye cannot be sent to two places at once. Use it for the complexity, the
+  number, the single word the interviewer is waiting to hear. Never wrap a whole
+  sentence in it.
+- \`backticks\` for identifiers, types, commands and code fragments. Anything
+  inside backticks is left exactly as written, so \`a == b\` is safe to say.
 
 No headings, no tables, no horizontal rules, no nested lists, and no code fence
 longer than a few lines. A one-line answer is never a bullet, and a bulleted

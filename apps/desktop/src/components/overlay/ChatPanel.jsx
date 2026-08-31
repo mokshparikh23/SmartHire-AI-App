@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import Icon from '../ui/Icon'
+import Markdown from './Markdown'
 
 /**
  * REDESIGN 2026-08-29: Chat mode.
@@ -62,7 +63,17 @@ export default function ChatPanel({ onSend }) {
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`ia-msg ia-msg--${m.role}`}>
-              {m.content}
+              {/* EMPHASIS 2026-09-01: the assistant's turns go through the same
+                  renderer as the answer card. This was the last surface still
+                  printing the model's markdown literally — a chat reply with a
+                  code fragment in it arrived as backticks and unindented Inter,
+                  which is the exact complaint Markdown.jsx was written to fix.
+
+                  The user's own turns stay plain text on purpose: what they
+                  typed is what should appear, and asterisks in a question are
+                  asterisks, not formatting.
+                  {m.content} */}
+              {m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}
               {/* The assistant turn is pushed empty and streams into; the caret
                   is what makes that read as "working" rather than "blank". */}
               {m.role === 'assistant' && !m.content && streaming && (

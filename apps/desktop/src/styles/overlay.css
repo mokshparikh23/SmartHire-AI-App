@@ -849,8 +849,39 @@
   font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
   text-shadow: none;
 }
-.ia-answer strong { font-weight: 650; color: #fff; }
+/* EMPHASIS 2026-09-01 ─ bold that is actually bolder ──────────────────────────
+   650 against a body already set in rgba(255,255,255,0.94) is about a third of a
+   weight step, over a translucent panel, at 13.5px. It was technically bold and
+   visibly nothing — which is half of why the model's **bold** appeared not to
+   work. 700 is the first weight Inter ships that separates cleanly from the
+   body at this size.
+   .ia-answer strong { font-weight: 650; color: #fff; } */
+.ia-answer strong { font-weight: 700; color: #fff; }
 .ia-answer em     { font-style: italic; color: rgba(255, 255, 255, 0.92); }
+
+/* EMPHASIS 2026-09-01 ─ the one thing to actually say ─────────────────────────
+   Amber, because the panel already spends amber on exactly this meaning: the
+   answer's own sparkle icon is #fbbf24 and .ia-blocked — the state with the one
+   action worth taking — is #fcd34d on rgba(251,191,36,.10). A new hue would be a
+   fourth accent in a panel that has three.
+
+   Both background AND color are set explicitly: the UA default for <mark> is
+   black text on a bright yellow block, which over dark glass is a hole punched
+   in the panel.
+
+   text-shadow is removed for the same reason .ia-answer code removes it — the
+   body's 0 1px 2px shadow is there to lift white text off a moving video
+   underneath, and inside a filled pill it only smears the glyphs. */
+.ia-answer mark,
+.ia-md-mark {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(251, 191, 36, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+  font-weight: 650;
+  text-shadow: none;
+}
 
 .ia-question-text {
   font-size: 13.5px; line-height: 1.6;

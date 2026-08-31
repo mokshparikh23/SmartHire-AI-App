@@ -44,6 +44,11 @@ function Inline({ text }) {
   const parts = splitInline(text)
   return parts.map((p, i) => {
     if (p.type === 'code')   return <code key={i}>{p.text}</code>
+    // EMPHASIS 2026-09-01: <mark> and not a styled <span>. It is the element
+    // that MEANS "relevant to what the reader is doing right now", so it is what
+    // VoiceOver and Narrator announce as marked text — and this panel is read
+    // under pressure by people who sometimes have a screen reader running.
+    if (p.type === 'mark')   return <mark key={i} className="ia-md-mark">{p.text}</mark>
     if (p.type === 'strong') return <strong key={i}>{p.text}</strong>
     if (p.type === 'em')     return <em key={i}>{p.text}</em>
     return <React.Fragment key={i}>{p.text}</React.Fragment>

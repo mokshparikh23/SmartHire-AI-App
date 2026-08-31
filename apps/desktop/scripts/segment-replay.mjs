@@ -656,5 +656,74 @@ check('markdown: growing text never loses what it already showed', () => {
   assert.ok(!previous.includes('*'), `a marker survived into the output: "${previous}"`)
 })
 
+/* EMPHASIS 2026-09-01 ─ ==highlight==, and the operator it must not eat ───────
+   The whole risk of this marker is in the second fixture. A candidate is asked
+   about equality checks constantly, so "==" appears in ordinary prose in this
+   product far more often than it does anywhere else — and the obvious regex,
+   /==([^=]+)==/, highlights the text between two unrelated comparisons. */
+
+check('markdown: ==highlight== marks a span', () => {
+  assert.deepEqual(splitInline('Answer: ==O(n) time== overall'), [
+    { type: 'text', text: 'Answer: ' },
+    { type: 'mark', text: 'O(n) time' },
+    { type: 'text', text: ' overall' },
+  ])
+
+  // Bold and highlight are separate levels and must not consume each other.
+  assert.deepEqual(splitInline('**hash map**, ==O(n)=='), [
+    { type: 'strong', text: 'hash map' },
+    { type: 'text', text: ', ' },
+    { type: 'mark', text: 'O(n)' },
+  ])
+})
+
+check('markdown: == as a comparison operator is never a highlight', () => {
+  // Two operators on one line: the naive rule marks " b and c ".
+  assert.deepEqual(splitInline('if a == b and c == d'),
+    [{ type: 'text', text: 'if a == b and c == d' }])
+
+  // The sentence this product will actually produce.
+  assert.deepEqual(splitInline('use === not ==, because == coerces'),
+    [{ type: 'text', text: 'use === not ==, because == coerces' }])
+
+  // Inside backticks nothing applies at all — `code` is checked first.
+  assert.deepEqual(splitInline('write `a == b` here'), [
+    { type: 'text', text: 'write ' },
+    { type: 'code', text: 'a == b' },
+    { type: 'text', text: ' here' },
+  ])
+
+  // Two real highlights on one line resolve as two, not as one span swallowing
+  // the text between them — this is what the lazy quantifier buys.
+  assert.deepEqual(splitInline('==first== then ==second=='), [
+    { type: 'mark', text: 'first' },
+    { type: 'text', text: ' then ' },
+    { type: 'mark', text: 'second' },
+  ])
+})
+
+check('markdown: a half-arrived == never prints', () => {
+  // The frame where the closing pair is one character short.
+  assert.deepEqual(splitInline('Answer: ==O(n) time='), [
+    { type: 'text', text: 'Answer: ' },
+    { type: 'mark', text: 'O(n) time' },
+  ])
+
+  // And the frame before any content has arrived after the opener.
+  assert.deepEqual(splitInline('Answer: =='), [{ type: 'text', text: 'Answer: ' }])
+
+  // The monotonic-growth property, for a line carrying a highlight.
+  const full = 'Say ==O(n log n)== and **stop**'
+  let previous = ''
+  for (let i = 1; i <= full.length; i++) {
+    const visible = splitInline(full.slice(0, i)).map((p) => p.text).join('')
+    assert.ok(visible.length >= previous.length - 1,
+      `visible text shrank at ${i}: "${previous}" -> "${visible}"`)
+    previous = visible
+  }
+  assert.ok(!previous.includes('='), `a marker survived into the output: "${previous}"`)
+  assert.ok(!previous.includes('*'), `a marker survived into the output: "${previous}"`)
+})
+
 console.log(failures === 0 ? '\nall green\n' : `\n${failures} failing\n`)
 process.exit(failures === 0 ? 0 : 1)

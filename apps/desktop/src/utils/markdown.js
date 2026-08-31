@@ -26,6 +26,32 @@
    of the text — the half-streamed case. */
 const INLINE_RULES = [
   { type: 'code',   re: /`([^`]+)`/,                  open: /`([^`]*)$/ },
+  /* EMPHASIS 2026-09-01 ─ a second, louder level than bold ────────────────────
+     Bold marks the words that carry the answer. This marks the ONE thing the
+     candidate has to actually say — the number, the name, the complexity — and
+     it is painted rather than merely weighted, so it survives being read at a
+     glance over someone else's video.
+
+     It sits after `code` for the same reason `strong` does: whatever is inside
+     backticks is a code fragment and none of these markers apply to it.
+
+     THE LOOKAROUNDS ARE LOAD-BEARING, NOT TIDINESS. The obvious spelling,
+     /==([^=]+)==/, is wrong in this product specifically. A candidate is asked
+     about equality checks constantly, and
+
+         "use === not ==, because == coerces"
+         "if a == b and c == d"
+
+     both contain two `==` on one line. The naive rule highlights the text
+     BETWEEN them — mid-sentence, in amber, as though the model meant it. A
+     highlight the model did not ask for is worse than no highlight at all,
+     because the eye goes to it first.
+
+     Requiring the span to start and end on a non-space kills every one of those:
+     a comparison always has a space after its operator. `==O(n) time==` is
+     unaffected. The lazy `+?` keeps the match to the NEAREST closing pair rather
+     than spanning two separate highlights on one line. */
+  { type: 'mark',   re: /==(?!\s)([^=]+?)(?<!\s)==/,  open: /==(?!\s)([^=]*)$/ },
   { type: 'strong', re: /\*\*([^*]+)\*\*/,            open: /\*\*([^*]*)$/ },
   { type: 'em',     re: /(?<!\*)\*([^*]+)\*(?!\*)/,   open: /(?<!\*)\*([^*]*)$/ },
 ]
@@ -73,7 +99,13 @@ export function splitInline(text) {
        One frame is enough to see, and it is precisely the visible rewrite this
        parser exists to prevent. A trailing run of marker characters that closes
        nothing is a marker still arriving: drop it, then scan what is left. */
-    const trimmed = rest.replace(/[*`]+$/, '')
+    /* EMPHASIS 2026-09-01: `=` joins the class, or the new rule reintroduces
+       exactly the flash this paragraph describes. "==O(n) time==" streams
+       through "==O(n) time=", where the closing pair is half arrived: nothing
+       matches closed, the open rule needs `==` and sees one `=`, and the leading
+       `==` prints as literal text for a frame.
+       const trimmed = rest.replace(/[*`]+$/, '') */
+    const trimmed = rest.replace(/[*`=]+$/, '')
 
     if (!trimmed) {
       // The remainder was nothing but a half-arrived marker.
