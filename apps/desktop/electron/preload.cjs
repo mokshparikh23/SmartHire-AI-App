@@ -20,6 +20,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWindowOpacity:  (o)   => ipcRenderer.invoke('window:setOpacity', o),
   setOverlayOpacity: (o)   => ipcRenderer.invoke('overlay:setOpacity', o),
 
+  /* PLACEMENT 2026-09-01 ─ the six named zones ────────────────────────────────
+     `zone` is one of tl/tc/tr/bl/bc/br. Main resolves it against the work area
+     of whichever display the window is on and rejects anything else, so this
+     stays a fixed vocabulary rather than a "put the window anywhere" primitive
+     the renderer could be talked into misusing.
+
+     onMovePicker is the other direction: ⌘⇧M is a GLOBAL shortcut, so it is
+     main that hears it, and this is how the panel finds out it should open the
+     picker. It returns its own unsubscribe and strips IpcRendererEvent, exactly
+     as onSessionTick below does — so an effect cleanup removes the listener it
+     added rather than every listener on the channel. */
+  moveToZone:   (zone) => ipcRenderer.invoke('window:moveToZone', zone),
+  onMovePicker: (fn) => {
+    const h = () => fn()
+    ipcRenderer.on('overlay:movePicker', h)
+    return () => ipcRenderer.removeListener('overlay:movePicker', h)
+  },
+
   // ── App ───────────────────────────────────────────────────────────────────
   getVersion: ()           => ipcRenderer.invoke('app:getVersion'),
   platform:   process.platform,
