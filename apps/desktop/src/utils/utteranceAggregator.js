@@ -319,13 +319,35 @@ export function createUtteranceAggregator({
       disposed = true
       clearHoldTimer()
       held = null
+      // PIPELINE 2026-08-31: dispose() left whatever was painted on screen
+      // forever — the caption is driven from onHoldChange and nothing else
+      // clears it once this instance stops answering.
+      onHoldChange?.('')
     },
+
+    /* PIPELINE 2026-08-31 ─ why a one-way flag needs a reader ──────────────────
+       dispose() is deliberately one-way: reset() does not undo it, because
+       "disposed" means the instance is gone, not idle.
+
+       But useInterviewSession holds this in a REF, and a ref survives
+       StrictMode's simulated remount while the effect cleanup that calls
+       dispose() does not. Its `if (aggRef.current === null)` guard therefore saw
+       a non-null — and permanently dead — aggregator and never rebuilt it. Under
+       `npm run dev` the app ran with a disposed aggregator and emitted zero
+       questions: pushFragment returned on its first line, the mic meter animated,
+       and the caption stayed empty forever.
+
+       The guard needs to ask "is this a LIVE aggregator?", not "is this
+       non-null?". That is a correct invariant in production too, where the
+       cleanup only runs on a genuine unmount. */
+    isDisposed: () => disposed,
 
     inspect: () => ({
       holding: !!held,
       text: held?.text || '',
       fragments: held?.fragments.length || 0,
       holdDeadline, speaking, speechActiveSince, lastSpeechEndAt, nextId,
+      disposed,
     }),
   }
 }

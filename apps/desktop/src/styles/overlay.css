@@ -101,6 +101,22 @@
   -webkit-app-region: drag;
 }
 
+/* PREMIUM-UX 2026-08-31 ─ text you could not select ──────────────────────────
+   The rule above made every bar a drag surface, and only CONTROLS opted back
+   out. Text did not — so .ia-answer declared `user-select: text; cursor: text`
+   (see its rule below), the pointer turned into an I-beam over the answer, and
+   dragging moved the window instead of selecting anything.
+
+   Selecting an answer to copy a snippet out of it is the single most common
+   thing a candidate does with this panel, and it was impossible. Drag stays on
+   the bar background, .ia-card-head and .ia-footer padding, and on
+   .ia-btn--move, which is what the drag affordance is for. */
+.ia-body, .ia-answer, .ia-question-text, .ia-qa,
+.ia-chat-log, .ia-msg, .ia-words, .ia-live, .ia-committed, .ia-word,
+.ia-error, .ia-blocked, .ia-empty, .ia-drawer, .ia-waiting {
+  -webkit-app-region: no-drag;
+}
+
 /* The answer card is the only bar that grows, and the only one that scrolls. */
 .ia-bar--card {
   flex: 1;
@@ -205,6 +221,14 @@
   padding: 0 16px;
 }
 .ia-pill--danger:hover:not(:disabled) { background: #dc2626; color: #fff; }
+
+/* PREMIUM-UX 2026-08-31: the armed half of the two-step End. It has to read as
+   "this press was heard, the NEXT one does it" — so it darkens and pulses
+   rather than changing colour, which would read as a different button. */
+.ia-pill--danger[data-arming='true'] {
+  background: #b91c1c;
+  animation: ia-pulse 900ms ease-in-out infinite;
+}
 
 /* ── Keyboard chip ────────────────────────────────────────────────────────── */
 .ia-kbd {
@@ -737,5 +761,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ia-dot--live, .ia-dot--thinking, .ia-caret, .ia-dots i { animation: none; }
+  /* .ia-dot--live, .ia-dot--thinking, .ia-caret, .ia-dots i { animation: none; } */
+  /* PREMIUM-UX 2026-08-31: the armed End pill joins the list. It still darkens
+     to #b91c1c, so the state is carried by colour alone when motion is off. */
+  .ia-dot--live, .ia-dot--thinking, .ia-caret, .ia-dots i,
+  .ia-pill--danger[data-arming='true'] { animation: none; }
 }

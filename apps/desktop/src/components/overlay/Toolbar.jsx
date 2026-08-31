@@ -15,7 +15,10 @@ import Kbd, { comboLabel } from './Kbd'
  * SUBSCRIPTIONS: booleans only. This must never subscribe to currentAnswer, or
  * every streamed token re-renders the toolbar — see store/sessionStore.js.
  */
-export default function Toolbar({ session, onEnd, onToggleCollapse }) {
+// PREMIUM-UX 2026-08-31: `endArming` added. SessionPanel owns the two-step
+// state so the ⌘⇧X chord and this pill cannot get out of step with each other.
+// export default function Toolbar({ session, onEnd, onToggleCollapse }) {
+export default function Toolbar({ session, onEnd, endArming, onToggleCollapse }) {
   const isThinking       = useSessionStore((s) => s.isThinking)
   const hasQuestion      = useSessionStore((s) => !!s.currentQuestion)
   const micEnabled       = useSessionStore((s) => s.micEnabled)
@@ -144,9 +147,21 @@ export default function Toolbar({ session, onEnd, onToggleCollapse }) {
           The row stayed open until the next Start superseded it or the sweep
           called it stale, which is why the Sessions page almost never said
           "Ended by you". */}
+      {/* PREMIUM-UX 2026-08-31: two-step, and it finally carries its chord.
+          Ending the session is irreversible and metered, and ⌘⇧X appeared in no
+          tooltip or chip anywhere in the app — so the only way to discover it
+          was to end an interview by accident. */}
       {/* <button className="ia-pill ia-pill--danger" onClick={onEnd} title="End session"> */}
-      <button className="ia-pill ia-pill--danger" onClick={() => onEnd()} title="End session">
-        End
+      {/* <button className="ia-pill ia-pill--danger" onClick={() => onEnd()} title="End session">End</button> */}
+      <button
+        className="ia-pill ia-pill--danger"
+        data-arming={!!endArming}
+        onClick={() => onEnd()}
+        title={endArming
+          ? 'Press again to end the session'
+          : `End session (${comboLabel('mod shift x')})`}
+      >
+        {endArming ? 'Press again' : <>End <Kbd combo="mod shift x" /></>}
       </button>
     </div>
   )

@@ -263,7 +263,23 @@ export function useInterviewSession() {
      own pause, which is the clearest possible signal that the app is waiting on
      purpose rather than having dropped the question. */
   const aggRef = useRef(null)
-  if (aggRef.current === null) {
+  /* PIPELINE 2026-08-31 ─ the aggregator died in dev and nobody noticed ───────
+     main.jsx wraps the app in <React.StrictMode>, which in development runs
+     every effect setup -> cleanup -> setup. The cleanup at the bottom of this
+     hook calls aggRef.current.dispose(), and dispose() is one-way.
+
+     A ref survives that simulated remount, so the guard below saw a non-null
+     value and kept the DISPOSED instance. Every pushFragment then returned on
+     its first line: zero questions emitted, for the whole dev session, silently
+     — the level meter still animated and the caption simply stayed empty.
+
+     That is almost certainly why so much of this pipeline shipped broken: the
+     app could not be exercised in dev at all. Ask whether the ref holds a LIVE
+     aggregator rather than merely a non-null one; that is the invariant this
+     line always meant, and it is correct in production too, where the cleanup
+     only runs on a genuine unmount. */
+  // if (aggRef.current === null) {
+  if (aggRef.current === null || aggRef.current.isDisposed()) {
     aggRef.current = createUtteranceAggregator({
       log: segLog,
       emit: (u) => { onQuestionRef.current?.(u.text) },

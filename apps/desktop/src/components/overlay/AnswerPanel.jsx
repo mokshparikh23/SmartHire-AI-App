@@ -47,9 +47,22 @@ export default function AnswerPanel() {
     }
   }, [answer])
 
-  // A new question always starts at the top.
+  /* PREMIUM-UX 2026-08-31 ─ do not yank a reader who scrolled away ────────────
+     "A new question always starts at the top" contradicted the pin-aware
+     auto-follow immediately above it. A question can land at ANY moment — the
+     aggregator emits whenever the interviewer stops talking — so the sequence
+     was: candidate scrolls up to re-read the first paragraph, interviewer says
+     one more sentence, and the answer is blanked and the body jumps to the top
+     mid-read.
+
+     Honour the same pin the scroll handler maintains. If the reader had already
+     scrolled away from the live edge, leave them where they are. */
+  // useEffect(() => {
+  //   pinnedRef.current = true
+  //   if (bodyRef.current) bodyRef.current.scrollTop = 0
+  // }, [question])
   useEffect(() => {
-    pinnedRef.current = true
+    if (!pinnedRef.current) return
     if (bodyRef.current) bodyRef.current.scrollTop = 0
   }, [question])
 
@@ -95,7 +108,30 @@ export default function AnswerPanel() {
           </div>
         )}
 
-        {blockedReason ? (
+        {/* PREMIUM-UX 2026-08-31 ─ content wins over a session-level state ─────
+            blockedReason was tested FIRST, so it hid everything below it. It is
+            set from chat's failure path too (sendChat's finally), which meant a
+            402 raised by a chat message painted the amber "Top up credits" panel
+            over an answer that had streamed back perfectly — the user toggles
+            out of chat and their answer is gone.
+
+            Running out of credits is a state of the SESSION. It must never hide
+            content that already arrived. So `answer` moves to the front and
+            nothing else moves: blockedReason still outranks `error`, because
+            reportFailure sets BOTH on a 402 and the amber panel is the one that
+            carries the button that fixes it. */}
+        {/* {blockedReason ? (…) : error ? (…) : answer ? (…) : …} */}
+        {answer ? (
+          <div className="ia-qa ia-qa--answer">
+            <Icon name="sparkle" size={15} />
+            <p className="ia-answer">
+              {/* <span className="ia-qa-label">Answer:</span> */}
+              <span className="ia-qa-label">{aLabel}</span>
+              {answer}
+              {isThinking && <span className="ia-caret" />}
+            </p>
+          </div>
+        ) : blockedReason ? (
           /* Running out of credits is a state with an action, not a red string. */
           <div className="ia-blocked">
             <span>{error || 'You have run out of credits.'}</span>
@@ -106,16 +142,6 @@ export default function AnswerPanel() {
           </div>
         ) : error ? (
           <p className="ia-error">{error}</p>
-        ) : answer ? (
-          <div className="ia-qa ia-qa--answer">
-            <Icon name="sparkle" size={15} />
-            <p className="ia-answer">
-              {/* <span className="ia-qa-label">Answer:</span> */}
-              <span className="ia-qa-label">{aLabel}</span>
-              {answer}
-              {isThinking && <span className="ia-caret" />}
-            </p>
-          </div>
         ) : isThinking ? (
           <span className="ia-dots"><i /><i /><i /></span>
         ) : !question ? (

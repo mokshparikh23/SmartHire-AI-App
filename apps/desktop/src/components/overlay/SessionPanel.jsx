@@ -50,6 +50,44 @@ export default function SessionPanel({ session }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [collapsed, setCollapsed]   = useState(false)
 
+  /* PREMIUM-UX 2026-08-31 ─ ending a paid interview needs two presses ─────────
+     ⌘⇧X and the End pill both called session.stop() outright. That closes the
+     metered session on the server; there is no undo, the panel disappears, and
+     the chord appeared in no tooltip, no chip and no menu — so the first time
+     most users met it was by accident.
+
+     Two-step rather than a modal: a modal over an always-on-top overlay during a
+     live call is worse than the problem. The pill says what the second press
+     will do and reverts on its own. */
+  const ARM_MS = 3000
+  const [arming, setArming] = useState(false)
+  const armTimerRef = useRef(0)
+  // The decision "is this the second press?" has to be readable SYNCHRONOUSLY
+  // inside the handler. A setState updater does not run at the call site in
+  // React 18, so the flag lives in a ref and the state exists only to repaint.
+  const armedRef = useRef(false)
+
+  const requestStop = useCallback(() => {
+    if (armTimerRef.current) { clearTimeout(armTimerRef.current); armTimerRef.current = 0 }
+
+    if (armedRef.current) {
+      armedRef.current = false
+      setArming(false)
+      session.stop()
+      return
+    }
+
+    armedRef.current = true
+    setArming(true)
+    armTimerRef.current = setTimeout(() => {
+      armTimerRef.current = 0
+      armedRef.current = false
+      setArming(false)
+    }, ARM_MS)
+  }, [session])
+
+  useEffect(() => () => { if (armTimerRef.current) clearTimeout(armTimerRef.current) }, [])
+
   // The window shrinks with the collapsed panel. Without this the hidden bars
   // leave an invisible rectangle that still swallows clicks — the exact problem
   // sizing the window to the panel exists to avoid.
@@ -92,7 +130,10 @@ export default function SessionPanel({ session }) {
 
   usePanelHotkeys({
     onType:  () => setTyping(true),
-    onStop:  session.stop,
+    // PREMIUM-UX 2026-08-31: ⌘⇧X went straight to stop(), which closes the
+    // metered session with no undo. It now arms the End pill instead.
+    // onStop:  session.stop,
+    onStop:  requestStop,
     onRetry: session.regenerate,
     onCopy:  () => copy(useSessionStore.getState().currentAnswer),
 
@@ -116,7 +157,11 @@ export default function SessionPanel({ session }) {
       <div className="ia-glass ia-bar ia-bar--toolbar">
         <Toolbar
           session={session}
-          onEnd={session.stop}
+          // PREMIUM-UX 2026-08-31: both routes to ending a session go through
+          // the same two-step gate, so the pill and the chord cannot disagree.
+          // onEnd={session.stop}
+          onEnd={requestStop}
+          endArming={arming}
           onToggleCollapse={toggleCollapsed}
         />
       </div>

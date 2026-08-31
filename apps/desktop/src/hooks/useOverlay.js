@@ -52,6 +52,18 @@ export function usePanelHotkeys({
       const key = e.key.toLowerCase()
 
       if (e.shiftKey) {
+        /* PREMIUM-UX 2026-08-31 ─ the typing guard was never applied here ──────
+           `typing` is computed above for every branch, but only the non-shift
+           branch below consulted it. So every ⌘⇧ chord fired while the user was
+           typing in the chat composer or the transcript input — including
+           ⌘⇧⌫, which wipes the transcript, and ⌘⇧X, which ENDS THE BILLED
+           SESSION with no confirmation and no label anywhere in the UI.
+
+           Only the two destructive chords are guarded. Copy, Retry, Chat,
+           Screenshot and Type are all safe to fire mid-typing and are useful
+           there — guarding them too would be a different, smaller bug. */
+        if (typing && (key === 'x' || key === 'backspace')) return
+
         if (key === 'k')          { e.preventDefault(); onType?.() }
         else if (key === 'x')     { e.preventDefault(); onStop?.() }
         else if (key === 'c')     { e.preventDefault(); onCopy?.() }
