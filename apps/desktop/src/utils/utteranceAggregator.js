@@ -67,7 +67,17 @@ export const SEGMENT_DEFAULTS = {
      from the first fragment, which would expire while the speaker is still
      mid-question. The stated upper bound for a pause inside one question was
      ~3s; this leaves margin and bounds the silent wait at 700 + 3500 = 4.2s. */
-  maxHoldMs: 3500,
+  /* PIPELINE 2026-08-31: 3500 -> 5000, tolerated silence 4.2s -> 5.7s. This is
+     the lowest-confidence number in this file and should be tuned against real
+     audio rather than by reasoning.
+
+     It costs nothing in the common case: hold() takes min(at + 1100, ceiling),
+     so a single dangling fragment still emits at +1100 and this never binds. It
+     binds only when fragments or fillers keep re-arming the hold across a
+     silence — which is exactly the multi-pause question we are trying to keep
+     together, e.g. an interviewer reading a scenario off their screen. */
+  // maxHoldMs: 3500,
+  maxHoldMs: 5000,
 
   /* Gap between a fragment's speech end and a later speech start under which the
      resumption belongs to the same utterance. Equal to the total dangling budget
@@ -76,12 +86,58 @@ export const SEGMENT_DEFAULTS = {
   continuationGapMs: 1800,
 
   /* ~100 words. Far beyond any interview question; bounds prompt growth. */
-  maxUtteranceChars: 600,
+  /* PIPELINE 2026-08-31: 600 chars is ~100 words, which is roughly 40 seconds of
+     speech — well INSIDE the length of an ordinary multi-part question ("here is
+     the setup… given that… how would you…"). Far from being "far beyond any
+     interview question", it was cutting normal ones in half. 1200 is ~200 words.
+
+     This is not free: the utterance goes into every prompt, and this is a
+     metered product. It is affordable because HISTORY_TURNS x
+     HISTORY_ANSWER_CHARS in useInterviewSession already dwarfs it, and because
+     the cap is now a backstop rather than the thing that routinely fires. */
+  // maxUtteranceChars: 600,
+  maxUtteranceChars: 1200,
 
   /* From the first held fragment's speech start, and the ONLY thing bounding a
      speaker who never pauses. Sits above useVoice's MAX_SEGMENT_MS (12s) plus
-     one hold, so a segment cut and an utterance cut cannot collide. */
-  maxUtteranceMs: 15000,
+     one hold, so a segment cut and an utterance cut cannot collide.
+     ^ SUPERSEDED — see the PIPELINE note immediately below. */
+  /* PIPELINE 2026-08-31 ─ one cap was measuring two different things ──────────
+     Measured from firstSpeechStartedAt, this budget was charged for the length
+     of the audio itself AND for the transcription round trip. The user
+     experiences neither as a wait: they were listening to the question during
+     the first, and the app cannot act during the second.
+
+     That is why a slow transcribe was catastrophic rather than merely slow. On
+     the segmented path a 12s max-segment cut plus a >2.9s upload arrived ALREADY
+     over budget, so process() hit the cap at its safety check before the verdict
+     was even consulted and emitted instantly — every 12s chunk becoming its own
+     question, with nothing ever stitched. A bigger number would not have fixed
+     that; a slower connection eats any number.
+
+     So: two bounds, each measuring the thing it actually cares about.
+
+     maxUtteranceMs is a LATENCY bound, measured from firstPushAt — the moment
+     there was text we could have answered. Independent of network speed by
+     construction.
+
+     maxUtteranceSpeechMs is a CONTENT bound: how much speech one question may
+     cover. Both its timestamps come from the VAD's own clock, so it is
+     latency-free by construction, and it is the one that will normally bind —
+     deliberately, because cutting on elapsed speech is smoother than cutting
+     mid-word on a character count.
+
+     The old coupling to useVoice's MAX_SEGMENT_MS is REMOVED, not adjusted.
+     Once the budget starts at arrival the two constants are on different clocks
+     and there is nothing left to keep in step. */
+  // maxUtteranceMs: 15000,
+  maxUtteranceMs: 20000,
+  maxUtteranceSpeechMs: 45000,
+
+  /* PIPELINE 2026-08-31: how many times one question may be extended after a cap
+     forced it out early. Bounds the merge chain in useInterviewSession so a
+     monologue cannot regrow the prompt without limit. */
+  maxContinuations: 2,
 
   minCompleteTokens: 4,
 }
@@ -119,16 +175,54 @@ export function createUtteranceAggregator({
   let nextId = 0
   let disposed = false
 
+  /* PIPELINE 2026-08-31 ─ what the last emit was, so the next one can extend it ─
+     { id, final, speechEndedAt, chainSeq }, or null. This is the entire memory
+     the merge path needs: an incoming fragment that starts soon after a
+     NON-final emit is the rest of that same question, not a new one. */
+  let lastEmit = null
+
   const clearHoldTimer = () => {
     if (holdTimer !== null) { disarm(holdTimer); holdTimer = null }
   }
 
-  const emitNow = (reason) => {
+  // PIPELINE 2026-08-31: `scored` lets process() hand over the verdict it has
+  // already computed, instead of this scoring the same string a second time.
+  // Falls back to scoring for the flush() path, which has none.
+  // const emitNow = (reason) => {
+  const emitNow = (reason, scored) => {
     if (!held) return
     clearHoldTimer()
 
     const at = now()
-    const verdict = scoreFn(held.text, { minCompleteTokens: cfg.minCompleteTokens })
+    // const verdict = scoreFn(held.text, { minCompleteTokens: cfg.minCompleteTokens })
+    const verdict = scored || scoreFn(held.text, { minCompleteTokens: cfg.minCompleteTokens })
+
+    /* PIPELINE 2026-08-31 ─ is this a finished question? ───────────────────────
+       The first attempt keyed this on the RELEASE REASON: a cap firing while the
+       speaker was still talking meant "truncated", and a hold expiring meant
+       "they finished". The replay harness immediately produced the case that
+       breaks it (fixture A, the 40s chopped question):
+
+         "means we get lock contention under load and"
+
+       released by hold-expired, because the transcript for the rest of the
+       sentence was still uploading when the hold ran out. By the reason rule
+       that is a finished question. It plainly is not one.
+
+       So the question is answered by the TEXT, not by the clock: an utterance is
+       final when it reads as complete. Everything else — a cap cutting it, a
+       hold running out mid-upload — leaves a half-sentence, and a half-sentence
+       is exactly what the next fragment should be allowed to extend.
+
+       This is safe to be generous with because `final` alone does not merge
+       anything. process() also requires the next speech to have STARTED within
+       continuationGapMs of this one ending, which is what keeps two genuinely
+       separate questions separate (fixtures 2 and D). Being wrong in this
+       direction stitches two halves of one question; being wrong in the other
+       direction answers half a question and then throws that answer away, which
+       is the bug this whole change exists to fix. */
+    const forced = verdict.verdict !== VERDICT.COMPLETE
+
     const payload = {
       id: ++nextId,
       text: held.text,
@@ -144,22 +238,57 @@ export function createUtteranceAggregator({
       // Must be 0 for anything scored COMPLETE — that is the assertion proving
       // the common case did not regress.
       heldMs: Math.max(0, at - held.firstPushAt),
+
+      /* PIPELINE 2026-08-31 ─ the three fields the caller could not do without ──
+         emit's payload always carried reason and verdict, and useInterviewSession
+         passed only u.text — so generate() could not tell a forced mid-sentence
+         cut ("more of this question is coming") from a finished question ("this
+         supersedes the last one"). It treated both as new questions, aborting the
+         answer on screen and blanking the card each time. A 40-second question
+         became three or four calls, of which only the last fragment was answered.
+
+         final:     false when the emitted text does not read as a finished
+                    question — see the note above.
+         continues: the id of the utterance this extends, or null.
+         chainSeq:  0 for the head of a chain, 1..n for its extensions. */
+      final: !forced,
+      continues: held.continues,
+      chainSeq: held.chainSeq,
     }
 
     held = null
     holdDeadline = 0
     onHoldChange?.('')
 
+    lastEmit = {
+      id: payload.id,
+      final: payload.final,
+      speechEndedAt: payload.speechEndedAt,
+      chainSeq: payload.chainSeq,
+    }
+
     log?.('emit', {
       id: payload.id, reason, verdict: payload.verdict, lang: payload.lang,
       chars: payload.chars, fragments: payload.fragments,
       heldMs: Math.round(payload.heldMs),
+      final: payload.final, continues: payload.continues, chainSeq: payload.chainSeq,
     })
     emit?.(payload)
   }
 
+  // PIPELINE 2026-08-31: from firstPushAt, not firstSpeechStartedAt. See the
+  // note on maxUtteranceMs above — this is a latency budget, and measuring it
+  // from speech start charged it for the audio's length and the upload.
+  // const overUtteranceCap = (at) =>
+  //   held && at - held.firstSpeechStartedAt >= cfg.maxUtteranceMs
   const overUtteranceCap = (at) =>
-    held && at - held.firstSpeechStartedAt >= cfg.maxUtteranceMs
+    held && at - held.firstPushAt >= cfg.maxUtteranceMs
+
+  /* PIPELINE 2026-08-31: the content bound. Both timestamps come from the VAD,
+     so no amount of network latency can make this fire early — which is the
+     property the old single cap did not have. */
+  const overSpeechCap = () =>
+    held && held.lastSpeechEndedAt - held.firstSpeechStartedAt >= cfg.maxUtteranceSpeechMs
 
   const onHoldExpired = (reason) => {
     holdTimer = null
@@ -167,6 +296,11 @@ export function createUtteranceAggregator({
 
     const at = now()
     if (overUtteranceCap(at)) { emitNow('cap-ms'); return }
+    // PIPELINE 2026-08-31: the speech-span cap is checked wherever the wall cap
+    // is. With noteSpeechEnd no longer falsifying `speaking` on a max-segment
+    // cut (see below), these two are the ONLY things bounding a continuous
+    // talker — maxHoldMs no longer reaches that case at all.
+    if (overSpeechCap()) { emitNow('cap-speech'); return }
 
     // Expiring mid-sentence is precisely the bug being fixed. Re-arm; the
     // utterance cap above is what stops this from recurring forever.
@@ -184,6 +318,7 @@ export function createUtteranceAggregator({
     const at = now()
 
     if (overUtteranceCap(at)) { emitNow('cap-ms'); return }
+    if (overSpeechCap()) { emitNow('cap-speech'); return }
 
     const ceiling = speaking ? Infinity : lastSpeechEndAt + cfg.maxHoldMs
     const deadline = Math.min(at + ms, ceiling)
@@ -203,13 +338,34 @@ export function createUtteranceAggregator({
     const endedAt = meta.speechEndedAt ?? at
 
     if (!held) {
+      /* PIPELINE 2026-08-31 ─ is this the rest of the last question? ───────────
+         Only asked when a fresh `held` is being created, because that is the
+         only moment a NEW utterance begins. Three conditions, all narrow:
+
+           - the previous emit was NOT final, i.e. it did not read as finished;
+           - the chain has not already been extended maxContinuations times;
+           - this speech began soon enough after that one ended.
+
+         continuationGapMs is reused verbatim rather than given a sibling: it
+         already means "this resumption belongs to the same utterance", which is
+         precisely the question here, and two constants that must agree are two
+         constants that will eventually disagree. */
+      const startedAt = meta.speechStartedAt ?? at
+      const extends_ = lastEmit
+        && !lastEmit.final
+        && lastEmit.chainSeq < cfg.maxContinuations
+        && startedAt - lastEmit.speechEndedAt <= cfg.continuationGapMs
+
       held = {
         text: clean,
         fragments: [clean],
-        firstSpeechStartedAt: meta.speechStartedAt ?? at,
+        firstSpeechStartedAt: startedAt,
         lastSpeechEndedAt: endedAt,
         firstPushAt: at,
+        continues: extends_ ? lastEmit.id : null,
+        chainSeq: extends_ ? lastEmit.chainSeq + 1 : 0,
       }
+      if (extends_) log?.('continues', { of: lastEmit.id, seq: held.chainSeq })
     } else {
       // Timestamps running backwards means a fragment overtook its predecessor.
       // useVoice serialises transcription so this should not happen; if it does,
@@ -231,8 +387,16 @@ export function createUtteranceAggregator({
     })
 
     // Safety caps first; nothing below may override them.
-    if (held.text.length >= cfg.maxUtteranceChars) { emitNow('cap-chars'); return }
-    if (overUtteranceCap(at)) { emitNow('cap-ms'); return }
+    /* PIPELINE 2026-08-31: the verdict is passed through to emitNow now. It was
+       already computed one line above, and the cap fired BEFORE it was consulted
+       — so a question that genuinely ended at the character cap was labelled a
+       forced truncation and would have wrongly invited a merge. Same text, same
+       instant, correct label. */
+    // if (held.text.length >= cfg.maxUtteranceChars) { emitNow('cap-chars'); return }
+    // if (overUtteranceCap(at)) { emitNow('cap-ms'); return }
+    if (held.text.length >= cfg.maxUtteranceChars) { emitNow('cap-chars', verdict); return }
+    if (overUtteranceCap(at)) { emitNow('cap-ms', verdict); return }
+    if (overSpeechCap()) { emitNow('cap-speech', verdict); return }
 
     // The free signal, in two forms. Either the speaker is talking right now, or
     // they spoke again after this fragment's audio ended and that speech is
@@ -292,9 +456,33 @@ export function createUtteranceAggregator({
      * clock that can actually expire, and it fires BEFORE the transcript for
      * that speech arrives — which is the window the hold has to cover.
      */
-    noteSpeechEnd(at) {
+    /* PIPELINE 2026-08-31 ─ a recorder cut is not a speaker stopping ───────────
+       silenceDetector fires endSegment('max-segment') when a segment has run its
+       full length WHILE THE SPEAKER IS STILL ABOVE THRESHOLD, and both capture
+       hooks forwarded that here as a speech end. So on every 12-second cut this
+       file was told the speaker had stopped when they had not — falsifying
+       `speaking`, the one signal the header at the top argues outranks every
+       word list, and switching hold()'s ceiling from Infinity to
+       lastSpeechEndAt + maxHoldMs in the middle of a sentence.
+
+       It self-corrected a frame later when the VAD's next tick re-fired
+       onSpeechStart, but the utterance could be cut inside that window.
+
+       The policy stays here rather than in the hooks: this file owns the
+       end-of-turn decision and the hooks stay dumb reporters. The default keeps
+       every existing caller — and every existing replay case — byte-identical.
+
+       CONSEQUENCE, worth stating plainly: with `speaking` no longer falsified,
+       maxHoldMs no longer bounds a chopped monologue at all. maxUtteranceMs and
+       maxUtteranceSpeechMs are now the only things that do. */
+    // noteSpeechEnd(at) {
+    //   speaking = false
+    //   lastSpeechEndAt = at
+    //   …
+    // },
+    noteSpeechEnd(at, reason = 'silence') {
       if (disposed) return
-      speaking = false
+      if (reason !== 'max-segment') speaking = false
       lastSpeechEndAt = at
       if (held && holdTimer !== null) hold(cfg.holdDanglingMs, 'speech-ended')
     },
@@ -312,6 +500,9 @@ export function createUtteranceAggregator({
       speaking = false
       speechActiveSince = -Infinity
       lastSpeechEndAt = -Infinity
+      // PIPELINE 2026-08-31: a new session must not extend the last session's
+      // truncated question.
+      lastEmit = null
       onHoldChange?.('')
     },
 
@@ -319,6 +510,7 @@ export function createUtteranceAggregator({
       disposed = true
       clearHoldTimer()
       held = null
+      lastEmit = null
       // PIPELINE 2026-08-31: dispose() left whatever was painted on screen
       // forever — the caption is driven from onHoldChange and nothing else
       // clears it once this instance stops answering.

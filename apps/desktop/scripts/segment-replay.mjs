@@ -21,7 +21,11 @@
    logic; only real audio validates the constants.  */
 
 import assert from 'node:assert/strict'
-import { createUtteranceAggregator } from '../src/utils/utteranceAggregator.js'
+// PIPELINE 2026-08-31: SEGMENT_DEFAULTS imported so the bounds fixtures assert
+// against the constants themselves rather than against numbers copied out of
+// them, which is how case 5's `span <= 30000` silently stopped meaning anything.
+// import { createUtteranceAggregator } from '../src/utils/utteranceAggregator.js'
+import { createUtteranceAggregator, SEGMENT_DEFAULTS } from '../src/utils/utteranceAggregator.js'
 import { scoreCompleteness, VERDICT } from '../src/utils/completeness/index.js'
 
 /* ── virtual clock ───────────────────────────────────────────────────────── */
@@ -79,7 +83,11 @@ function run(events, opts = {}) {
   for (const e of ordered) {
     clock.advanceTo(e.at)
     if (e.speechStart) agg.noteSpeechStart(e.at)
-    else if (e.speechEnd) agg.noteSpeechEnd(e.at)
+    // PIPELINE 2026-08-31: the close reason rides along, exactly as the capture
+    // hooks now pass it. Defaulted to 'silence' in burst() below, so every
+    // pre-existing fixture drives the aggregator byte-identically.
+    // else if (e.speechEnd) agg.noteSpeechEnd(e.at)
+    else if (e.speechEnd) agg.noteSpeechEnd(e.at, e.endReason || 'silence')
     else agg.pushFragment(e.text, e)
   }
 
@@ -89,10 +97,14 @@ function run(events, opts = {}) {
 }
 
 /** One spoken burst: the start edge, the end edge, and the transcript that follows. */
-function burst({ text, from, to, transcriptAt, silenceMs = 700 }) {
+// PIPELINE 2026-08-31: endReason added, defaulting to 'silence' so no existing
+// fixture changes. 'max-segment' is what the recorder reports when it ran out of
+// segment while the speaker was STILL talking.
+// function burst({ text, from, to, transcriptAt, silenceMs = 700 }) {
+function burst({ text, from, to, transcriptAt, silenceMs = 700, endReason = 'silence' }) {
   return [
     { at: from, speechStart: true },
-    { at: to + silenceMs, speechEnd: true },
+    { at: to + silenceMs, speechEnd: true, endReason },
     {
       at: transcriptAt ?? to + silenceMs,
       text,
@@ -168,9 +180,15 @@ check('continuous talker -> bounded by maxUtteranceMs', () => {
   }
   const out = run(events)
   assert.ok(out.length >= 1, 'a continuous talker must still emit')
+  /* PIPELINE 2026-08-31: re-based on maxUtteranceSpeechMs, the constant that now
+     actually bounds this case. 30000 was a number picked to sit under the old
+     single 15s wall cap measured from speech start; that cap now measures from
+     ARRIVAL and cannot bound elapsed speech at all. */
+  // assert.ok(span <= 30000, `utterance span ${span}ms is unbounded`)
   for (const u of out) {
     const span = u.speechEndedAt - u.speechStartedAt
-    assert.ok(span <= 30000, `utterance span ${span}ms is unbounded`)
+    assert.ok(span <= SEGMENT_DEFAULTS.maxUtteranceSpeechMs,
+      `utterance span ${span}ms exceeds maxUtteranceSpeechMs`)
   }
 })
 
@@ -277,16 +295,200 @@ check('LATENCY: a COMPLETE question is never held', () => {
 /* Bounds. */
 check('maxUtteranceChars caps a runaway stitch', () => {
   const events = [{ at: 0, speechStart: true }]
-  for (let i = 0; i < 12; i++) {
-    events.push({ at: 1000 + i * 900, speechStart: true })
+  /* PIPELINE 2026-08-31: 12 -> 40 fragments, and 900ms -> 300ms apart. At 48
+     chars each, twelve joined to ~588 — comfortably under the OLD 600 cap, so
+     this fixture stopped exercising the cap the moment it was written. And at
+     900ms apart the 20s wall budget elapses after ~22 fragments, so cap-ms wins
+     the race and the character cap still never fires. Both numbers had to move. */
+  // for (let i = 0; i < 12; i++) {
+  //   events.push({ at: 1000 + i * 900, speechStart: true })
+  for (let i = 0; i < 40; i++) {
+    events.push({ at: 1000 + i * 300, speechStart: true })
     events.push({
-      at: 1200 + i * 900, text: 'and then we rebuilt the indexing layer around it',
-      speechStartedAt: 1000 + i * 900, speechEndedAt: 1150 + i * 900, speechMs: 150,
+      at: 1150 + i * 300, text: 'and then we rebuilt the indexing layer around it',
+      speechStartedAt: 1000 + i * 300, speechEndedAt: 1100 + i * 300, speechMs: 100,
     })
   }
   const out = run(events)
   assert.ok(out.length >= 1)
-  for (const u of out) assert.ok(u.chars <= 700, `emitted ${u.chars} chars`)
+  // One fragment of slack: the cap is checked AFTER the join, so the emitted
+  // text may overshoot by at most the fragment that crossed it.
+  // for (const u of out) assert.ok(u.chars <= 700, `emitted ${u.chars} chars`)
+  const ceiling = SEGMENT_DEFAULTS.maxUtteranceChars + 100
+  for (const u of out) assert.ok(u.chars <= ceiling, `emitted ${u.chars} chars, ceiling ${ceiling}`)
+  assert.ok(out.some((u) => u.reason === 'cap-chars'),
+    `no emit was attributed to cap-chars: ${JSON.stringify(out.map((u) => u.reason))}`)
+})
+
+/* PIPELINE 2026-08-31 ─ the merge path and the re-measured caps ───────────────
+   Everything below covers the change that stops a long question becoming three
+   or four separate LLM calls. Cases B and F are load-bearing: they are what
+   makes noteSpeechEnd's 'max-segment' behaviour safe to ship, because with
+   `speaking` no longer falsified, maxHoldMs stops bounding a continuous talker
+   and these two caps become the only bounds that remain. */
+
+/* A — the reported long-question bug, end to end. A 40s question that the
+      recorder chops into four segments must arrive as ONE question, either
+      stitched or explicitly chained — never as four unrelated ones that each
+      abort the previous answer. */
+check('a 40s chopped question chains rather than splitting', () => {
+  const out = run([
+    { at: 0, speechStart: true },
+    { at: 12000, speechEnd: true, endReason: 'max-segment' },
+    { at: 13500, text: 'So the system we are building has three services and',
+      speechStartedAt: 0, speechEndedAt: 12000, speechMs: 12000 },
+    { at: 12100, speechStart: true },
+    { at: 24000, speechEnd: true, endReason: 'max-segment' },
+    { at: 25500, text: 'each of them writes to the same postgres table which',
+      speechStartedAt: 12000, speechEndedAt: 24000, speechMs: 12000 },
+    { at: 24100, speechStart: true },
+    { at: 36000, speechEnd: true, endReason: 'max-segment' },
+    { at: 37500, text: 'means we get lock contention under load and',
+      speechStartedAt: 24000, speechEndedAt: 36000, speechMs: 12000 },
+    { at: 36100, speechStart: true },
+    { at: 40700, speechEnd: true },
+    { at: 42000, text: 'how would you fix that?',
+      speechStartedAt: 36000, speechEndedAt: 40000, speechMs: 4000 },
+  ])
+
+  assert.ok(out.length >= 1, 'the question must reach the model at all')
+  const joined = out.map((u) => u.text).join(' ')
+  assert.match(joined, /three services/)
+  assert.match(joined, /how would you fix that\?/)
+
+  // Every emit after the first must be flagged as an extension of the one
+  // before it — that is what stops generate() treating it as a new question.
+  for (let i = 1; i < out.length; i++) {
+    assert.equal(out[i].continues, out[i - 1].id,
+      `emit ${i} (${out[i].reason}) did not chain to its predecessor`)
+    assert.equal(out[i - 1].final, false,
+      `emit ${i - 1} was marked final despite being cut mid-question`)
+  }
+  assert.equal(out[out.length - 1].final, true, 'the closing fragment must be final')
+})
+
+/* B — the guard for noteSpeechEnd's 'max-segment' arm. A recorder cut while the
+      speaker is still above threshold must NOT start the maxHoldMs ceiling. */
+check('a max-segment cut does not falsify `speaking`', () => {
+  const clock = makeClock()
+  const emitted = []
+  const agg = createUtteranceAggregator({
+    emit: (u) => emitted.push(u),
+    now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
+  })
+
+  agg.noteSpeechStart(0)
+  clock.advanceTo(12000)
+  agg.noteSpeechEnd(12000, 'max-segment')
+  clock.advanceTo(13500)
+  agg.pushFragment('So the system we are building has three services and', {
+    speechStartedAt: 0, speechEndedAt: 12000, speechMs: 12000,
+  })
+
+  // Well past 700 + maxHoldMs. If the cut had been reported as a real speech
+  // end, the hold ceiling would have expired here and emitted the stub.
+  clock.advanceTo(20000)
+  assert.equal(emitted.length, 0,
+    `emitted mid-sentence: ${JSON.stringify(emitted.map((u) => u.text))}`)
+  assert.equal(agg.inspect().speaking, true, '`speaking` was cleared by a recorder cut')
+})
+
+/* C — the exact regression the re-measured cap exists to fix. Slow
+      transcription must not consume the utterance budget. */
+check('transcription latency no longer eats the utterance budget', () => {
+  // 4s upload on a 12s segment. Under the OLD cap (15s from speech START) this
+  // arrived at 16000 already over budget and emitted instantly, unstitched.
+  const out = run([
+    { at: 0, speechStart: true },
+    { at: 12000, speechEnd: true, endReason: 'max-segment' },
+    { at: 16000, text: 'can you walk me through how you would',
+      speechStartedAt: 0, speechEndedAt: 12000, speechMs: 12000 },
+    { at: 12100, speechStart: true },
+    { at: 17500, speechEnd: true },
+    { at: 18000, text: 'design a rate limiter?',
+      speechStartedAt: 12100, speechEndedAt: 16800, speechMs: 4700 },
+  ])
+  assert.equal(out.length, 1, `expected 1 stitched emit, got ${out.length}: ${JSON.stringify(out.map((u) => u.text))}`)
+  assert.equal(out[0].fragments, 2, 'the two halves were not stitched')
+  assert.match(out[0].text, /walk me through how you would design a rate limiter\?/)
+})
+
+/* D — a forced cut followed by a genuinely NEW question must not merge. */
+check('a new question after a forced cut does not chain', () => {
+  const out = run([
+    ...(() => {
+      const events = [{ at: 0, speechStart: true }]
+      for (let i = 0; i < 40; i++) {
+        events.push({ at: 100 + i * 300, speechStart: true })
+        events.push({
+          at: 200 + i * 300, text: 'and then we rebuilt the indexing layer around it',
+          speechStartedAt: 100 + i * 300, speechEndedAt: 150 + i * 300, speechMs: 50,
+        })
+      }
+      return events
+    })(),
+    // Then silence far longer than continuationGapMs, then something unrelated.
+    ...burst({ text: 'What is your notice period?', from: 40000, to: 41500 }),
+  ])
+  const last = out[out.length - 1]
+  assert.match(last.text, /notice period/)
+  assert.equal(last.continues, null,
+    'a question asked after a long silence was merged into the previous one')
+})
+
+/* E — the chain is bounded, so a monologue cannot regrow the prompt forever. */
+check('the merge chain is bounded by maxContinuations', () => {
+  const events = [{ at: 0, speechStart: true }]
+  for (let i = 0; i < 60; i++) {
+    events.push({ at: 100 + i * 300, speechStart: true })
+    events.push({
+      at: 200 + i * 300, text: 'and then we rebuilt the indexing layer around it and',
+      speechStartedAt: 100 + i * 300, speechEndedAt: 150 + i * 300, speechMs: 50,
+    })
+  }
+  const out = run(events)
+  assert.ok(out.length >= 2, 'this fixture must produce several emits')
+  for (const u of out) {
+    assert.ok(u.chainSeq <= SEGMENT_DEFAULTS.maxContinuations,
+      `chainSeq ${u.chainSeq} exceeds maxContinuations`)
+  }
+})
+
+/* F — the speech-span cap is what bounds a talker who never pauses, now that
+      maxHoldMs no longer reaches that case. */
+check('maxUtteranceSpeechMs bounds a continuous talker', () => {
+  const events = [{ at: 0, speechStart: true }]
+  for (let i = 1; i <= 10; i++) {
+    events.push({ at: i * 12000, speechEnd: true, endReason: 'max-segment' })
+    events.push({
+      at: i * 12000 + 500, text: `and then we rebuilt the whole indexing layer part ${i} and`,
+      speechStartedAt: (i - 1) * 12000, speechEndedAt: i * 12000, speechMs: 12000,
+    })
+    events.push({ at: i * 12000 + 100, speechStart: true })
+  }
+  const out = run(events)
+  assert.ok(out.length >= 1, 'a continuous talker must still emit')
+  for (const u of out) {
+    const span = u.speechEndedAt - u.speechStartedAt
+    assert.ok(span <= SEGMENT_DEFAULTS.maxUtteranceSpeechMs + 12000,
+      `utterance span ${span}ms is unbounded`)
+  }
+})
+
+/* G — labelling. A COMPLETE question that merely ARRIVED late is a finished
+      question, not a truncation, and must not invite a merge. */
+check('a slow-arriving COMPLETE question is labelled complete, not capped', () => {
+  const out = run([
+    { at: 0, speechStart: true },
+    { at: 12000, speechEnd: true },
+    // 16s after speech started — over the OLD cap, well under the new one.
+    { at: 16000, text: 'What is the difference between a class and a struct?',
+      speechStartedAt: 0, speechEndedAt: 12000, speechMs: 12000 },
+  ])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].reason, 'complete', `emitted as ${out[0].reason}`)
+  assert.equal(out[0].final, true)
+  assert.equal(out[0].continues, null)
 })
 
 console.log(failures === 0 ? '\nall green\n' : `\n${failures} failing\n`)

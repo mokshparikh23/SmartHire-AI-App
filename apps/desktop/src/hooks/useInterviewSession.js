@@ -141,8 +141,13 @@ export function useInterviewSession() {
   // messagesFor() in aiBackend only prepends the system prompt and never
   // inspects content, and /api/ai/chat forwards `messages` verbatim, so a
   // vision turn needs no service or route change.
+  /* PIPELINE 2026-08-31 ─ `utterance`, a fourth optional parameter ────────────
+     Carries the aggregator's emit payload so this can tell an EXTENSION of the
+     question already on screen from a genuinely new one. Optional and trailing,
+     so askManual, regenerate and askAboutScreen are untouched. */
   // const generate = useCallback(async (question, source = 'voice') => {
-  const generate = useCallback(async (question, source = 'voice', content = null) => {
+  // const generate = useCallback(async (question, source = 'voice', content = null) => {
+  const generate = useCallback(async (question, source = 'voice', content = null, utterance = null) => {
     const q = question?.trim()
     if (!q) return
 
@@ -153,13 +158,44 @@ export function useInterviewSession() {
        Order matters and is the whole reason commitInterrupted is a separate
        action: setQuestion below blanks currentAnswer, so anything not saved by
        this line is gone. It no-ops unless a live, uncommitted pair exists. */
-    useSessionStore.getState().commitInterrupted()
+    /* PIPELINE 2026-08-31 ─ an extension is not a new question ─────────────────
+       This is the fix for the reported "long questions break". When a cap forced
+       an utterance out early, the rest of it arrived here as a brand-new
+       question: commitInterrupted + setQuestion, which blanked the answer on
+       screen and started again. A 40-second question therefore produced three or
+       four LLM calls, each destroying the previous one's answer, with only the
+       final fragment actually answered.
 
+       The chain check is deliberately narrow. The aggregator has already decided
+       this fragment continues a specific utterance AND that the speech resumed
+       within continuationGapMs; this additionally requires that the utterance it
+       names is the one THIS hook is currently showing, so a stale chain from
+       before a manual question or a session boundary cannot splice itself in. */
+    const chained = utterance?.continues != null
+      && utterance.continues === chainIdRef.current
+
+    const store = useSessionStore.getState()
+    // Abort in BOTH branches: we must stop paying for an answer to half a
+    // question. Only the store bookkeeping differs.
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
-    useSessionStore.getState().setQuestion(q, source)
+    let asked = q
+    if (chained) {
+      asked = store.extendQuestion(q)
+    } else {
+      store.commitInterrupted()
+      // keepAnswer: the previous answer stays readable until the first token of
+      // the new one lands, instead of the card blanking to three dots.
+      store.setQuestion(q, source, { keepAnswer: true })
+    }
+
+    // Remember which utterance the card is showing, so the NEXT emit can decide
+    // whether it extends this one. Non-voice turns clear it: a typed question or
+    // a screenshot ends whatever chain was running.
+    chainIdRef.current = utterance ? (utterance.continues ?? utterance.id) : null
+
     bufRef.current = ''
 
     try {
@@ -173,7 +209,11 @@ export function useInterviewSession() {
         // [{ role: 'user', content: q }],
         // [{ role: 'user', content: content ?? q }],
         // [{ role: 'user', content: tagContent(content ?? q, source) }],
-        [...recentHistory(), { role: 'user', content: tagContent(content ?? q, source) }],
+        // PIPELINE 2026-08-31: `asked`, not `q` — on a chained turn the question
+        // that goes up is the MERGED one the store just assembled, not the
+        // fragment that arrived. `q` remains correct for every other path.
+        // [...recentHistory(), { role: 'user', content: tagContent(content ?? q, source) }],
+        [...recentHistory(), { role: 'user', content: tagContent(content ?? asked, source) }],
         (chunk) => {
           if (gen !== genRef.current) return     // a newer question took over
           bufRef.current += chunk
@@ -203,8 +243,15 @@ export function useInterviewSession() {
   // }, [flush, reportFailure])
   }, [flush, reportFailure, recentHistory])
 
+  // PIPELINE 2026-08-31: which utterance the card is currently showing, so the
+  // next emit can be recognised as its continuation. A ref, not state — nothing
+  // renders from it.
+  const chainIdRef = useRef(null)
+
   // Stable identity: useVoice tears down and re-acquires the mic if this changes.
-  const onQuestion = useCallback((text) => generate(text, 'voice'), [generate])
+  // PIPELINE 2026-08-31: takes the whole emit payload rather than just its text.
+  // const onQuestion = useCallback((text) => generate(text, 'voice'), [generate])
+  const onQuestion = useCallback((u) => generate(u.text, 'voice', null, u), [generate])
 
   // SEGMENTATION 2026-08-30: the aggregator is built once and never rebuilt, so
   // its emit callback reads the CURRENT onQuestion through a ref rather than
@@ -282,7 +329,12 @@ export function useInterviewSession() {
   if (aggRef.current === null || aggRef.current.isDisposed()) {
     aggRef.current = createUtteranceAggregator({
       log: segLog,
-      emit: (u) => { onQuestionRef.current?.(u.text) },
+      /* PIPELINE 2026-08-31: the payload, not just its text. emit has always
+         carried reason, verdict, final and continues, and this dropped all of
+         it — so generate() could not tell a forced mid-sentence truncation from
+         a finished question and treated both as new. */
+      // emit: (u) => { onQuestionRef.current?.(u.text) },
+      emit: (u) => { onQuestionRef.current?.(u) },
       onHoldChange: (text) => { heldRef.current = text; partialRef.current = text },
     })
   }

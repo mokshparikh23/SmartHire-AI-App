@@ -478,7 +478,11 @@ export function useVoice({ enabled, source = 'system', aggRef, levelRef }) {
              when the transcript arrives: on this path the text lands ~700ms
              later, and a hold that only began then would already have run down
              most of its budget on the upload. */
-          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
+          // PIPELINE 2026-08-31: the reason rides along. A 'max-segment' close
+          // means the RECORDER ran out of segment, not that the speaker ran out
+          // of question — the aggregator has to be able to tell the two apart.
+          // aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
+          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt, meta.reason)
 
           pendingMeta = meta
           if (recorder.state === 'recording') recorder.stop()

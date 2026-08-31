@@ -299,7 +299,11 @@ export function useLiveVoice({
           // treats the edges and the content as separate inputs precisely so the
           // segmented path — where the transcript lands ~700ms later — behaves
           // identically.
-          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
+          // PIPELINE 2026-08-31: the reason rides along, same as useVoice — a
+          // 'max-segment' close is the segment timer expiring, not the speaker
+          // stopping, and reporting it as a speech end falsified `speaking`.
+          // aggRef?.current?.noteSpeechEnd(meta.speechEndedAt)
+          aggRef?.current?.noteSpeechEnd(meta.speechEndedAt, meta.reason)
 
           // An idle recycle carries no speech, and a sub-threshold blip is a
           // cough or a keystroke. Neither is a fragment. MIN_SPEECH_MS never

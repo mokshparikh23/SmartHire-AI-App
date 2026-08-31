@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+// PIPELINE 2026-08-31: the same join used to stitch fragments inside one
+// utterance, reused to stitch an utterance to its continuation. Pure and
+// dependency-free, so importing it here costs nothing.
+import { joinFragments } from '../utils/textFormatter'
 
 /**
  * Session state, split into two paths on purpose:
@@ -32,6 +36,18 @@ export const useSessionStore = create((set, get) => ({
   currentAnswer: '',
   questionAt: null,      // REDESIGN 2026-08-29: wall clock for the card's footer
   isThinking: false,
+  /* PIPELINE 2026-08-31 ─ why the answer no longer flickers ───────────────────
+     setQuestion used to blank currentAnswer immediately, so the instant a new
+     question was heard the card went from a readable answer to three dots and
+     stayed there for the whole time-to-first-token. With the aggregator now able
+     to supersede more often — an extended question, a retry — that flicker was
+     going to get worse rather than better.
+
+     answerPending means "the answer on screen belongs to the previous request;
+     replace it the moment the first token of the new one arrives". appendAnswer
+     honours it, so the swap happens in one frame with no empty state in
+     between. */
+  answerPending: false,
   source: 'voice',     // 'voice' | 'manual' — how the current question arrived
   error: null,
 
@@ -106,6 +122,8 @@ export const useSessionStore = create((set, get) => ({
       currentAnswer: '',
       questionAt: null,
       isThinking: false,
+      // PIPELINE 2026-08-31: answerPending cleared everywhere isThinking is.
+      answerPending: false,
       source: 'voice',
       error: null,
       chatMode: false,
@@ -127,6 +145,7 @@ export const useSessionStore = create((set, get) => ({
     // set({ isRunning: false, timerInterval: null, isThinking: false })
     set({
       isRunning: false, timerInterval: null, isThinking: false,
+      answerPending: false,   // PIPELINE 2026-08-31
       sessionId: null, chatStreaming: false,
     })
   },
@@ -144,10 +163,15 @@ export const useSessionStore = create((set, get) => ({
       blockedReason: beat?.stop ? (beat.reason || 'stopped') : null,
     }),
 
-  setQuestion: (q, source = 'voice') =>
+  // PIPELINE 2026-08-31: opts.keepAnswer leaves the previous answer on screen
+  // until the replacement's first token lands. See `answerPending` above.
+  // setQuestion: (q, source = 'voice') =>
+  setQuestion: (q, source = 'voice', opts = {}) =>
     set({
       currentQuestion: q,
-      currentAnswer: '',
+      // currentAnswer: '',
+      currentAnswer: opts.keepAnswer ? get().currentAnswer : '',
+      answerPending: !!opts.keepAnswer,
       // REDESIGN 2026-08-29: the answer card's footer shows "Answer · HH:MM".
       // turns[].ts covers history; this covers the turn still streaming.
       questionAt: Date.now(),
@@ -157,7 +181,39 @@ export const useSessionStore = create((set, get) => ({
       activeTurnId: null,   // a new question always returns us to the live view
     }),
 
-  appendAnswer: (chunk) => set((s) => ({ currentAnswer: s.currentAnswer + chunk })),
+  /* PIPELINE 2026-08-31 ─ the other half of not splitting a long question ─────
+     When a cap forces an utterance out early, the rest of it arrives as a
+     separate emit flagged `continues`. That is not a new question and must not
+     go through setQuestion, which commits the previous pair and blanks the card.
+     It appends to the question already showing and re-asks it as one.
+
+     joinFragments is the same helper the aggregator uses to join fragments
+     WITHIN an utterance — same hyphen, weak-punctuation and stray-full-stop
+     rules — so a question stitched across a cap reads identically to one
+     stitched across a pause. questionAt is deliberately untouched: the turn
+     started when its first fragment landed. */
+  extendQuestion: (more) => {
+    const { currentQuestion, currentAnswer } = get()
+    if (!more) return currentQuestion
+    const next = currentQuestion ? joinFragments(currentQuestion, more) : more
+    set({
+      currentQuestion: next,
+      currentAnswer,          // stays on screen until the new first token
+      answerPending: true,
+      isThinking: true,
+      error: null,
+      activeTurnId: null,
+    })
+    return next
+  },
+
+  // appendAnswer: (chunk) => set((s) => ({ currentAnswer: s.currentAnswer + chunk })),
+  /* PIPELINE 2026-08-31: one boolean read per flushed frame. This sits on the
+     documented one-leaf-render-per-token path, but flush() already coalesces to
+     ~60/s via rAF, so the cost is a branch on a value that changes once a turn. */
+  appendAnswer: (chunk) => set((s) => (s.answerPending
+    ? { currentAnswer: chunk, answerPending: false }
+    : { currentAnswer: s.currentAnswer + chunk })),
 
   /* SEGMENTATION 2026-08-30 ─ the turn that used to vanish ────────────────────
      A question arriving mid-stream superseded the one before it, and the partial
@@ -194,7 +250,7 @@ export const useSessionStore = create((set, get) => ({
 
   setAnswerDone: () => {
     const { currentQuestion, currentAnswer, source, turns, error } = get()
-    if (!currentQuestion) return set({ isThinking: false })
+    if (!currentQuestion) return set({ isThinking: false, answerPending: false })
 
     /* PIPELINE 2026-08-31 ─ a completion that streamed nothing showed nothing ──
        If the provider sends zero content deltas — the exact Gemini-3
@@ -222,7 +278,7 @@ export const useSessionStore = create((set, get) => ({
       feedback: null,      // REDESIGN 2026-08-29: 'up' | 'down' from the card footer
     }
     // set({ isThinking: false, turns: [...turns, turn], activeTurnId: turn.id })
-    set({ isThinking: false, error: failed, turns: [...turns, turn], activeTurnId: turn.id })
+    set({ isThinking: false, answerPending: false, error: failed, turns: [...turns, turn], activeTurnId: turn.id })
   },
 
   /**
@@ -239,7 +295,10 @@ export const useSessionStore = create((set, get) => ({
       ),
     })),
 
-  setError: (msg) => set({ error: msg, isThinking: false }),
+  // setError: (msg) => set({ error: msg, isThinking: false }),
+  // PIPELINE 2026-08-31: a failed request must not leave the previous answer
+  // sitting there waiting for a first token that is never coming.
+  setError: (msg) => set({ error: msg, isThinking: false, answerPending: false }),
 
   /** Repoint the fast path at a stored turn. Cheap — no refetch. */
   selectTurn: (id) => {
@@ -252,6 +311,7 @@ export const useSessionStore = create((set, get) => ({
       source: turn.source,
       error: turn.error ?? null,
       isThinking: false,
+      answerPending: false,   // PIPELINE 2026-08-31
       activeTurnId: id,
     })
   },
@@ -279,7 +339,7 @@ export const useSessionStore = create((set, get) => ({
   }),
 
   clearCurrent: () =>
-    set({ currentQuestion: '', currentAnswer: '', isThinking: false, error: null, activeTurnId: null }),
+    set({ currentQuestion: '', currentAnswer: '', isThinking: false, answerPending: false, error: null, activeTurnId: null }),
 
   /* REDESIGN 2026-08-29 ─ the two Clear buttons in the new chrome ──────────── */
 
@@ -303,7 +363,7 @@ export const useSessionStore = create((set, get) => ({
 
   /** Answer card's Clear (⌘⌫) — empties the card without touching the log. */
   clearAnswer: () =>
-    set({ currentAnswer: '', questionAt: null, isThinking: false, error: null }),
+    set({ currentAnswer: '', questionAt: null, isThinking: false, answerPending: false, error: null }),
 
   /* REDESIGN 2026-08-29 ─ Chat mode ────────────────────────────────────────── */
 
