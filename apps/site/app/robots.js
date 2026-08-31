@@ -10,7 +10,7 @@
   Nothing is disallowed here. There is nothing on this deployment that is not
   meant to be read.
 */
-const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3001').replace(/\/$/, '')
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3002').replace(/\/$/, '')
 
 export default function robots() {
   return {

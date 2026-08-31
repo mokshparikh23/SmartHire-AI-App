@@ -21,7 +21,7 @@
   /privacy and /terms are deliberately absent until they exist — see the Legal
   column in components/SiteChrome.jsx.
 */
-const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3001').replace(/\/$/, '')
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3002').replace(/\/$/, '')
 
 const ROUTES = [
   { path: '/',             changed: '2026-09-01', priority: 1.0 },

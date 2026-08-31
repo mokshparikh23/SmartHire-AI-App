@@ -130,7 +130,7 @@ const mono = IBM_Plex_Mono({
   into production OG tags.
 */
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3001'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3002'),
   title: {
     default: 'Smart Hire AI — Interview Copilot',
     /*

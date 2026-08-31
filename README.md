@@ -52,7 +52,7 @@ All run from the repo root.
 | --- | --- |
 | `npm run dev` | All three apps |
 | `npm run dev:front` | Site + web only, which is the usual loop |
-| `npm run dev:site` | Marketing site on :3001 |
+| `npm run dev:site` | Marketing site on :3002 |
 | `npm run dev:web` | Next.js dev server on :3000 |
 | `npm run dev:desktop` | Vite on :5173 + Electron |
 | `npm run build` | Desktop renderer bundle |

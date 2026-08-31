@@ -10,7 +10,7 @@
     "apps/site",
     "apps/web"
   ],
-  "_comment_dev": "SPLIT 2026-09-01: `dev` keeps meaning \"everything\", which is now three processes. `dev:front` is the loop most work actually needs — site on 3001 and app on 3000, without Electron — because three Next/Vite/Electron processes under the 512MB cap is heavy. The ports are not interchangeable: apps/desktop/.env points WEB_URL at 127.0.0.1:3000, so if the site could take that port the desktop would silently talk to it.",
+  "_comment_dev": "SPLIT 2026-09-01: `dev` keeps meaning \"everything\", which is now three processes. `dev:front` is the loop most work actually needs — site on 3002 and app on 3000, without Electron — because three Next/Vite/Electron processes under the 512MB cap is heavy. The ports are not interchangeable: apps/desktop/.env points WEB_URL at 127.0.0.1:3000, so if the site could take that port the desktop would silently talk to it.",
   "scripts": {
     "dev": "concurrently -n site,web,desktop -c green,cyan,magenta \"npm run dev:site\" \"npm run dev:web\" \"npm run dev:desktop\"",
     "dev:front": "concurrently -n site,web -c green,cyan \"npm run dev:site\" \"npm run dev:web\"",
