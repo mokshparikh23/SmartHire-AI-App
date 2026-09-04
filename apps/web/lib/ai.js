@@ -1,10 +1,10 @@
-import { validateLicense } from './license'
-import { createAdminClient } from './supabase-server'
-// import { heartbeatSession, chargeMinutes, isUnlimited, RESEARCH_COST_MINUTES } from './metering'
+import { validateLicense } from 'smarthire-data/license'
+import { createAdminClient } from 'smarthire-data/supabase-server'
+// import { heartbeatSession, chargeMinutes, isUnlimited, RESEARCH_COST_MINUTES } from 'smarthire-data/metering'
 import {
   heartbeatSession, chargeMinutes, isUnlimited,
   RESEARCH_COST_MINUTES, RESUME_PARSE_COST_MINUTES,
-} from './metering'
+} from 'smarthire-data/metering'
 
 export const OPENAI_BASE = 'https://api.openai.com/v1'
 

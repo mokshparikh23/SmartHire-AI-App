@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from 'smarthire-ui/Icon'
 import { Button, CONTROL } from 'smarthire-ui'
-import { formatBalance } from '@/lib/credits'
+import { formatBalance } from 'smarthire-data/credits'
 
 export default function IssueLicenseForm({ users }) {
   const router = useRouter()

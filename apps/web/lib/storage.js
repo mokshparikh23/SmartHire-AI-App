@@ -16,7 +16,7 @@
  * Server-only: importing this from a client component would pull the
  * service-role key into the bundle.
  */
-import { createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient } from 'smarthire-data/supabase-server'
 import { RESUME_BUCKET } from '@/lib/resume'
 
 /**

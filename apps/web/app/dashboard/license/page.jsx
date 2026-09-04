@@ -1,5 +1,5 @@
 import { requireUser, getSupabase } from '@/lib/auth'
-import { ensureLicense } from '@/lib/license'
+import { ensureLicense } from 'smarthire-data/license'
 import { getLatestRelease } from '@/lib/releases'
 import LicenseCard from '@/components/dashboard/LicenseCard'
 import { Card, Button, PageHeader, EmptyState } from 'smarthire-ui'

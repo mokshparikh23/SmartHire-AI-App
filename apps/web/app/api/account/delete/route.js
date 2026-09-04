@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getUser, getSupabase } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient } from 'smarthire-data/supabase-server'
 import { RESUME_BUCKET } from '@/lib/resume'
 import { tombstone } from '@/lib/storage'
 import { DEVICE_COOKIE } from '@/lib/devices'

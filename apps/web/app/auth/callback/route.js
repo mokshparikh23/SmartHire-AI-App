@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { reactivateDevice, DEVICE_COOKIE } from '@/lib/devices'
-import { safeNext } from '@/lib/next-url'
+import { safeNext } from 'smarthire-data/next-url'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)

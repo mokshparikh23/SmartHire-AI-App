@@ -1,6 +1,6 @@
 import { verifyWebhookSignature, fetchSubscription } from '@/lib/razorpay'
-import { createAdminClient } from '@/lib/supabase-server'
-import { setSubscription } from '@/lib/metering'
+import { createAdminClient } from 'smarthire-data/supabase-server'
+import { setSubscription } from 'smarthire-data/metering'
 import { fulfilCreditOrder, claimOrder, isoFromUnix } from '@/lib/fulfilment'
 
 // Signature verification needs the RAW body, so this must not run on an edge

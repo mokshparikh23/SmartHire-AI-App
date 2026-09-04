@@ -1,6 +1,6 @@
 import { CORS, jsonError } from '@/lib/http'
 import { requireLicense } from '@/lib/ai'
-import { createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient } from 'smarthire-data/supabase-server'
 // CONTEXT 2026-08-31: the compressed résumé is computed server-side, where the
 // prompt-injection stripping in lib/resume.js's clean() already lives.
 import { briefResume, normalizeParsed } from '@/lib/resume'

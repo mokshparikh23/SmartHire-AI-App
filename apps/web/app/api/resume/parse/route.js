@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUser } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase-server'
+import { createAdminClient } from 'smarthire-data/supabase-server'
 import {
   PARSE_MODEL, PARSE_MAX_TOKENS, MAX_PARSE_CHARS, GEMINI_REASONING_EFFORT,
   requireProvider, chargeResumeParse, recordUsage, fetchWithRetry,

@@ -1,0 +1,37 @@
+{
+  "name": "smarthire-data",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Everything that reads or writes an account: the Supabase clients, the credit meter, the licence, and the two cached auth primitives. Raw source, no build step. Shared by apps/web and apps/admin - NEVER by apps/site, which holds no Supabase keys on purpose, and NEVER by apps/desktop.",
+
+  "_comment_no_root_export": "THERE IS NO \".\" EXPORT AND THAT IS THE WHOLE DESIGN. It is the mirror image of packages/ui's rule. That package's root must never gain 'use client'; this one must never gain a root barrel, because a barrel puts next/headers and the SUPABASE_SERVICE_ROLE_KEY factory onto the import graph of every client component that only wanted formatBalance(). credits.js is imported by three 'use client' files, so this is not hypothetical. `import x from 'smarthire-data'` is ERR_PACKAGE_PATH_NOT_EXPORTED at build time, deliberately, and the phase gate is: grep '\"\\.\"' packages/data/package.json must return nothing.",
+
+  "_comment_exports": "ONE SUBPATH PER FILE, AND THE NAMES MIRROR THE OLD FILENAMES - same reasoning as packages/ui's _comment_names: the rewrite in apps/web is then one reviewable substitution of @/lib for smarthire-data, not forty judgement calls. The split is by WHAT A CLIENT BUNDLE MAY SEE, not by tidiness:  ./credits and ./next-url are pure, import nothing, and are safe in a browser.  ./supabase-server, ./metering, ./license and ./auth are server-only - next/headers, react cache(), and createAdminClient() reading the service-role key. Merging any of the last four into the first two would work today and would be one careless import away from shipping a service-role call site to a browser.",
+
+  "_comment_peers": "next AND react ARE PEERS BECAUSE THEIR MODULE IDENTITY IS LOAD-BEARING, not for version hygiene. auth.js leans on react's cache() to collapse getUser() into one GET /auth/v1/user per render pass - the whole reason that file exists. cache() reads the async dispatcher off ReactSharedInternals and cookies() reads an AsyncLocalStorage that Next's server runtime populates, so A SECOND COPY OF EITHER DOES NOT THROW: React 19 finds no dispatcher and quietly stops memoising, and the dashboard goes back to three serial round trips with a green build. react-dom is deliberately absent - nothing here renders. @supabase/ssr and @supabase/supabase-js are REAL dependencies at the ranges apps/web already carries: createServerClient() hands back a fresh object and holds no shared module state, so a duplicate costs bundle size and not correctness. That is the line between a dep and a peer here. Verify after install: npm ls react next must say deduped.",
+
+  "_comment_desktop": "apps/desktop MUST NOT depend on this. Four of the six subpaths import next/* and would fail loudly at Vite resolve, but ./credits and ./next-url import nothing and would link cleanly - and merely LISTING smarthire-data in apps/desktop/package.json resolves its react ^19 peer beside desktop's pinned 18.3.1, with no ERESOLVE to rely on. The review tripwire is a lockfile diff: git diff package-lock.json | grep 'apps/desktop/node_modules/\\(next\\|react\\)'.",
+
+  "_comment_no_server_only": "`server-only` is deliberately NOT a dependency yet. It would turn a client component importing ./metering into a build error naming the file, which is worth having - but it is a new package and a lockfile change inside the one phase whose entire claim is that it changes no output. If it is added later, sideEffects must stop being false and become an explicit array naming the four server modules, or the bundler is free to drop the import and the guard silently does nothing.",
+
+  "sideEffects": false,
+
+  "exports": {
+    "./supabase-server": "./src/supabase-server.js",
+    "./auth":            "./src/auth.js",
+    "./metering":        "./src/metering.js",
+    "./license":         "./src/license.js",
+    "./credits":         "./src/credits.js",
+    "./next-url":        "./src/next-url.js"
+  },
+
+  "peerDependencies": {
+    "next": "^16.1.6",
+    "react": "^19.2.4"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.99.1"
+  }
+}

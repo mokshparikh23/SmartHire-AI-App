@@ -1,38 +1,36 @@
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createClient, createAdminClient } from '@/lib/supabase-server'
-import { safeNext } from '@/lib/next-url'
+import { getSupabase, getUser, profileFor, adminProfileFor } from 'smarthire-data/auth'
+import { safeNext } from 'smarthire-data/next-url'
 import { AUTH_COOKIE } from '@/lib/auth-cookie'
 
 /**
- * The one authoritative auth gate for every server render.
+ * This app's auth gate: everything that decides where to SEND someone.
  *
- * Why this file exists: `getUser()` is a network call. @supabase/auth-js
- * `GoTrueClient._getUser()` always issues `GET /auth/v1/user` — it never decodes
- * the JWT locally — so calling it in the proxy, then the layout, then the page
- * cost three serial round trips per request. React `cache()` collapses them into
- * one for the whole render pass.
+ * ADMIN SPLIT 2026-09-01 ─ the read half of this file moved to
+ * packages/data/src/auth.js and is re-exported below. What stayed is what a
+ * shared package must not contain: literal route paths, and the cookie pattern
+ * this deployment writes. Read that file's header for the seam and for the
+ * dev-only bug that sharing the regex would have produced.
  *
- * Why the check lives here and is called from PAGES, not just the layout:
- * layouts are not re-executed on sibling client navigation (Next only renders
- * below the segment that changed). A layout-only gate would render
- * `usage/page.jsx` with no auth check in that pass at all.
+ * The imports that used to head this file, for the record:
  *
- * `getSession()` is deliberately absent. It reads the cookie payload without
- * verifying it against the auth server, which is fine for the optimistic
- * redirect in proxy.js and is NOT fine for anything that reads data.
+ *   // import { createClient, createAdminClient } from 'smarthire-data/supabase-server'
+ *   // import { safeNext } from 'smarthire-data/next-url'
+ *
+ * getSupabase and getUser are re-exported rather than re-wrapped. They are
+ * already cache()'d in the package, and wrapping a cached function in another
+ * cache() would give two memo entries for one round trip — which is the exact
+ * cost this file was written to remove.
+ *
+ * Why the gate is called from PAGES and not only from layouts: layouts are not
+ * re-executed on sibling client navigation (Next only renders below the segment
+ * that changed), and whether one re-renders is decided by the client-supplied
+ * `next-router-state-tree` header. A layout-only gate would render a sibling
+ * page with no auth check in that pass at all.
  */
-
-/** One Supabase cookie client per request. cache() keys on the empty arg list. */
-export const getSupabase = cache(createClient)
-
-/** The authoritative call. Returns null rather than throwing, so callers choose. */
-export const getUser = cache(async () => {
-  const supabase = await getSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user ?? null
-})
+export { getSupabase, getUser }
 
 /**
  * Every protected page starts with this. It replaces the old pattern of
@@ -43,7 +41,7 @@ export const getUser = cache(async () => {
  *
  * SPLIT 2026-09-01 ─ the optional `next`.
  *
- * proxy.js now carries the destination through /login (see loginWithNext there),
+ * proxy.js carries the destination through /login (see loginWithNext there),
  * which covers the realistic signed-out paths: no cookie at all, and a cookie
  * whose session has lapsed. This function fires in the narrower case where the
  * optimistic cookie check PASSED and the authoritative network call disagreed,
@@ -90,6 +88,13 @@ export async function requireUser({ next } = {}) {
 
       Only when a cookie is actually present. Without one there is nothing to
       clear and /login is both correct and one hop shorter.
+
+      ADMIN SPLIT 2026-09-01: this block is why requireUser() did not move into
+      packages/data. Both the route and the regex are this deployment's, and
+      AUTH_COOKIE matches on NAME across the whole jar rather than looking up a
+      storage key — so shipping it to another app that shares a cookie jar in dev
+      (ports do not separate cookies) would make that app redirect to a route it
+      does not have. apps/admin gets its own copy of both.
     */
     const jar = await cookies()
     const hasAuthCookie = jar.getAll().some(c => AUTH_COOKIE.test(c.name) && c.value)
@@ -97,7 +102,7 @@ export async function requireUser({ next } = {}) {
 
     // Re-validated here rather than trusted from the caller: on the billing
     // page this string is built from a search param that started on another
-    // origin. See lib/next-url.js.
+    // origin. See next-url.js in packages/data.
     const to = safeNext(next)
     // redirect('/login')
     redirect(to ? `/login?next=${encodeURIComponent(to)}` : '/login')
@@ -105,46 +110,47 @@ export async function requireUser({ next } = {}) {
   return user
 }
 
-/** The signed-in user's profile row. Shared by the sidebar and the pages. */
+/**
+ * The signed-in user's profile row. Shared by the sidebar and the pages.
+ *
+ * ADMIN SPLIT 2026-09-01: the query moved to profileFor() in packages/data; the
+ * requireUser() call did not, because redirecting is the half that is this app's
+ * to decide. cache() here memoises the pair, so the argument-less call signature
+ * every caller already uses is unchanged.
+ *
+ *   // export const getProfile = cache(async () => {
+ *   //   const user = await requireUser()
+ *   //   const supabase = await getSupabase()
+ *   //   const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+ *   //   return data ?? null
+ *   // })
+ */
 export const getProfile = cache(async () => {
   const user = await requireUser()
-  const supabase = await getSupabase()
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-  return data ?? null
+  return profileFor(user.id)
 })
 
 /**
  * Admin gate for PAGES. Redirects; it does not return a status.
  *
- * Named `requireAdminPage` on purpose: `lib/admin.js` already exports a
- * `requireAdmin()` for the /api/admin/* routes which returns
- * `{ok, status, error}` instead of redirecting. Two gates with one name, where
- * one is falsy-checked and the other throws, is how a route ends up unguarded —
- * so they get different names.
+ * ADMIN SPLIT 2026-09-01 ─ the stale comment that used to sit here claimed
+ * `lib/admin.js` exports a `requireAdmin()` for the /api/admin routes. There is
+ * no lib/admin.js and there never was in this tree; both gates are in this file
+ * and always have been. The point it was making survives the correction and is
+ * worth keeping: two gates with one name, where one is falsy-checked and the
+ * other throws, is how a route ends up unguarded — so they get different names.
  *
- * Every admin page must call this, not only `app/admin/layout.jsx`. Whether a
- * layout re-renders is decided by the client-supplied `next-router-state-tree`
- * header, so a layout is not a trustworthy boundary against a crafted RSC
- * request — and the admin pages query with `createAdminClient()`, which bypasses
- * RLS entirely.
+ * The role is read through the service-role client. A hidden row fails closed
+ * either way (`profile?.role !== 'admin'`); reading it with elevated privilege
+ * only avoids locking a real admin out if an RLS policy ever hides their own row.
  *
- * The role is read through the service-role client to match the behaviour
- * `app/admin/layout.jsx` already had. A hidden row fails closed either way
- * (`profile?.role !== 'admin'`); reading it with elevated privilege only avoids
- * locking a real admin out if an RLS policy ever hides their own row.
+ * `/dashboard` is the deny target because this app has one. apps/admin will not,
+ * which is the second reason this function stays app-local — see
+ * packages/data/src/auth.js.
  */
 export const getAdminProfile = cache(async () => {
   const user = await requireUser()
-  const { data } = await createAdminClient()
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-  return data ?? null
+  return adminProfileFor(user.id)
 })
 
 export async function requireAdminPage() {

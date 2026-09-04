@@ -1,6 +1,6 @@
-import { grantMinutes } from '@/lib/metering'
-import { ensureLicense } from '@/lib/license'
-import { MINUTES_PER_CREDIT } from '@/lib/credits'
+import { grantMinutes } from 'smarthire-data/metering'
+import { ensureLicense } from 'smarthire-data/license'
+import { MINUTES_PER_CREDIT } from 'smarthire-data/credits'
 
 /**
  * Turning a paid order into credits, and claiming a subscription order.

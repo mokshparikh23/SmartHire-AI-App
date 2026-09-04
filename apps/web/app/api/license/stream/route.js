@@ -1,4 +1,4 @@
-import { validateLicense } from '@/lib/license'
+import { validateLicense } from 'smarthire-data/license'
 
 export const runtime     = 'nodejs'
 export const dynamic     = 'force-dynamic'

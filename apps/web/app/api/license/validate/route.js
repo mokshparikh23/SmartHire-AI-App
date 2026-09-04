@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { validateLicense } from '@/lib/license'
+import { validateLicense } from 'smarthire-data/license'
 import { touchDevice, reactivateDevice, desktopLabel } from '@/lib/devices'
 
 /**

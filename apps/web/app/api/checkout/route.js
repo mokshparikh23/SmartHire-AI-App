@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
-import { createClient, createAdminClient } from '@/lib/supabase-server'
+import { createClient, createAdminClient } from 'smarthire-data/supabase-server'
 import { getStripe, siteUrl } from '@/lib/stripe'
 import {
   createPaymentLink, createSubscription, planIdFor, assertPlanMatchesPricing,
@@ -9,7 +9,7 @@ import { gatewayFor } from 'smarthire-pricing/gateway'
 import {
   PACK_BY_ID, SUBSCRIPTION_TIERS, resolveCurrency, priceOf, PRICE_TABLE,
 } from 'smarthire-pricing'
-import { MINUTES_PER_CREDIT } from '@/lib/credits'
+import { MINUTES_PER_CREDIT } from 'smarthire-data/credits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

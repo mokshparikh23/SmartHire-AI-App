@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createClient } from 'smarthire-data/supabase-server'
 
 /**
  * Ends the session for a browser that was signed out from another device.

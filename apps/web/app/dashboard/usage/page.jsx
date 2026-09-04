@@ -1,6 +1,6 @@
 import { requireUser, getSupabase } from '@/lib/auth'
-import { formatBalance, END_REASON_LABEL } from '@/lib/credits'
-import { sweepStaleSessions } from '@/lib/metering'
+import { formatBalance, END_REASON_LABEL } from 'smarthire-data/credits'
+import { sweepStaleSessions } from 'smarthire-data/metering'
 import { Card, Stat, PageHeader, EmptyState, Badge, Button, TH } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'
 

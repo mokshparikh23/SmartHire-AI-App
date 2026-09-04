@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { safeNext } from '@/lib/next-url'
+import { safeNext } from 'smarthire-data/next-url'
 import Icon, { Spinner } from 'smarthire-ui/Icon'
 import { Button } from 'smarthire-ui'
 

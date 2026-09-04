@@ -15,6 +15,7 @@
     "postcss": "^8.5.8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "smarthire-data": "*",
     "smarthire-pricing": "*",
     "smarthire-ui": "*",
     "stripe": "^22.6.0",

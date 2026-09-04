@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import { safeNext } from '@/lib/next-url'
+import { safeNext } from 'smarthire-data/next-url'
 import { AUTH_COOKIE } from '@/lib/auth-cookie'
 
 /*

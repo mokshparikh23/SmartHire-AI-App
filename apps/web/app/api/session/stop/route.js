@@ -1,5 +1,5 @@
 import { CORS, jsonError } from '@/lib/http'
-import { stopSession } from '@/lib/metering'
+import { stopSession } from 'smarthire-data/metering'
 
 export const runtime     = 'nodejs'
 export const dynamic     = 'force-dynamic'

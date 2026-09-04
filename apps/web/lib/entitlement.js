@@ -1,6 +1,6 @@
 import { cache } from 'react'
-import { createClient } from './supabase-server'
-import { ensureLicense } from './license'
+import { createClient } from 'smarthire-data/supabase-server'
+import { ensureLicense } from 'smarthire-data/license'
 
 /**
  * What a signed-in customer is currently entitled to, read through the cookie

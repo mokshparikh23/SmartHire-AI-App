@@ -3,7 +3,7 @@ import { requireUser, getSupabase } from '@/lib/auth'
 import { getEntitlement } from '@/lib/entitlement'
 import {
   formatBalance, formatCredits, balanceTone, LOW_BALANCE_MINUTES, LEDGER_LABEL,
-} from '@/lib/credits'
+} from 'smarthire-data/credits'
 import {
   resolveCurrency, tiersForCurrency, packsForCurrency, singlePackForCurrency, formatMoney,
   // SPLIT 2026-09-01: for validating ?plan= and deciding which tab it belongs to.

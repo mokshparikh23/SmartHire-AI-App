@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from 'smarthire-ui/Icon'
 import { Button, Badge, CONTROL } from 'smarthire-ui'
-import { formatBalance, MINUTES_PER_CREDIT } from '@/lib/credits'
+import { formatBalance, MINUTES_PER_CREDIT } from 'smarthire-data/credits'
 
 /** Shortcuts, not the vocabulary. Discounts and manual fulfilment mean any
  *  integer has to stay reachable, so the minutes field is never limited to these. */

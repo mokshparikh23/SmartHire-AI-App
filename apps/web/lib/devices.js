@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { createAdminClient, createClient } from './supabase-server'
+import { createAdminClient, createClient } from 'smarthire-data/supabase-server'
 
 /**
  * Where an account is signed in, and how to sign it out.

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import RevokeLicenseButton from './RevokeLicenseButton'
 import CopyButton from '@/components/dashboard/CopyButton'
 import { Badge, EmptyState, TH } from 'smarthire-ui'
-import { formatBalance } from '@/lib/credits'
+import { formatBalance } from 'smarthire-data/credits'
 
 const STATUS_TONE = { active: 'positive', revoked: 'critical' }
 const FILTERS     = ['all', 'active', 'revoked']

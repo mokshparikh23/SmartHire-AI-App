@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
-import { setRole } from '@/lib/metering'
+import { setRole } from 'smarthire-data/metering'
 import { fail } from '@/lib/http'
 
 /*
@@ -8,7 +8,7 @@ import { fail } from '@/lib/http'
 
   It used to take whatever arrived and hand it to the service-role client:
 
-  // import { createAdminClient } from '@/lib/supabase-server'
+  // import { createAdminClient } from 'smarthire-data/supabase-server'
   //
   //     const { userId, role } = await request.json()
   //     if (!userId || !role)

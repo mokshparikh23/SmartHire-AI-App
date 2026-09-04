@@ -1,5 +1,5 @@
 import { CORS, jsonError } from '@/lib/http'
-import { heartbeatSession, HEARTBEAT_SECONDS } from '@/lib/metering'
+import { heartbeatSession, HEARTBEAT_SECONDS } from 'smarthire-data/metering'
 
 export const runtime     = 'nodejs'
 export const dynamic     = 'force-dynamic'
