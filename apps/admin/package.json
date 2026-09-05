@@ -5,6 +5,7 @@
   "description": "The admin console. Its own Next app on its own origin (admin.<domain>) and its own Vercel project, so the surface that grants credits and comps subscriptions does not share a deployment, a build or a rollback with the app every customer uses.",
   "_comment_port": "3003, and the three it is not are each ruled out for a different reason. NOT 3000: apps/dashboard has it, and apps/desktop/.env points WEB_URL at http://127.0.0.1:3000, so anything else taking that port makes the desktop app silently talk to the wrong server. NOT 3001: another long-running project on this machine holds it, and the two do NOT cleanly collide - that one binds IPv4 and Next binds :: for IPv6, so it half-works and misleads. NOT 3002: apps/marketing. The 512MB cap matches the other two dev scripts; `npm run dev` is four processes now.",
   "_comment_deps": "WHAT IS ABSENT IS THE SECURITY ARGUMENT OF THE WHOLE SPLIT, so read this before adding anything. No stripe, no razorpay, no OpenAI or Gemini key, no Brandfetch, no unpdf: this deployment charges nobody and calls no model. It holds the Supabase keys and nothing else, which is what makes the SECOND copy of SUPABASE_SERVICE_ROLE_KEY (see .env.local.example) an acceptable trade rather than a straight widening. Every addition here is a decision, not a convenience.",
+  "_comment_data_dep": "ADDED 2026-09-06 after the first Vercel build of this project failed. @smarthire/data was imported by every page and route here — createAdminClient, formatBalance — but never declared, and npm hoists workspace packages to the root node_modules, so a local build and a local `npm ci` both resolved it anyway and the omission was invisible until a real deployment. This is NOT the widening the note above warns about: it declares a package the console already ran on. apps/dashboard has always declared it.",
   "_comment_lint": "HARDENED 2026-09-06: was `next lint`, which Next 16 removed — so this script had been exiting non-zero on every invocation, and nothing invoked it. eslint.config.mjs was scaffolded here from the start but eslint itself was never a dependency; it and eslint-config-next are root devDependencies now, and the rules live in @smarthire/config. Run from the repo root with `npm run lint`.",
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=512' next dev --port 3003",
@@ -19,6 +20,7 @@
     "postcss": "^8.5.8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "@smarthire/data": "*",
     "@smarthire/pricing": "*",
     "@smarthire/ui": "*"
   },
