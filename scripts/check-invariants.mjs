@@ -191,6 +191,70 @@ check(
   },
 )
 
+/*
+  Loaded up front because check() is synchronous.
+
+  Imported as data: URLs rather than by path, and that is not fussiness. Neither
+  app declares "type": "module" — they cannot, because that would change how Next
+  treats every other .js file in them — so importing these by path makes Node
+  reparse them and warn on every run. Both files are plain ESM with no imports at
+  all (auth-cookie.js says why: it must not drag @supabase/ssr's browser client
+  into the server graph), so their source stands alone as a module.
+*/
+const loadCookieModule = (path) =>
+  import(`data:text/javascript,${encodeURIComponent(read(path))}`)
+
+const cookieModules = await Promise.all([
+  loadCookieModule('apps/admin/lib/auth-cookie.js'),
+  loadCookieModule('apps/dashboard/lib/auth-cookie.js'),
+])
+
+check(
+  'the admin and dashboard auth cookies cannot match each other',
+  'Cookies ignore ports, so in development the two apps share one jar. If either pattern matched the other app\'s cookie, a request with no session of its own would find the neighbour\'s, and the bug would be invisible in production where the jars are separate — on the one origin whose sign-in path is hardest to exercise.',
+  () => {
+    const [admin, dashboard] = cookieModules
+    const problems = []
+
+    // The two patterns must not be the same regex.
+    if (String(admin.AUTH_COOKIE) === String(dashboard.AUTH_COOKIE)) {
+      problems.push('both apps use the identical AUTH_COOKIE pattern')
+    }
+
+    // The dashboard's pattern must not fire on the admin cookie, chunks included.
+    for (const name of [admin.AUTH_STORAGE_KEY, `${admin.AUTH_STORAGE_KEY}.0`]) {
+      if (dashboard.AUTH_COOKIE.test(name)) {
+        problems.push(`the dashboard pattern matches the admin cookie "${name}"`)
+      }
+    }
+
+    /*
+      And the admin's must not fire on a real @supabase/ssr cookie. The note in
+      apps/admin/lib/auth-cookie.js explains why the name does not start with
+      `sb-`: an sb- prefixed name would match the dashboard's pattern in
+      development, so its optimistic gate would see a cookie it cannot use, build
+      a client, get null from getSession() and bounce to /login.
+    */
+    for (const name of ['sb-abcdefghijklm-auth-token', 'sb-abcdefghijklm-auth-token.1']) {
+      if (admin.AUTH_COOKIE.test(name)) {
+        problems.push(`the admin pattern matches a Supabase cookie "${name}"`)
+      }
+    }
+
+    // The chunk suffix is "the part that gets dropped when someone retypes this
+    // from memory", and dropping it leaves the halves of a large session
+    // surviving every attempt to clear it.
+    if (!admin.AUTH_COOKIE.test(`${admin.AUTH_STORAGE_KEY}.0`)) {
+      problems.push('the admin pattern does not match its own chunked cookie (.0/.1)')
+    }
+    if (!dashboard.AUTH_COOKIE.test('sb-abcdefghijklm-auth-token.0')) {
+      problems.push('the dashboard pattern does not match a chunked Supabase cookie (.0/.1)')
+    }
+
+    return problems.length ? problems.join('; ') : null
+  },
+)
+
 check(
   'no .env file is tracked by git',
   'apps/admin holds SUPABASE_SERVICE_ROLE_KEY. Until 2026-09-06 the root .gitignore covered only .env and .env.local, so apps/admin/.env.production was a file waiting for someone to type `git add -A`.',

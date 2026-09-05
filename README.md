@@ -119,9 +119,25 @@ runs all eight, each with the cost of breaking it written beside the assertion:
 - `apps/marketing` reaches no database and reads no Supabase credential
 - every workspace directory is actually listed in root `workspaces` — `apps/*` is not globbed, so a missing entry silently links nothing
 - every `@smarthire/*` import resolves to a subpath the target package really exports
+- the admin and dashboard auth cookie patterns cannot match each other, and each still matches its own chunked `.0`/`.1` form
 - no `.env` file is tracked by git
 
 Each was verified by breaking it on purpose and confirming the check fails.
+
+### On the "duplicated" files in apps/admin and apps/dashboard
+
+Worth writing down, because it looks like debt and is not, and the next person
+to notice it will reach the same wrong conclusion this repo's own audit did.
+
+`auth.js`, `proxy.js`, `http.js`, `auth-cookie.js` and `app-links.js` each exist
+in two apps. Comparing the contents rather than the filenames:
+
+- **`auth.js` and `proxy.js` are already merged.** Both import `makeSession`, `adminProfileFor` and `safeNext` from `@smarthire/data`. What is left in each app is the half a shared package must not hold: the routes that deployment has, and the cookie it writes.
+- **`http.js` shares nothing.** admin has `fail()`, dashboard has `CORS` and `jsonError()`, and there is no overlap. `fail()` was deliberately moved *out* of dashboard so a wildcard-CORS helper would not sit beside a route that grants credits.
+- **`auth-cookie.js` must never be shared.** Its own header says so in capitals: the two values differing *is* the session isolation. Merging them would reintroduce the dev-only bug where the admin app silently reuses the dashboard's session, on the one origin whose sign-in path is hardest to exercise. That is what the new invariant above guards.
+- **`app-links.js`** shares about four lines, and `apps/marketing` may not import `@smarthire/data` — see the invariant above it. Not worth a package.
+
+So there is nothing here to merge. The duplication is between filenames, not code.
 
 ### Tests
 

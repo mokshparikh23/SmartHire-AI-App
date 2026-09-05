@@ -99,7 +99,15 @@
       "Bash(npx vitest *)",
       "Bash(bash /private/tmp/claude-501/-Users-mokshparikh-SmartHire-AI-App/be2557fc-17bf-41f7-8939-4a3009e9e357/scratchpad/mutate.sh)",
       "Bash(perl -pi -e \"s/&& !!periodEnd && periodEnd > new Date\\\\\\(\\\\\\)//\" apps/dashboard/lib/entitlement.js)",
-      "Bash(perl -0pi -e \"s/&&\\\\s*\\\\n\\\\s*!!periodEnd && periodEnd > new Date\\\\\\(\\\\\\)//\" apps/dashboard/lib/entitlement.js)"
+      "Bash(perl -0pi -e \"s/&&\\\\s*\\\\n\\\\s*!!periodEnd && periodEnd > new Date\\\\\\(\\\\\\)//\" apps/dashboard/lib/entitlement.js)",
+      "Bash(node -p \"Object.entries\\(require\\('./package.json'\\).scripts\\).filter\\(\\([k]\\)=>/test|lint/.test\\(k\\)\\).map\\(\\([k,v]\\)=>k+' -> '+v\\).join\\('\\\\n'\\) || '\\(none at root\\)'\")",
+      "Bash(curl -s -o /dev/null -w \"GET / -> HTTP %{http_code}\\\\n\" --max-time 15 https://web-moksh-8946s-projects.vercel.app/)",
+      "Bash(curl -s -o /dev/null -w \"POST /api/license/validate -> HTTP %{http_code}\\\\n\" --max-time 15 -X POST -H \"Content-Type: application/json\" -d '{\"licenseKey\":\"probe\"}' https://web-moksh-8946s-projects.vercel.app/api/license/validate)",
+      "Bash(git clone *)",
+      "Bash(git -C /private/tmp/claude-501/-Users-mokshparikh-SmartHire-AI-App/bb0971ec-c621-4bc0-bfa2-adc12ea8981a/scratchpad/repro/app log --oneline -1)",
+      "Bash(npm ci *)",
+      "Bash(node -p \"JSON.stringify\\(require\\('./apps/dashboard/package.json'\\).dependencies,null,2\\)\")",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\);console.log\\(JSON.stringify\\(l.packages['apps/admin'].dependencies,null,2\\)\\)\")"
     ]
   }
 }
