@@ -51,6 +51,28 @@ const nextConfig = {
      start if a package is in both. */
   transpilePackages: ['smarthire-ui', 'smarthire-pricing'],
 
+  /* ADMIN SPLIT 2026-09-01 ─ the bare hostname is not a page.
+
+     The console kept its /admin path prefix when it moved here, so
+     admin.<domain>/admin/users is the real URL and admin.<domain>/ has nothing
+     to render. Keeping the prefix is what made the move a pure rename: the four
+     NAV entries in AdminSidebar, the logo link, the two panel headers and the
+     two quick-action cards in app/admin/page.jsx are all still correct
+     unchanged, and so are the five fetch('/api/admin/…') strings in the client
+     components — which shrank the most dangerous diff in this split to file
+     moves plus one link.
+
+     SAME-ORIGIN, so this is not a guessed destination and needs no env var.
+
+     permanent: false, because flattening /admin/* to /* here is a plausible
+     future change and a 308 would outlive it in every browser cache that ever
+     saw it. This repo has already had to undo one such redirect. */
+  async redirects() {
+    return [
+      { source: '/', destination: '/admin', permanent: false },
+    ]
+  },
+
   async headers() {
     return [{
       source: '/:path*',

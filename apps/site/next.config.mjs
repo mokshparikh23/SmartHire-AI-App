@@ -50,7 +50,25 @@ const nextConfig = {
       { source: '/signup',          destination: `${app}/signup`,    permanent: false },
       { source: '/dashboard',       destination: `${app}/dashboard`, permanent: false },
       { source: '/dashboard/:path*', destination: `${app}/dashboard/:path*`, permanent: false },
-      { source: '/admin/:path*',    destination: `${app}/admin/:path*`, permanent: false },
+      /*
+        ADMIN SPLIT 2026-09-01 ─ REMOVED, NOT REPOINTED, AND THAT IS THE POINT.
+
+        // { source: '/admin/:path*', destination: `${app}/admin/:path*`, permanent: false },
+
+        The four rules above exist for bookmarks made before the marketing split
+        — a real audience arriving on a real path. /admin has no such audience:
+        two people hold it, and they can update a bookmark.
+
+        Repointing it at admin.<domain> would publish the admin hostname from the
+        highest-traffic, most-crawled origin in the repo, turning a typo on the
+        marketing site into hostname disclosure. Leaving it pointed at
+        app.<domain>/admin is worse still — that path no longer exists, so it
+        would be a redirect chain ending in a 404.
+
+        So /admin 404s here, like any other path this site does not own. That
+        nothing anywhere links to the admin origin is also what licenses
+        apps/admin/app/robots.js to say Disallow instead of copying apps/web.
+      */
     ]
   },
 }

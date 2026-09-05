@@ -1,5 +1,5 @@
 import { requireAdminPage } from '@/lib/auth'
-import AdminSidebar from '@/components/admin/AdminSidebar'
+import AdminSidebar from '@/components/AdminSidebar'
 
 // PIVOT 2026-08-29: the inline session + role lookup moved to lib/auth.js so the
 // layout and every admin page share ONE cached pair of round trips instead of

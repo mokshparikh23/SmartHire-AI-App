@@ -54,7 +54,19 @@ import { AUTH_COOKIE } from '@/lib/auth-cookie'
   // layout render entirely. Do not remove those page-level calls.
 */
 
-const PROTECTED = ['/dashboard', '/admin']
+/*
+  ADMIN SPLIT 2026-09-01 ─ /admin moved to its own origin and its own deployment.
+  Nothing under it is served here any more, so the optimistic gate has nothing to
+  gate. Its replacement is apps/admin/proxy.js, which INVERTS the polarity of
+  this list: an allowlist of PUBLIC paths, because on that origin every route is
+  admin-only and one added tomorrow must be protected by default.
+
+  The long commented block above stays exactly as it is — the reasoning about
+  reading the role in a proxy is still in force, it just lives next door now.
+
+  // const PROTECTED = ['/dashboard', '/admin']
+*/
+const PROTECTED = ['/dashboard']
 const AUTH_PAGES = ['/login', '/signup']
 
 /*
@@ -176,5 +188,7 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/login', '/signup']
+  // ADMIN SPLIT 2026-09-01: '/admin/:path*' removed with the pages it matched.
+  // matcher: ['/dashboard/:path*', '/admin/:path*', '/login', '/signup']
+  matcher: ['/dashboard/:path*', '/login', '/signup']
 }

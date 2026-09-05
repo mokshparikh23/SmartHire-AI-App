@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import Icon, { Logo } from 'smarthire-ui/Icon'
 import NavItem from 'smarthire-ui/NavItem'
-import SignOutButton from '@/components/dashboard/SignOutButton'
+import SignOutButton from '@/components/SignOutButton'
+import { DASHBOARD } from '@/lib/app-links'
 
 /*
   PIVOT 2026-08-29: the nav-item markup and the sign-out handler were duplicated
@@ -47,15 +48,37 @@ export default function AdminSidebar({ profile }) {
           {NAV.map(item => <NavItem key={item.href} {...item} />)}
         </ul>
 
-        <div className="mt-6 border-t border-line pt-4">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted transition-colors duration-150 hover:bg-paper/60 hover:text-ink"
-          >
+        {/*
+          ADMIN SPLIT 2026-09-01 ─ /dashboard is ANOTHER ORIGIN now, so this is a
+          plain <a>. next/navigation's router cannot navigate off-origin, so a
+          next/link here would do nothing when clicked and would prefetch an
+          origin it cannot render. The long version is in
+          apps/site/lib/app-links.js.
+
+          RENDERED ONLY WHEN THE ORIGIN IS CONFIGURED. NEXT_PUBLIC_APP_URL is not
+          one of the variables this deployment requires — see .env.local.example,
+          where the whole point is that this project holds three Supabase values
+          and nothing else. Unset, there is no correct destination, so the link is
+          absent rather than pointing at a guess. A bare href="/dashboard" would
+          404 on this origin, and lib/app-links.js deliberately has no localhost
+          fallback for the same reason.
+
+          <Link href="/dashboard" className="…">
             <Icon name="arrowRight" size={16} className="text-faint" />
             Back to my dashboard
           </Link>
-        </div>
+        */}
+        {DASHBOARD && (
+          <div className="mt-6 border-t border-line pt-4">
+            <a
+              href={DASHBOARD}
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted transition-colors duration-150 hover:bg-paper/60 hover:text-ink"
+            >
+              <Icon name="arrowRight" size={16} className="text-faint" />
+              Back to my dashboard
+            </a>
+          </div>
+        )}
       </nav>
 
       <div className="border-t border-line p-3">
