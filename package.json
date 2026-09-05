@@ -27,9 +27,11 @@
     "build:dashboard": "npm run build --workspace apps/dashboard",
     "build:admin": "npm run build --workspace apps/admin",
     "lint": "npm run lint --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check:invariants": "node scripts/check-invariants.mjs",
     "check:schema": "node scripts/sync-schema.mjs --check",
-    "check": "npm run check:invariants && npm run check:schema && npm run lint",
+    "check": "npm run check:invariants && npm run check:schema && npm run lint && npm run test",
     "build:mac": "npm run build:mac --workspace apps/desktop",
     "build:win": "npm run build:win --workspace apps/desktop",
     "build:all": "npm run build:all --workspace apps/desktop"
@@ -48,6 +50,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "vitest": "^5.0.0"
   }
 }

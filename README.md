@@ -89,7 +89,8 @@ All run from the repo root.
 | `npm run build:dashboard` | Next.js production build |
 | `npm run build:admin` | Admin console production build |
 | `npm run build:mac` / `build:win` / `build:all` | Packaged desktop installers |
-| `npm run check` | Everything CI checks: invariants, schema sync, lint |
+| `npm run check` | Everything CI checks: invariants, schema sync, lint, tests |
+| `npm test` | The unit suite (`npm run test:watch` while working) |
 | `npm run lint` | eslint across all six workspaces |
 | `npm run check:invariants` | The boundary rules, as code |
 | `npm run check:schema` | `supabase-schema.sql` still matches its sources |
@@ -121,6 +122,32 @@ runs all eight, each with the cost of breaking it written beside the assertion:
 - no `.env` file is tracked by git
 
 Each was verified by breaking it on purpose and confirming the check fails.
+
+### Tests
+
+126 of them, added 2026-09-06. Before that the repo had 213 source files and no
+test file at all, and the untested set included both payment webhooks, the
+credit meter and the entitlement gate. They live beside the code they cover as
+`*.test.js` and run in about a fifth of a second.
+
+They are all pure unit tests — no database, no network. That is a deliberate
+ceiling: `@smarthire/data/metering` is a set of thin wrappers over `SECURITY
+DEFINER` Postgres functions, and the logic that matters most in them — the
+wallet row lock, the clamp at zero, the last-admin guard — is SQL that only a
+live database can exercise. Testing that needs a Supabase instance in CI and is
+its own piece of work. What the suite does cover:
+
+- **`lib/fulfilment.js`** — the double-credit bug. A redelivered webhook must move no money, and the conditional update is the lock that stops it.
+- **`packages/pricing`** — that every pack and tier has an integer price in every currency, that the bigger pack is always better value, and that a currency can only come from a geo header and never from a request body.
+- **`packages/data/credits`** — the balance a customer reads, at every edge: zero, negative, fractional, junk.
+- **`packages/data/metering`** — that each RPC is called under exactly the argument names its Postgres signature expects, and that a transport failure throws rather than being read as a verdict.
+- **`lib/entitlement.js`** — who is metered and who is not, including that `past_due` still counts because Stripe retries for days.
+
+**Every one was checked by mutation.** Twenty-five deliberate breakages were
+applied to the source one at a time — dropping the idempotency lock, cutting off
+a `past_due` subscriber, letting a request body name its own currency, removing
+an RPC argument — and all twenty-five turned the suite red. A test that has only
+ever passed has not been tested.
 
 ### Known lint debt
 

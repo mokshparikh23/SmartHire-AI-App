@@ -94,7 +94,12 @@
       "Bash(node scripts/check-invariants.mjs)",
       "Bash(node -e \"const p=require\\('next/package.json'\\);console.log\\(Object.keys\\(p.bin\\)\\)\")",
       "Bash(node -p \"const d=require\\('./package.json'\\).devDependencies; JSON.stringify\\(d,null,2\\)\")",
-      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; const bad=Object.keys\\(s\\).filter\\(k=>k.startsWith\\('_'\\)\\); console.log\\(bad.length?'BOGUS SCRIPTS: '+bad:'scripts clean ✓'\\); console.log\\('scripts:', Object.keys\\(s\\).join\\(', '\\)\\)\")"
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; const bad=Object.keys\\(s\\).filter\\(k=>k.startsWith\\('_'\\)\\); console.log\\(bad.length?'BOGUS SCRIPTS: '+bad:'scripts clean ✓'\\); console.log\\('scripts:', Object.keys\\(s\\).join\\(', '\\)\\)\")",
+      "Bash(node -p \"'vitest ' + require\\('./node_modules/vitest/package.json'\\).version\")",
+      "Bash(npx vitest *)",
+      "Bash(bash /private/tmp/claude-501/-Users-mokshparikh-SmartHire-AI-App/be2557fc-17bf-41f7-8939-4a3009e9e357/scratchpad/mutate.sh)",
+      "Bash(perl -pi -e \"s/&& !!periodEnd && periodEnd > new Date\\\\\\(\\\\\\)//\" apps/dashboard/lib/entitlement.js)",
+      "Bash(perl -0pi -e \"s/&&\\\\s*\\\\n\\\\s*!!periodEnd && periodEnd > new Date\\\\\\(\\\\\\)//\" apps/dashboard/lib/entitlement.js)"
     ]
   }
 }
