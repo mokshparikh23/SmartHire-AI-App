@@ -1,32 +1,32 @@
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect, forbidden } from 'next/navigation'
-import { makeSession, adminProfileFor } from 'smarthire-data/auth'
-import { safeNext } from 'smarthire-data/next-url'
+import { makeSession, adminProfileFor } from '@smarthire/data/auth'
+import { safeNext } from '@smarthire/data/next-url'
 import { AUTH_COOKIE, AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 
 /**
  * This app's auth gate: everything that decides where to SEND someone.
  *
- * ADMIN SPLIT 2026-09-01 ─ the counterpart is apps/web/lib/auth.js, and the two
+ * ADMIN SPLIT 2026-09-01 ─ the counterpart is apps/dashboard/lib/auth.js, and the two
  * are deliberately separate files rather than one shared module. packages/data
  * owns the READING — the cached Supabase client, getUser(), the profile
  * queries. What lives here is what a shared package must not contain: the routes
  * this deployment has, and the cookie it writes. Read
  * packages/data/src/auth.js's header for the seam.
  *
- * Three things differ from apps/web, and each is a decision:
+ * Three things differ from apps/dashboard, and each is a decision:
  *
  *   1. THE COOKIE NAME. `shai-admin-auth`, not @supabase/ssr's default. Cookies
- *      ignore ports, so without it this app would silently reuse apps/web's
+ *      ignore ports, so without it this app would silently reuse apps/dashboard's
  *      session in development and nobody would exercise /login until production.
  *      See lib/auth-cookie.js.
  *
- *   2. THE DENY TARGET. apps/web sends a non-admin to /dashboard. There is no
+ *   2. THE DENY TARGET. apps/dashboard sends a non-admin to /dashboard. There is no
  *      /dashboard on this origin, so this app answers 403 instead — see
  *      requireAdminPage().
  *
- *   3. NO getProfile(). apps/web's sidebar and settings page read the caller's
+ *   3. NO getProfile(). apps/dashboard's sidebar and settings page read the caller's
  *      own profile through their own session; nothing on this origin does. Every
  *      page here reads OTHER people's rows through the service-role client, and
  *      the only thing it needs about the caller is whether they are an admin.
@@ -53,7 +53,7 @@ export async function requireUser({ next } = {}) {
   const user = await getUser()
   if (!user) {
     /*
-      A cookie that outlived its account — the same trap apps/web documents at
+      A cookie that outlived its account — the same trap apps/dashboard documents at
       length, reproduced here because this origin can reach it too.
 
       proxy.js decides with getSession(), which reads the cookie WITHOUT a
@@ -69,7 +69,7 @@ export async function requireUser({ next } = {}) {
       from here would make the network call, silently fail to clear anything, and
       return as though it worked.
 
-      AUTH_COOKIE is THIS app's pattern. Using apps/web's would fire on apps/web's
+      AUTH_COOKIE is THIS app's pattern. Using apps/dashboard's would fire on apps/dashboard's
       cookie in development, where the jar is shared, and redirect to a route
       this origin does have — but for a session that was never ours. See
       lib/auth-cookie.js.
@@ -103,7 +103,7 @@ export const getAdminProfile = cache(async () => {
  *
  * ADMIN SPLIT 2026-09-01 ─ WHY 403 AND NOT A REDIRECT TO THE APP.
  *
- * apps/web's version does `redirect('/dashboard')`. That route does not exist
+ * apps/dashboard's version does `redirect('/dashboard')`. That route does not exist
  * here, and a CROSS-origin bounce is worse than it looks:
  *
  *   - It needs NEXT_PUBLIC_APP_URL on this deployment, which is optional by

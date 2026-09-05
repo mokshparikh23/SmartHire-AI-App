@@ -2,7 +2,7 @@ import { cache } from 'react'
 import { createClient, createAdminClient } from './supabase-server'
 
 /**
- * The cached read half of the auth gate. Extracted from apps/web/lib/auth.js.
+ * The cached read half of the auth gate. Extracted from apps/dashboard/lib/auth.js.
  *
  * ADMIN SPLIT 2026-09-01 ─ WHY THIS FILE IS ONLY HALF OF THAT ONE.
  *
@@ -12,7 +12,7 @@ import { createClient, createAdminClient } from './supabase-server'
  *
  * By the time the extraction ran, `requireUser()` had grown two hard references
  * to routes that exist on one origin and not the other: it redirects to
- * `/auth/device-signout` (a route handler apps/web has, added by the
+ * `/auth/device-signout` (a route handler apps/dashboard has, added by the
  * account-deletion work, because a Server Component cannot clear a cookie), and
  * it tests every cookie in the jar against `AUTH_COOKIE` from lib/auth-cookie.js.
  * `requireAdminPage()` likewise redirects a non-admin to `/dashboard`, which will
@@ -27,8 +27,8 @@ import { createClient, createAdminClient } from './supabase-server'
  *
  * THE COOKIE REGEX IS THE ONE THAT WOULD HAVE BITTEN SILENTLY. `requireUser()`
  * scans the WHOLE jar with a pattern rather than looking up its own storage key.
- * Cookies ignore ports, so in local development apps/web's cookie is visible at
- * localhost:3003 — ship apps/web's `/^sb-.+-auth-token/` into a shared
+ * Cookies ignore ports, so in local development apps/dashboard's cookie is visible at
+ * localhost:3003 — ship apps/dashboard's `/^sb-.+-auth-token/` into a shared
  * `requireUser` and the admin app, with no session of its own, would still see a
  * cookie, conclude the session had outlived its account, and redirect to
  * `/auth/device-signout` — a 404 on that origin. Production, where the jars are
@@ -52,7 +52,7 @@ import { createClient, createAdminClient } from './supabase-server'
  * The session-scoped trio, built once per app.
  *
  * A FACTORY RATHER THAN THREE PLAIN EXPORTS, because the cookie name is
- * per-deployment and these three all read it. apps/web writes
+ * per-deployment and these three all read it. apps/dashboard writes
  * `sb-<project-ref>-auth-token`; apps/admin writes `shai-admin-auth` so that the
  * two do not share a session in development, where cookies ignore ports. See
  * createClient() in supabase-server.js for the full argument.

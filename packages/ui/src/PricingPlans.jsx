@@ -51,14 +51,14 @@ import { Badge, Button } from './index.jsx'
   SPLIT 2026-09-01: appOrigin — the prop that makes this component work on two
   origins.
 
-  UNSET (apps/web, /dashboard/billing): everything below behaves exactly as it
+  UNSET (apps/dashboard, /dashboard/billing): everything below behaves exactly as it
   always has. Same fetch, same signed-out routing, same states. That call site
   passes nothing and did not change.
 
-  SET (apps/site, /pricing): buy() stops fetching entirely and navigates to
+  SET (apps/marketing, /pricing): buy() stops fetching entirely and navigates to
   `${appOrigin}/dashboard/billing?plan=<id>`.
 
-  WHY NOT A CREDENTIALED CROSS-ORIGIN FETCH. apps/web sends
+  WHY NOT A CREDENTIALED CROSS-ORIGIN FETCH. apps/dashboard sends
   `Access-Control-Allow-Origin: *` and cannot narrow it — the packaged Electron
   renderer connects from file:// with origin `null`, which no allowlist can
   match — and browsers reject `*` outright for a request with credentials. The
@@ -136,8 +136,8 @@ export default function PricingPlans({
       The hop losing it was the confirmation link, which is exactly what
       emailRedirectTo writes, so AuthForm sets it now and the target survives.
 
-      This branch is unreachable from apps/site (appOrigin returns above) and is
-      reached on apps/web only by a signed-out visitor who somehow got to
+      This branch is unreachable from apps/marketing (appOrigin returns above) and is
+      reached on apps/dashboard only by a signed-out visitor who somehow got to
       /dashboard/billing, which proxy.js already prevents. Kept as the honest
       fallback rather than removed.
     */

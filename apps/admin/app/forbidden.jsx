@@ -1,4 +1,4 @@
-import { Container, Button } from 'smarthire-ui'
+import { Container, Button } from '@smarthire/ui'
 import { getUser } from '@/lib/auth'
 import { DASHBOARD } from '@/lib/app-links'
 import SignOutButton from '@/components/SignOutButton'

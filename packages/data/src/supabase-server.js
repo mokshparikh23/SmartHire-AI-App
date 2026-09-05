@@ -14,7 +14,7 @@ import { cookies } from 'next/headers'
  *
  * WHY THAT IS NOT COSMETIC. Cookies ignore ports. In development
  * localhost:3000 and localhost:3003 are the SAME cookie origin, so without a
- * distinct name apps/admin would silently reuse apps/web's session: its own
+ * distinct name apps/admin would silently reuse apps/dashboard's session: its own
  * /login would never render, every bug in it would stay invisible, and the first
  * time anyone found out would be in production — where the two are different
  * hosts, the cookies really are host-only, and every admin is suddenly signed
@@ -23,7 +23,7 @@ import { cookies } from 'next/headers'
  * cannot do because vercel.app is on the Public Suffix List.
  *
  * Unset means whatever @supabase/ssr defaults to — `sb-<project-ref>-auth-token`
- * — which is what apps/web has always written and must keep writing.
+ * — which is what apps/dashboard has always written and must keep writing.
  *
  * // export async function createClient() {
  */

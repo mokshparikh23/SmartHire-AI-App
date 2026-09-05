@@ -1,10 +1,10 @@
 /*
-  SPLIT 2026-09-01: this was apps/web/lib/gateway.js, and its first line was
+  SPLIT 2026-09-01: this was apps/dashboard/lib/gateway.js, and its first line was
 
       import { razorpayConfigured } from '@/lib/razorpay'
 
-  which cannot survive the move — `@/` is an apps/web alias, and lib/razorpay.js
-  is a payment client that has no business in a package apps/site imports.
+  which cannot survive the move — `@/` is an apps/dashboard alias, and lib/razorpay.js
+  is a payment client that has no business in a package apps/marketing imports.
 
   THE REAL PROBLEM IS NOT THE IMPORT, IT IS THE SECRET. /compare calls
   gatewayFor('INR') to decide whether the table shows UPI as live or as a
@@ -15,11 +15,11 @@
 
   So the check has two arms, and both live in this one function on purpose:
 
-    apps/web  answers from the keys it already holds, exactly as before.
-    apps/site answers from RAZORPAY_LIVE, a plain flag and not a credential.
+    apps/dashboard  answers from the keys it already holds, exactly as before.
+    apps/marketing answers from RAZORPAY_LIVE, a plain flag and not a credential.
 
   KEEP THEM TOGETHER. The alternative — a second `upiLive` constant over in
-  apps/site — is a claim about the checkout written in a codebase that cannot
+  apps/marketing — is a claim about the checkout written in a codebase that cannot
   see the checkout, and it would be the first thing to rot.
 
   WHAT THIS TRADE COSTS: the two can now drift by one env var. Set RAZORPAY_LIVE
@@ -29,7 +29,7 @@
   site to call the app over the network to find out was the other option, and it
   is not worth a request on every render of a comparison table.
 
-  apps/web/lib/razorpay.js keeps its own razorpayConfigured() — it guards the
+  apps/dashboard/lib/razorpay.js keeps its own razorpayConfigured() — it guards the
   actual REST calls, which is a different question from what the table shows.
 */
 

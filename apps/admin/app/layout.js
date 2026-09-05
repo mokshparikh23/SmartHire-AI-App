@@ -3,7 +3,7 @@ import './globals.css'
 
 /*
   ADMIN SPLIT 2026-09-01 ─ THE TWO DECLARATIONS BELOW ARE COPIED VERBATIM FROM
-  apps/web/app/layout.js, AND THEY CANNOT BE FACTORED OUT. Do not "fix" this.
+  apps/dashboard/app/layout.js, AND THEY CANNOT BE FACTORED OUT. Do not "fix" this.
 
   next/font/google is parsed by SWC at the call site. It rejects spreads and
   imported identifiers, so the options object cannot come from a shared module
@@ -14,7 +14,7 @@ import './globals.css'
   name that packages/ui/src/styles/base.css defines in its @theme block. That
   file has `--font-tight: var(--font-inter-tight, …)`; naming this one
   --font-tight too would make that declaration reference itself, which is invalid
-  at computed-value time, and the whole app renders in Times. apps/web's layout
+  at computed-value time, and the whole app renders in Times. apps/dashboard's layout
   carries the long version of this story — read it before touching either name.
 
   Also deliberately NOT passing `fallback: [...]`. It replaces next/font's
@@ -48,7 +48,7 @@ export const metadata = {
     Metadata only exists on pages that render a <head>, so it misses the /api
     routes entirely. The X-Robots-Tag header in next.config.mjs covers those, and
     app/robots.js goes further still and disallows crawling outright — which is
-    the opposite of what apps/web does, for reasons written down in that file.
+    the opposite of what apps/dashboard does, for reasons written down in that file.
   */
   robots: { index: false, follow: false },
 
@@ -62,7 +62,7 @@ export default function RootLayout({ children }) {
   /* data-scroll-behavior because base.css sets `scroll-behavior: smooth`, and
      without the attribute Next warns on every client navigation — a smooth
      scroll during a route change animates from the OLD page's scroll position.
-     Same reason as apps/web. */
+     Same reason as apps/dashboard. */
   return (
     <html lang="en" data-scroll-behavior="smooth" className={`${tight.variable} ${mono.variable}`}>
       <body>{children}</body>

@@ -44,7 +44,7 @@
 --
 -- WHY 90 IS A LITERAL
 --
--- It mirrors STALE_SECONDS in apps/web/lib/metering.js. Adding a
+-- It mirrors STALE_SECONDS in apps/dashboard/lib/metering.js. Adding a
 -- p_stale_seconds parameter instead would create a SECOND signature, and the
 -- revoke/grant block in 20260829120000_credit_billing.sql revokes the old one
 -- by exact signature — a revoke against a stale signature silently does

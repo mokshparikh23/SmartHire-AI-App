@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
-import { createAdminClient } from 'smarthire-data/supabase-server'
+import { createAdminClient } from '@smarthire/data/supabase-server'
 import { fail } from '@/lib/http'
 
 export async function POST(request) {

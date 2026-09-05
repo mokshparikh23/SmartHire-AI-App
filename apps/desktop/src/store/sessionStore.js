@@ -410,7 +410,7 @@ export const useSessionStore = create((set, get) => ({
 
     /* PIPELINE 2026-08-31 ─ a completion that streamed nothing showed nothing ──
        If the provider sends zero content deltas — the exact Gemini-3
-       thinking-budget failure documented in apps/web/lib/ai.js — pumpStream
+       thinking-budget failure documented in apps/dashboard/lib/ai.js — pumpStream
        returns normally, this commits a turn with a: '', and AnswerPanel falls
        through EVERY branch to null: the question header, a completely blank
        body, no error, no retry, no explanation. The user sees the app answer

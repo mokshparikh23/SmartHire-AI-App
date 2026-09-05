@@ -16,7 +16,7 @@ const fs = require('fs')
 
   The line below read only `.env`. The working tree had a `.env.local` holding
   WEB_URL=http://127.0.0.1:3000 — written by someone following the Next.js
-  naming habit from apps/web next door — and dotenv never looked at it. So local
+  naming habit from apps/dashboard next door — and dotenv never looked at it. So local
   desktop development was silently pointed at PRODUCTION: production Supabase,
   production licences, real AI spend, real session minutes deducted from a real
   account. It fails invisibly, because talking to production works.

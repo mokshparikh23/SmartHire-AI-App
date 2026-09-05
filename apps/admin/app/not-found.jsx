@@ -1,9 +1,9 @@
-import { Container, Button } from 'smarthire-ui'
+import { Container, Button } from '@smarthire/ui'
 
 /*
   ADMIN SPLIT 2026-09-01 ─ deliberately the thinnest of the three 404 pages.
 
-  apps/site's version lists everything the site has, because a stranger who
+  apps/marketing's version lists everything the site has, because a stranger who
   mistypes a marketing URL needs a way back in. Nobody reaches this one by
   accident: the only people who can render anything on this origin are admins,
   and the only way here is typing a URL.

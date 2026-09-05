@@ -1,9 +1,9 @@
 /*
-  SPLIT 2026-09-01: this was apps/web/lib/pricing.js. It moved here unchanged.
+  SPLIT 2026-09-01: this was apps/dashboard/lib/pricing.js. It moved here unchanged.
 
   WHY IT IS A PACKAGE AND NOT A SECOND COPY. The line below says this file is
   the only place prices live. The marketing site is a separate deployment on a
-  separate domain now — it quotes a price, and apps/web charges one. A copied
+  separate domain now — it quotes a price, and apps/dashboard charges one. A copied
   file would keep that comment technically present and actually false: two price
   tables that agree until the day somebody edits one of them, and the way you
   find out is a customer being charged something other than the number they read.

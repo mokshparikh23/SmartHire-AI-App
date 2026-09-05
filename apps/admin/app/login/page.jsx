@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
-import { Container, Button } from 'smarthire-ui'
-import Icon, { Logo } from 'smarthire-ui/Icon'
-import { safeNext } from 'smarthire-data/next-url'
+import { Container, Button } from '@smarthire/ui'
+import Icon, { Logo } from '@smarthire/ui/Icon'
+import { safeNext } from '@smarthire/data/next-url'
 import { getUser, getAdminProfile } from '@/lib/auth'
 import { DASHBOARD } from '@/lib/app-links'
 import AdminAuthForm from '@/components/AdminAuthForm'
@@ -15,7 +15,7 @@ export const metadata = {
 /**
  * ADMIN SPLIT 2026-09-01 ─ A SERVER COMPONENT, AND IT DOES NOT AUTO-BOUNCE.
  *
- * apps/web handles this in proxy.js: `session && AUTH_PAGES.includes(path)`
+ * apps/dashboard handles this in proxy.js: `session && AUTH_PAGES.includes(path)`
  * sends an already-signed-in visitor to /dashboard. That cannot be ported,
  * because a proxy can only know a SESSION exists — knowing whether it is an
  * ADMIN session takes a database read, which an optimistic gate must not do. A
@@ -102,7 +102,7 @@ export default async function LoginPage({ searchParams }) {
   )
 }
 
-/* Deliberately not apps/web's two-column (auth) layout. That one carries an
+/* Deliberately not apps/dashboard's two-column (auth) layout. That one carries an
    editorial panel and a logo linking to the marketing site — neither belongs on
    an origin with no marketing story and no NEXT_PUBLIC_WWW_URL. */
 function Shell({ children }) {

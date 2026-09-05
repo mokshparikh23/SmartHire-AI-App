@@ -1,4 +1,4 @@
--- Forward fix for drift between apps/web/supabase-schema.sql and the initial
+-- Forward fix for drift between apps/dashboard/supabase-schema.sql and the initial
 -- migration. The grants below were added to the schema file in commit bd5df64
 -- but never reached supabase/migrations/00000000000000_init.sql.
 --

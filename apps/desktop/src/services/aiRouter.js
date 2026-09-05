@@ -52,7 +52,7 @@ export const CHAT_MODELS = [
    already fetches it and snaps an off-list model to the server's default. So
    this was not a second line of defence; it was a first line of damage. The
    allowlist that actually caps spend is resolveModel(model, provider) in
-   apps/web/lib/ai.js, which re-checks against the provider that is really live.
+   apps/dashboard/lib/ai.js, which re-checks against the provider that is really live.
 
    CHAT_MODELS stays exported — Launcher still uses it as the offline fallback
    list when /api/ai/models cannot be reached. */

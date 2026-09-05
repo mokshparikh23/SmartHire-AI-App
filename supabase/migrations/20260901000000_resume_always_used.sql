@@ -23,8 +23,8 @@
 -- That is strictly more removal than unticking ever was.
 --
 -- WHY THE COLUMN SURVIVES. resume_consent stays, NOT NULL, and is written true
--- whenever a resume exists (apps/web/lib/resume.js toRow, and
--- apps/web/app/api/resume/parse). A desktop build older than this change still
+-- whenever a resume exists (apps/dashboard/lib/resume.js toRow, and
+-- apps/dashboard/app/api/resume/parse). A desktop build older than this change still
 -- gates buildSystemPrompt() on the flag, and those installs update on their own
 -- schedule; a column left false would silently drop the resume for exactly the
 -- users who can no longer see the box they would have looked for. Writing true

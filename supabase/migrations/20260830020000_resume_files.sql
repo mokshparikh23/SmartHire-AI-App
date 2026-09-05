@@ -77,7 +77,7 @@ alter table public.interview_profiles
   add constraint interview_profiles_resume_source_check
     check (resume_source in ('manual', 'pdf')),
 
-  -- normalizeParsed() in apps/web/lib/resume.js is the real shape check. These
+  -- normalizeParsed() in apps/dashboard/lib/resume.js is the real shape check. These
   -- two are the floor under it: whatever bug ships in that file, a row can never
   -- hold a bare string or a quarter-megabyte of model output. A resume is
   -- attacker-supplied text going into a model, so "the model returned 5 MB of X"

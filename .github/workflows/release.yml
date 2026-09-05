@@ -1,5 +1,5 @@
 # Packages the desktop app for macOS and Windows and attaches both to a
-# GitHub Release, which is the feed apps/web/lib/releases.js reads.
+# GitHub Release, which is the feed apps/dashboard/lib/releases.js reads.
 #
 # Windows is the reason this exists rather than a local script. NSIS packaging
 # needs a Windows toolchain (or wine, which is not installed on the dev Mac), so

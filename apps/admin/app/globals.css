@@ -11,12 +11,12 @@
 
   What the other two apps keep locally, and why this app needs neither:
 
-    apps/web/app/globals.css     the view transitions, driven by
+    apps/dashboard/app/globals.css     the view transitions, driven by
                                  components/ui/PageTransition.jsx. That component
                                  is imported by eleven files, every one of them
                                  under app/dashboard, and none of them moved here.
 
-    apps/site/app/globals.css    the marketing motion (.u-draw, .reveal,
+    apps/marketing/app/globals.css    the marketing motion (.u-draw, .reveal,
                                  .rail-fill, the ticker marquee) and the .marker /
                                  .x-scroll-fade classes. Nothing on an admin
                                  screen animates.
@@ -28,4 +28,4 @@
   ══════════════════════════════════════════════════════════════════════════════
 */
 @import "tailwindcss";
-@import "smarthire-ui/styles/base.css";
+@import "@smarthire/ui/styles/base.css";

@@ -212,7 +212,7 @@ export function useInterviewSession() {
 
      Six turns at roughly 250 tokens each is ~1500 tokens, against a system
      prompt that already runs 1500-3000 with a resume attached. MAX_TOKENS in
-     apps/web/lib/ai.js is the OUTPUT budget and is unaffected.
+     apps/dashboard/lib/ai.js is the OUTPUT budget and is unaffected.
 
      Clipping is tiered rather than uniform: the model needs the TOPIC of an old
      answer but the TEXT of the immediately preceding one, because that is what

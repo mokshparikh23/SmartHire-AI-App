@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 /**
  * The catch-all for this app's /api/admin routes.
  *
- * ADMIN SPLIT 2026-09-01 ─ moved here from apps/web/lib/http.js with the routes
+ * ADMIN SPLIT 2026-09-01 ─ moved here from apps/dashboard/lib/http.js with the routes
  * it serves. It sat next to jsonError() there, and the reason it was never the
  * same function is the reason this file does not carry that one:
  *

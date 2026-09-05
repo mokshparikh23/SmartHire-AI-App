@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Container, Button } from 'smarthire-ui'
+import { Container, Button } from '@smarthire/ui'
 
 /*
-  ADMIN SPLIT 2026-09-01 ─ adapted from apps/site/app/error.jsx, with one rule
+  ADMIN SPLIT 2026-09-01 ─ adapted from apps/marketing/app/error.jsx, with one rule
   that matters more here than on either other app.
 
   NOTHING FROM `error` IS RENDERED EXCEPT `error.digest`.
@@ -20,7 +20,7 @@ import { Container, Button } from 'smarthire-ui'
   detail goes, and the server log is where it is read.
 
   This is the same discipline as fail() in the API routes — see lib/http.js in
-  apps/web — applied to the render path instead of the fetch path.
+  apps/dashboard — applied to the render path instead of the fetch path.
 
   No global-error.jsx, matching both siblings: it would only catch a throw in the
   root layout and would have to ship its own <html> and styles to be useful.

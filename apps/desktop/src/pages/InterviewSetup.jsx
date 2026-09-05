@@ -24,7 +24,7 @@ export default function InterviewSetup({ onComplete }) {
      keep-don't-delete rule, but if any of it is ever revived, the consent
      checkbox, the `next()` guard on step 1 and the summary row must not come
      with it. The reasoning is in services/systemPrompt.js and in
-     apps/web/components/dashboard/interview/ResumePanel.jsx. */
+     apps/dashboard/components/dashboard/interview/ResumePanel.jsx. */
   // const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'' })
   const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'', resumeConsent:false })
   const [resumeFileName,setResumeFileName] = useState('')

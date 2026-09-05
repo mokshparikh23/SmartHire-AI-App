@@ -1,6 +1,6 @@
 /*
   ══════════════════════════════════════════════════════════════════════════════
-  The shared half of what used to be apps/web/app/globals.css.
+  The shared half of what used to be apps/dashboard/app/globals.css.
 
   SPLIT 2026-09-01. Marketing moved to its own deployment, and the stylesheet
   had to go somewhere. Three options, and only one of them is right:
@@ -10,7 +10,7 @@
                  repo could ship, and nothing would catch it.
     SHARE ALL  — each app would then carry ~90 lines of the other's dead
                  animation CSS. Tailwind v4 tree-shakes @theme variables and NOT
-                 @keyframes, which the marketing-motion comment in apps/web's
+                 @keyframes, which the marketing-motion comment in apps/dashboard's
                  globals.css already says in as many words.
     SPLIT      — tokens, base and typography here; each app keeps only the rules
                  its own components use.
@@ -18,8 +18,8 @@
   What each app adds on top of this file is listed in its own globals.css.
 
   ── WHO IMPORTS THIS ──────────────────────────────────────────────────────────
-      apps/web/app/globals.css
-      apps/site/app/globals.css
+      apps/dashboard/app/globals.css
+      apps/marketing/app/globals.css
   Both do `@import "tailwindcss"` FIRST and this file SECOND. That order matters:
   our @layer base and @layer components contributions have to join Tailwind's
   layers after Tailwind has declared them, which is what keeps them winning over
@@ -29,8 +29,8 @@
   The four --font-* tokens below read --font-inter-tight and --font-mono-plex,
   which next/font emits. THEY ARE A CONTRACT WITH TWO FILES:
 
-      apps/web/app/layout.js
-      apps/site/app/layout.js
+      apps/dashboard/app/layout.js
+      apps/marketing/app/layout.js
 
   Both must declare exactly those two variable names, and NEITHER may reuse a
   name defined here. next/font writes its variable from an UNLAYERED class on
@@ -111,7 +111,7 @@
     — --font-inter-tight and --font-mono-plex as of 2026-08-30, when Inter and
     Instrument Serif were dropped. See the note there.
 
-    SPLIT 2026-09-01: "layout.js" is now TWO files, apps/web's and apps/site's,
+    SPLIT 2026-09-01: "layout.js" is now TWO files, apps/dashboard's and apps/marketing's,
     and the rule binds both. See the font contract at the top of this file.
   */
   /*
@@ -152,12 +152,12 @@
 
   `@theme static` rather than plain `@theme`: Tailwind v4 tree-shakes theme vars
   that are only referenced from hand-written CSS, and every one of these is
-  consumed by the ::view-transition rules in apps/web/app/globals.css rather
+  consumed by the ::view-transition rules in apps/dashboard/app/globals.css rather
   than by a utility class.
 
   SPLIT 2026-09-01: `static` matters MORE now, not less. Those consuming rules
   used to sit at the bottom of the same file; they are in another package's
-  consumer today, and apps/site imports these tokens and uses none of them. A
+  consumer today, and apps/marketing imports these tokens and uses none of them. A
   plain @theme would therefore drop all five from BOTH builds. Do not "tidy" the
   keyword away because nothing in this file appears to use them — that is the
   symptom the keyword exists to prevent.
@@ -195,7 +195,7 @@
        underneath it and the section heading is the first thing you cannot read.
 
        SPLIT 2026-09-01: kept shared even though it was written for the marketing
-       header. apps/site still has in-page anchors (#desi, #platforms, #limits),
+       header. apps/marketing still has in-page anchors (#desi, #platforms, #limits),
        and on the dashboard — which has none — it is inert rather than wrong. */
     scroll-padding-top: 5rem;
   }
@@ -244,7 +244,7 @@
     It is verifiable in this very tree, because the repo has both versions
     installed: node_modules/tailwindcss (3.4, hoisted for the desktop app) still
     carries the rule under the comment "Set the default cursor for buttons";
-    apps/web/node_modules/tailwindcss (4.3, what these two apps actually build
+    apps/dashboard/node_modules/tailwindcss (4.3, what these two apps actually build
     with) has no cursor rule for buttons at all.
 
     Without it the UA default applies — `cursor: default`, the plain arrow. So
@@ -291,7 +291,7 @@
     for nothing.
 
     SPLIT 2026-09-01: they stay in ONE rule, in this shared file, even though
-    `.hl` now has no call sites in apps/web and `.display` few in apps/site.
+    `.hl` now has no call sites in apps/dashboard and `.display` few in apps/marketing.
     Splitting them across the two stylesheets to save each app one unused
     selector would recreate exactly the copy-waiting-to-drift the paragraph
     above refuses.
@@ -360,8 +360,8 @@
   in @layer base above, and the spinner — which lives in this package, so its
   exception has to as well.
 
-  apps/web adds:  the ::view-transition-* overrides (PageTransition is its own).
-  apps/site adds: the .mark-strip carve-out (the platforms marquee is its own).
+  apps/dashboard adds:  the ::view-transition-* overrides (PageTransition is its own).
+  apps/marketing adds: the .mark-strip carve-out (the platforms marquee is its own).
 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

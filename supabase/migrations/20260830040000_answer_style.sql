@@ -6,7 +6,7 @@
 -- English, full sentences, the register of a cover letter. That is the right
 -- default and it stays the default. It is also, for a large part of who this
 -- product is actually for, the wrong voice to be handed mid-interview — India is
--- the reference market (see apps/web/lib/pricing.js, where INR is the currency
+-- the reference market (see apps/dashboard/lib/pricing.js, where INR is the currency
 -- every price was set in), the conversation in the room is plain Indian English,
 -- and a follow-up the interviewer has to rewrite in their head before they can
 -- say it out loud is a follow-up that arrives too late to use.

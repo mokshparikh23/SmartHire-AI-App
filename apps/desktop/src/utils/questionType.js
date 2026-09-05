@@ -25,7 +25,7 @@
    belongs on the fast model; "use a hash map to find the pair" is a problem.
 
    Hinglish is in here because it is in the room. TRANSCRIBE_PROMPT in
-   apps/web/lib/ai.js says so outright — "English, Hindi, Gujarati or a mix, with
+   apps/dashboard/lib/ai.js says so outright — "English, Hindi, Gujarati or a mix, with
    English technical terms" — so an interviewer saying "iska code likho" is an
    ordinary event and a list that only reads English would miss it. */
 const CODING = [

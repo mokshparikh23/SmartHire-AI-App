@@ -3,16 +3,16 @@
 import { useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Icon from 'smarthire-ui/Icon'
+import Icon from '@smarthire/ui/Icon'
 
 /**
  * ADMIN SPLIT 2026-09-01 ─ a copy of
- * apps/web/components/dashboard/SignOutButton.jsx, and it is NOT a duplication
+ * apps/dashboard/components/dashboard/SignOutButton.jsx, and it is NOT a duplication
  * oversight.
  *
  * THE IMPORT ON LINE 5 IS THE ENTIRE REASON. This must resolve to
  * apps/admin/lib/supabase.js — the client carrying
- * `cookieOptions: { name: 'shai-admin-auth' }`. Point it at apps/web's and
+ * `cookieOptions: { name: 'shai-admin-auth' }`. Point it at apps/dashboard's and
  * signOut() clears the wrong cookie: in development, where the two apps share a
  * jar because cookies ignore ports, pressing Sign out here would end the
  * DASHBOARD session and leave the admin session live. Silently, and in the
@@ -23,7 +23,7 @@ import Icon from 'smarthire-ui/Icon'
  * are editing one of these, check the other.
  *
  * The rest is carried over unchanged, including the two things that were fixed
- * on the apps/web copy: replace() rather than push()+refresh() (which is two
+ * on the apps/dashboard copy: replace() rather than push()+refresh() (which is two
  * full RSC fetches, since refresh() invalidates what push() just fetched, and it
  * also keeps the signed-out page out of the back history), and the prefetch,
  * because nothing else on this origin links to /login so there is otherwise no

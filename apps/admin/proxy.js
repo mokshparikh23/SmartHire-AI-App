@@ -1,10 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import { safeNext } from 'smarthire-data/next-url'
+import { safeNext } from '@smarthire/data/next-url'
 import { AUTH_COOKIE, AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 
 /*
-  ADMIN SPLIT 2026-09-01 ─ adapted from apps/web/proxy.js, with the polarity
+  ADMIN SPLIT 2026-09-01 ─ adapted from apps/dashboard/proxy.js, with the polarity
   inverted. Read that file first; its long header explains why this is an
   OPTIMISTIC gate that decides redirects and nothing else, and why the
   authoritative check is requireAdminPage() inside every page.
@@ -22,14 +22,14 @@ import { AUTH_COOKIE, AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
        bypasses RLS — keeping unauthenticated traffic from ever entering a render
        is worth the file on its own.
 
-    2. Token rotation. apps/web/proxy.js's own comment says the `supabaseResponse`
+    2. Token rotation. apps/dashboard/proxy.js's own comment says the `supabaseResponse`
        write "is the only reason this file still builds a client". Admin sessions
        are long and idle, so the refresh that lands here matters MORE than it does
        next door, not less.
 */
 
 /*
-  AN ALLOWLIST, NOT apps/web's PROTECTED PREFIX LIST, AND THAT IS THE WHOLE
+  AN ALLOWLIST, NOT apps/dashboard's PROTECTED PREFIX LIST, AND THAT IS THE WHOLE
   DIFFERENCE.
 
   Over there, `PROTECTED = ['/dashboard', '/admin']` means a route added tomorrow
@@ -44,7 +44,7 @@ import { AUTH_COOKIE, AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 const PUBLIC = ['/login']
 
 /*
-  Deliberately NOT porting apps/web's `session && AUTH_PAGES.includes(path)`
+  Deliberately NOT porting apps/dashboard's `session && AUTH_PAGES.includes(path)`
   bounce, which sends an already-signed-in visitor away from /login.
 
   This proxy knows only that a SESSION exists, never that it is an ADMIN session

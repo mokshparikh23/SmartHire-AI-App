@@ -2,17 +2,17 @@
 #
 # It described ONE site, and there are two now:
 #
-#     apps/site  ->  <domain>          the marketing site
-#     apps/web   ->  app.<domain>      auth, dashboard, admin, /api
+#     apps/marketing  ->  <domain>          the marketing site
+#     apps/dashboard   ->  app.<domain>      auth, dashboard, admin, /api
 #
 # A repo-root netlify.toml cannot describe both. Worse, netlify.toml OVERRIDES
 # the per-site settings in Netlify's dashboard — so a second Netlify site
-# created from this repo would silently run `npm run build:web` and publish
-# `apps/web/.next`, whatever its own dashboard said. The failure is a marketing
+# created from this repo would silently run `npm run build:dashboard` and publish
+# `apps/dashboard/.next`, whatever its own dashboard said. The failure is a marketing
 # domain quietly serving the app.
 #
 # And the one per-site escape hatch is exactly what the original note below
-# forbids: `base = "apps/web"` installs inside the workspace and breaks the
+# forbids: `base = "apps/dashboard"` installs inside the workspace and breaks the
 # shared root node_modules.
 #
 # Both apps deploy from Vercel — see "Deploying" in the README. If Netlify is
@@ -21,11 +21,11 @@
 # the place someone would look.
 #
 # # Build runs from the repo root so npm workspaces hoist correctly.
-# # Do not set `base = "apps/web"` — that installs inside the workspace and
+# # Do not set `base = "apps/dashboard"` — that installs inside the workspace and
 # # breaks the shared root node_modules.
 # [build]
-#   command = "npm run build:web"
-#   publish = "apps/web/.next"
+#   command = "npm run build:dashboard"
+#   publish = "apps/dashboard/.next"
 #
 # [[plugins]]
 #   package = "@netlify/plugin-nextjs"

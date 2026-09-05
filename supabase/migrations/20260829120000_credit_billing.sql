@@ -10,7 +10,7 @@
 --
 -- MINUTES are canonical everywhere: the database, the API and the desktop app
 -- all deal in whole integers. "Credits" is a presentation unit and lives only in
--- apps/web/lib/credits.js. That is what keeps rounding out of the metering path
+-- apps/dashboard/lib/credits.js. That is what keeps rounding out of the metering path
 -- — someone who buys 3 credits owns exactly 180 minutes.
 --
 -- Both are sold on the public site. An admin can also grant either by hand, for

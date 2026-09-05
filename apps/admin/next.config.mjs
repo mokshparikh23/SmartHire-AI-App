@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* Same reasoning as apps/web: the indicator renders bottom-left, on top of the
+  /* Same reasoning as apps/dashboard: the indicator renders bottom-left, on top of the
      sidebar's account block. Compile and runtime errors still surface. */
   devIndicators: false,
 
   experimental: {
-    /* Matching apps/web, so the two admin-adjacent apps agree. */
+    /* Matching apps/dashboard, so the two admin-adjacent apps agree. */
     optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
 
     /* ADMIN SPLIT 2026-09-01 ─ REQUIRED BY app/forbidden.jsx. DO NOT DROP IT.
@@ -36,20 +36,20 @@ const nextConfig = {
 
      Nothing navigates, so it reads as a dead button — and an admin password is
      left in the URL bar, the history and this server's log. That is how it was
-     found on apps/web. See the note in apps/web/next.config.mjs.
+     found on apps/dashboard. See the note in apps/dashboard/next.config.mjs.
 
      This app has exactly one form and it is the admin sign-in, so the backstop
      matters more here than there. */
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
 
   /* The shared workspace packages ship RAW source and are not pre-bundled — see
-     the longer note in apps/web/next.config.mjs for why there is no build step
+     the longer note in apps/dashboard/next.config.mjs for why there is no build step
      and why pre-bundling is the standard way to lose a 'use client' directive.
 
-     smarthire-data joins this list when it exists (Phase 1 of the split).
+     @smarthire/data joins this list when it exists (Phase 1 of the split).
      Nothing here may also appear in serverExternalPackages; Next throws at build
      start if a package is in both. */
-  transpilePackages: ['smarthire-ui', 'smarthire-pricing'],
+  transpilePackages: ['@smarthire/ui', '@smarthire/pricing'],
 
   /* ADMIN SPLIT 2026-09-01 ─ the bare hostname is not a page.
 
@@ -82,7 +82,7 @@ const nextConfig = {
            <head> — it would miss every /api route. */
         { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
 
-        /* ADMIN SPLIT 2026-09-01 ─ three headers apps/web does not have, and the
+        /* ADMIN SPLIT 2026-09-01 ─ three headers apps/dashboard does not have, and the
            asymmetry is deliberate.
 
            Clickjacking "Remove admin" or "Comp a yearly subscription" is worth

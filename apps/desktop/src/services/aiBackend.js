@@ -93,7 +93,7 @@ function messagesFor(transcript) {
 
 /* PIPELINE 2026-08-31 ─ the app had no deadline of its own ────────────────────
    There was no timeout anywhere on this path, and the server's does not cover
-   what breaks. apps/web/lib/ai.js's ATTEMPT_TIMEOUT_MS aborts the upstream
+   what breaks. apps/dashboard/lib/ai.js's ATTEMPT_TIMEOUT_MS aborts the upstream
    fetch — but with `stream: true` that fetch RESOLVES the moment headers
    arrive, and its finally clears the timer. The streaming BODY then has no
    deadline in the entire stack, client or server.
@@ -109,7 +109,7 @@ function messagesFor(transcript) {
    through an answer are different failures with different budgets. */
 
 /* Server worst case to HEADERS is 12s x 2 attempts + one <=1.2s backoff, about
-   25.2s (RETRY_ATTEMPTS / RETRY_CAP_MS in apps/web/lib/ai.js), and the
+   25.2s (RETRY_ATTEMPTS / RETRY_CAP_MS in apps/dashboard/lib/ai.js), and the
    synchronous requireSession -> session_heartbeat RPC runs before the provider
    is even called. This MUST sit above that, or we kill answers the server was
    legitimately about to deliver. Past 30s nobody mid-interview reads it anyway. */
@@ -204,14 +204,14 @@ async function pumpStream(response, onChunk, signal, clock) {
 
    HONEST LIMIT: this reliably stops OUR consumption and closes OUR connection.
    Whether OpenAI stops generating is unverified — /api/ai/chat passes
-   upstream.body straight through, but fetchWithRetry in apps/web/lib/ai.js
+   upstream.body straight through, but fetchWithRetry in apps/dashboard/lib/ai.js
    overwrites init.signal with its own timeout controller, so request.signal
    cannot currently be threaded to the provider. That is a server change and is
    deliberately not in this commit. */
 // export async function askAIStream(transcript, onChunk, onDone, model) {
 // export async function askAIStream(transcript, onChunk, onDone, model, sessionId) {
 // INTENT-ROUTING 2026-09-01: `intent` — 'general' | 'coding' | 'screen'. The
-// server decides the model from it; see modelForIntent() in apps/web/lib/ai.js
+// server decides the model from it; see modelForIntent() in apps/dashboard/lib/ai.js
 // for why that decision cannot live on this side.
 // export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
 export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal, intent) {

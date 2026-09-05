@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from 'smarthire-ui'
+import { Button } from '@smarthire/ui'
 
 export default function RevokeLicenseButton({ licenseId }) {
   const router = useRouter()

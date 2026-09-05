@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createClient } from 'smarthire-data/supabase-server'
+import { createClient } from '@smarthire/data/supabase-server'
 import { AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 
 /**
  * Ends a session whose account no longer exists, or whose refresh token was
  * revoked. Reached from requireUser() in lib/auth.js.
  *
- * ADMIN SPLIT 2026-09-01 ─ a copy of apps/web/app/auth/device-signout/route.js,
+ * ADMIN SPLIT 2026-09-01 ─ a copy of apps/dashboard/app/auth/device-signout/route.js,
  * minus its device-reactivation half (this origin has no devices table) and plus
  * the cookie name. It is copied rather than shared for the same reason
  * lib/auth.js is: both the source route and the destination are this
@@ -29,7 +29,7 @@ import { AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
  * by the time /login renders the proxy sees nothing and lets it through.
  *
  * THE cookieName ARGUMENT IS THE WHOLE ROUTE. Without it this clears the
- * @supabase/ssr default — apps/web's cookie in development, where the jar is
+ * @supabase/ssr default — apps/dashboard's cookie in development, where the jar is
  * shared — and leaves this origin's session exactly where it was, which is the
  * loop above with an extra hop.
  */

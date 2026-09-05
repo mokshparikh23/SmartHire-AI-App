@@ -32,7 +32,7 @@ const INSET = 100
 const BOX = SIZE - INSET * 2
 const RADIUS = 185
 
-// Verbatim from apps/web/components/ui/Icon.jsx — PATHS.mic, on its 24x24 grid.
+// Verbatim from apps/dashboard/components/ui/Icon.jsx — PATHS.mic, on its 24x24 grid.
 const MIC = `
   <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
   <path d="M19 10v1a7 7 0 0 1-14 0v-1" />

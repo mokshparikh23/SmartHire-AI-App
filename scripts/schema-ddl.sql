@@ -4,7 +4,7 @@
 -- the Supabase SQL editor and you get the same result as replaying every
 -- migration in supabase/migrations/.
 --
--- DO NOT EDIT apps/web/supabase-schema.sql BY HAND — it is generated. Table
+-- DO NOT EDIT apps/dashboard/supabase-schema.sql BY HAND — it is generated. Table
 -- shapes live here; every function, policy and grant is copied verbatim out of
 -- supabase/migrations/20260829120000_credit_billing.sql by
 -- scripts/sync-schema.mjs, and every migration after that one is appended

@@ -1,9 +1,9 @@
 import Link from 'next/link'
-import { createAdminClient } from 'smarthire-data/supabase-server'
+import { createAdminClient } from '@smarthire/data/supabase-server'
 import { requireAdminPage } from '@/lib/auth'
-import Icon from 'smarthire-ui/Icon'
-import { Card, Badge, Stat, PageHeader, EmptyState } from 'smarthire-ui'
-import { formatBalance } from 'smarthire-data/credits'
+import Icon from '@smarthire/ui/Icon'
+import { Card, Badge, Stat, PageHeader, EmptyState } from '@smarthire/ui'
+import { formatBalance } from '@smarthire/data/credits'
 
 export const metadata = { title: 'Admin — Smart Hire AI' }
 

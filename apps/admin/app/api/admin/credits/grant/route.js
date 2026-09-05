@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
-import { grantMinutes, MAX_GRANT_MINUTES } from 'smarthire-data/metering'
-import { MINUTES_PER_CREDIT, creditsToMinutes } from 'smarthire-data/credits'
+import { grantMinutes, MAX_GRANT_MINUTES } from '@smarthire/data/metering'
+import { MINUTES_PER_CREDIT, creditsToMinutes } from '@smarthire/data/credits'
 import { fail } from '@/lib/http'
 
 /**

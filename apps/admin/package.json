@@ -1,10 +1,10 @@
 {
-  "name": "smarthire-admin",
+  "name": "@smarthire/admin",
   "version": "1.0.0",
   "private": true,
   "description": "The admin console. Its own Next app on its own origin (admin.<domain>) and its own Vercel project, so the surface that grants credits and comps subscriptions does not share a deployment, a build or a rollback with the app every customer uses.",
 
-  "_comment_port": "3003, and the three it is not are each ruled out for a different reason. NOT 3000: apps/web has it, and apps/desktop/.env points WEB_URL at http://127.0.0.1:3000, so anything else taking that port makes the desktop app silently talk to the wrong server. NOT 3001: another long-running project on this machine holds it, and the two do NOT cleanly collide - that one binds IPv4 and Next binds :: for IPv6, so it half-works and misleads. NOT 3002: apps/site. The 512MB cap matches the other two dev scripts; `npm run dev` is four processes now.",
+  "_comment_port": "3003, and the three it is not are each ruled out for a different reason. NOT 3000: apps/dashboard has it, and apps/desktop/.env points WEB_URL at http://127.0.0.1:3000, so anything else taking that port makes the desktop app silently talk to the wrong server. NOT 3001: another long-running project on this machine holds it, and the two do NOT cleanly collide - that one binds IPv4 and Next binds :: for IPv6, so it half-works and misleads. NOT 3002: apps/marketing. The 512MB cap matches the other two dev scripts; `npm run dev` is four processes now.",
 
   "_comment_deps": "WHAT IS ABSENT IS THE SECURITY ARGUMENT OF THE WHOLE SPLIT, so read this before adding anything. No stripe, no razorpay, no OpenAI or Gemini key, no Brandfetch, no unpdf: this deployment charges nobody and calls no model. It holds the Supabase keys and nothing else, which is what makes the SECOND copy of SUPABASE_SERVICE_ROLE_KEY (see .env.local.example) an acceptable trade rather than a straight widening. Every addition here is a decision, not a convenience.",
 
@@ -21,8 +21,8 @@
     "postcss": "^8.5.8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "smarthire-pricing": "*",
-    "smarthire-ui": "*"
+    "@smarthire/pricing": "*",
+    "@smarthire/ui": "*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",

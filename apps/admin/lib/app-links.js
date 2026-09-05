@@ -1,7 +1,7 @@
 /**
  * ADMIN SPLIT 2026-09-01 ─ links from the admin origin back to the app.
  *
- * The mirror of apps/site/lib/app-links.js, and its header is the long version
+ * The mirror of apps/marketing/lib/app-links.js, and its header is the long version
  * of the two rules that matter — read it. The short version:
  *
  *   1. NEVER next/link ACROSS AN ORIGIN. next/navigation's router cannot
@@ -18,7 +18,7 @@
  *      browser needs the value inlined; a runtime-only variable is how a
  *      prerendered page ships pointing at localhost with nothing erroring.
  *
- * ONE DELIBERATE DIFFERENCE FROM apps/site: no `|| 'http://localhost:3000'`
+ * ONE DELIBERATE DIFFERENCE FROM apps/marketing: no `|| 'http://localhost:3000'`
  * fallback.
  *
  * On the marketing site that fallback is right — dev has to work, and a site

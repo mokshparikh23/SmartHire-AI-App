@@ -3,14 +3,14 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Icon, { Spinner } from 'smarthire-ui/Icon'
-import { Button } from 'smarthire-ui'
+import Icon, { Spinner } from '@smarthire/ui/Icon'
+import { Button } from '@smarthire/ui'
 
 /*
-  ADMIN SPLIT 2026-09-01 ─ WRITTEN SMALL RATHER THAN COPIED FROM apps/web.
+  ADMIN SPLIT 2026-09-01 ─ WRITTEN SMALL RATHER THAN COPIED FROM apps/dashboard.
 
-  apps/web/components/auth/AuthForm.jsx is 500+ lines, and every one of its
-  extras is an apps/web concept that would be wrong here:
+  apps/dashboard/components/auth/AuthForm.jsx is 500+ lines, and every one of its
+  extras is an apps/dashboard concept that would be wrong here:
 
     mode="signup" + emailRedirectTo   There is no self-service admin signup, and
                                       there will not be. Shipping a signup path
@@ -32,7 +32,7 @@ import { Button } from 'smarthire-ui'
   NO GOOGLE OAUTH, AND THE REASON IS NOT LAZINESS. OAuth would need an
   app/auth/callback route here AND https://admin.<domain>/auth/callback plus
   every preview URL added to Supabase's Redirect URLs — manual production state
-  this split otherwise avoids entirely. Worse, the failure mode apps/web's
+  this split otherwise avoids entirely. Worse, the failure mode apps/dashboard's
   AuthForm already documents is nastier on this origin: on a Redirect-URL miss
   Supabase SILENTLY substitutes the project Site URL, so a mis-listed preview
   would complete a Google sign-in and land the admin on app.<domain> holding a
@@ -52,7 +52,7 @@ const FIELD_PADLESS =
 const FIELD = `${FIELD_PADLESS} px-3.5`
 const FIELD_WITH_TRAILING = `${FIELD_PADLESS} pl-3.5 pr-11`
 
-/* Duplicated from apps/web/components/auth/AuthForm.jsx. The px/pr split is not
+/* Duplicated from apps/dashboard/components/auth/AuthForm.jsx. The px/pr split is not
    stylistic: stacking `pr-11` onto a class carrying `px-3.5` does NOT reliably
    win, because shorthand and longhand of one property collide and Tailwind v4
    resolves that by stylesheet order, not by class-attribute order. */

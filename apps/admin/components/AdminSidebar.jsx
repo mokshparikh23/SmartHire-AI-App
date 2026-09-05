@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import Icon, { Logo } from 'smarthire-ui/Icon'
-import NavItem from 'smarthire-ui/NavItem'
+import Icon, { Logo } from '@smarthire/ui/Icon'
+import NavItem from '@smarthire/ui/NavItem'
 import SignOutButton from '@/components/SignOutButton'
 import { DASHBOARD } from '@/lib/app-links'
 
@@ -53,7 +53,7 @@ export default function AdminSidebar({ profile }) {
           plain <a>. next/navigation's router cannot navigate off-origin, so a
           next/link here would do nothing when clicked and would prefetch an
           origin it cannot render. The long version is in
-          apps/site/lib/app-links.js.
+          apps/marketing/lib/app-links.js.
 
           RENDERED ONLY WHEN THE ORIGIN IS CONFIGURED. NEXT_PUBLIC_APP_URL is not
           one of the variables this deployment requires — see .env.local.example,

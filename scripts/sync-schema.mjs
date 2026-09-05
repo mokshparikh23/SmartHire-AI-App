@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Regenerates apps/web/supabase-schema.sql from its sources.
+ * Regenerates apps/dashboard/supabase-schema.sql from its sources.
  *
  * That file is the complete, runnable schema for a fresh database — paste it
  * into the Supabase SQL editor and you get what replaying every migration
@@ -40,7 +40,7 @@ import { basename, dirname, join } from 'node:path'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MIGRATION = join(root, 'supabase/migrations/20260829120000_credit_billing.sql')
 const DDL       = join(root, 'scripts/schema-ddl.sql')
-const TARGET    = join(root, 'apps/web/supabase-schema.sql')
+const TARGET    = join(root, 'apps/dashboard/supabase-schema.sql')
 
 // Everything from this marker on is logic rather than table shape, and is
 // identical in both files.
@@ -81,11 +81,11 @@ if (process.argv.includes('--check')) {
   let actual = ''
   try { actual = readFileSync(TARGET, 'utf8') } catch { /* missing counts as stale */ }
   if (actual !== expected) {
-    console.error('apps/web/supabase-schema.sql is out of date.')
+    console.error('apps/dashboard/supabase-schema.sql is out of date.')
     console.error('Run: node scripts/sync-schema.mjs')
     process.exit(1)
   }
-  console.log('apps/web/supabase-schema.sql is in sync.')
+  console.log('apps/dashboard/supabase-schema.sql is in sync.')
   process.exit(0)
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
-import { setRole } from 'smarthire-data/metering'
+import { setRole } from '@smarthire/data/metering'
 import { fail } from '@/lib/http'
 
 /*
