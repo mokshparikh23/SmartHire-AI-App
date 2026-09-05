@@ -1,4 +1,4 @@
-import CopyButton from '@/components/dashboard/CopyButton'
+import CopyButton from 'smarthire-ui/CopyButton'
 import Icon from 'smarthire-ui/Icon'
 import { Card, Badge } from 'smarthire-ui'
 

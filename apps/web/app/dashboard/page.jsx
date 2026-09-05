@@ -5,7 +5,7 @@ import { sweepStaleSessions } from 'smarthire-data/metering'
 // import { getLatestRelease, formatSize } from '@/lib/releases'
 // SIZE-LABEL 2026-09-01: formatSize is no longer called here — see DownloadButton.
 import { getLatestRelease } from '@/lib/releases'
-import CopyButton from '@/components/dashboard/CopyButton'
+import CopyButton from 'smarthire-ui/CopyButton'
 import Icon from 'smarthire-ui/Icon'
 import { Card, Badge, Button, Stat, PageHeader } from 'smarthire-ui'
 import PageTransition from '@/components/ui/PageTransition'

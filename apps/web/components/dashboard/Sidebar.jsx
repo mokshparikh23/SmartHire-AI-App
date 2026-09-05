@@ -3,7 +3,7 @@ import { getProfile, getUser } from '@/lib/auth'
 import { getEntitlement } from '@/lib/entitlement'
 import Icon, { Logo } from 'smarthire-ui/Icon'
 import { MARKETING_HOME } from '@/lib/site-links'
-import NavItem from './NavItem'
+import NavItem from 'smarthire-ui/NavItem'
 import SignOutButton from './SignOutButton'
 
 /*

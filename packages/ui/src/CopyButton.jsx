@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Icon from 'smarthire-ui/Icon'
+import Icon from './Icon'
 
 /**
  * Copy-to-clipboard button.
