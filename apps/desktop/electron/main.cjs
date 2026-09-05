@@ -3,6 +3,11 @@ const {
   // REDESIGN 2026-08-29: desktopCapturer + shell + systemPreferences for the
   // toolbar's Screenshot button and its macOS Screen Recording permission path.
   desktopCapturer, shell, systemPreferences,
+  // DOCK 2026-09-06: `dialog` for the ⌘⇧Q confirmation, `Menu` because hiding
+  // the Dock icon makes this an ACCESSORY app, which has no menu bar — and with
+  // no menu there is no Edit menu, so ⌘C/⌘V/⌘X/⌘A stop working in every text
+  // field in the app. See installEditMenu() below.
+  dialog, Menu,
 } = require('electron')
 const path = require('path')
 const Store = require('electron-store')
@@ -65,6 +70,35 @@ const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173
 if (isDev) console.log(`[main] license backend: ${WEB_URL}`)
 
 let mainWindow = null
+
+/* DOCK 2026-09-06 ─ the app is hidden from the Dock and the taskbar ───────────
+   The WINDOW was already excluded from screen capture (setContentProtection, in
+   createMainWindow below). What still gave the app away in a screen share was
+   the app's own presence: a Dock icon on macOS, a taskbar button on Windows,
+   and an entry in ⌘Tab and Mission Control.
+
+   Hiding the Dock icon on macOS means NSApplicationActivationPolicyAccessory,
+   and that takes the MENU BAR with it. Two things follow, and both are handled
+   below rather than left to chance:
+
+     - ⌘Q and the Dock icon's right-click → Quit were this app's ONLY two quit
+       paths. Both are gone. confirmQuit() and ⌘⇧Q replace them.
+     - No menu means no Edit menu, so ⌘C/⌘V/⌘X/⌘A stop working in every text
+       field. installEditMenu() puts the roles back without showing a menu bar.
+
+   The preference lives in electron-store, NOT in the renderer's zustand store,
+   because main has to know it BEFORE any renderer exists. Read from
+   localStorage it would arrive a second or two after launch, so the Dock icon
+   would appear and then vanish on every start — exactly the flash this exists
+   to prevent. Default is hidden. */
+const DOCK_KEY = 'showInDock'
+const dockVisible = () => store.get(DOCK_KEY) === true
+
+/* Nothing destroys the window except a confirmed quit — the close button and ⌘W
+   hide it instead. That is what stops a stray ⌘W leaving a running process with
+   no window, no Dock icon and no menu bar: a ghost reachable only from Activity
+   Monitor. `isQuitting` is how the close handler tells the two apart. */
+let isQuitting = false
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -175,9 +209,29 @@ async function createMainWindow() {
     // this on hangs a grey halo around empty space during a session.
     hasShadow: false,
 
-    alwaysOnTop: true, skipTaskbar: false,
+    // DOCK 2026-09-06: skipTaskbar now follows the Dock preference. It is the
+    // Windows half of the same setting — there is no Dock there, the taskbar
+    // button is the thing that shows up in a screen share.
+    // alwaysOnTop: true, skipTaskbar: false,
+    alwaysOnTop: true, skipTaskbar: !dockVisible(),
+    /* DOCK 2026-09-06: minimizable:false is the less obvious half of the same
+       problem as close-means-hide. Minimising on macOS sends the window INTO the
+       Dock — and there is no Dock tile any more, so the yellow light was a
+       one-way door in exactly the way the red one was. Greying it out is the
+       honest rendering of "this cannot be done"; showMainWindow() still calls
+       restore() for any path that minimises us some other way. */
+    minimizable: false,
     resizable: true,
-    roundedCorners: true, visibleOnAllWorkspaces: true,
+    /* DOCK 2026-09-06: visibleOnAllWorkspaces removed from the constructor — it
+       was never doing anything. It is a BrowserWindow *property*, not a
+       constructor option: electron.d.ts declares it only on `class BaseWindow`
+       (:3781) and `class BrowserWindow` (:6593), never in the options
+       interface, and NativeWindow::InitFromOptions does not read it. The
+       explicit setVisibleOnAllWorkspaces() call further down is what has always
+       been doing this work, and it is the only spelling that can pass
+       skipTransformProcessType.
+       roundedCorners: true, visibleOnAllWorkspaces: true, */
+    roundedCorners: true,
     // Without this, the first click back onto the app after clicking through to
     // another window is eaten just to re-activate us.
     acceptFirstMouse: true,
@@ -229,7 +283,20 @@ async function createMainWindow() {
   // exist, which threw before the renderer ever loaded.
   mainWindow.setContentProtection(true)
   mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
-  if (isMac) mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  /* DOCK 2026-09-06 ─ skipTransformProcessType is what keeps the Dock icon gone.
+     Electron's own docs for this option: "Calling setVisibleOnAllWorkspaces will
+     by default transform the process type between UIElementApplication and
+     ForegroundApplication to ensure the correct behavior. However, this will
+     hide the window and dock for a short time every time it is called."
+
+     ForegroundApplication is the one WITH a Dock icon. Without this flag the
+     line below silently undoes applyDockVisibility() a moment after it runs and
+     the icon is back, with nothing in the code pointing at why.
+     if (isMac) mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }) */
+  if (isMac) mainWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: !dockVisible(),
+  })
 
   // A renderer reload (Vite HMR, a crash) must never leave the window stuck in
   // panel geometry with the session gone.
@@ -259,9 +326,141 @@ async function createMainWindow() {
      heartbeat and left the row open with the app still alive. The next Start
      then superseded it — "Started elsewhere", on one machine.
 
-     'close' and not 'closed': the webContents must still exist to settle. */
-  mainWindow.on('close', () => endSession('client_stop'))
+     'close' and not 'closed': the webContents must still exist to settle.
+
+     DOCK 2026-09-06: ⌘W and the red traffic light now HIDE the window rather
+     than destroy it. With no Dock icon a destroyed window leaves a process
+     nothing can reach — and window-all-closed still does not quit on darwin —
+     so the old line turned every stray ⌘W into exactly the ghost this change
+     had to avoid. It also stops a stray ⌘W ending a live session, which is
+     right now that hidden is a first-class state (backgroundThrottling:false
+     above is what keeps a hidden session actually working).
+
+     The settle is not lost: a real quit sets isQuitting, and will-quit calls
+     endSession as well.
+     mainWindow.on('close', () => endSession('client_stop')) */
+  mainWindow.on('close', (e) => {
+    if (isQuitting) { endSession('client_stop'); return }
+    e.preventDefault()
+    mainWindow.hide()
+  })
   mainWindow.on('closed', () => { mainWindow = null })
+}
+
+/* DOCK 2026-09-06 ─ apply the Dock/taskbar preference to the running app ──────
+   macOS has two spellings of this and they are NOT interchangeable here.
+   app.dock.hide() carries a documented dead zone — "Calling dock.hide() within
+   one second of a previous call will have no effect" — which the ⋮ menu toggle
+   hits the moment anyone flips it twice. setActivationPolicy() has no such
+   note, so it drives the change; dock.show() only tops it up on the way back,
+   because a 'regular' policy on its own does not always redraw the icon at once. */
+function applyDockVisibility() {
+  const visible = dockVisible()
+
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy(visible ? 'regular' : 'accessory')
+    if (visible) app.dock?.show()
+    else app.dock?.hide()
+  }
+
+  // Windows has no Dock — there the taskbar button is the same leak.
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setSkipTaskbar(!visible)
+  return visible
+}
+
+/* An accessory app has no menu bar, and on macOS Electron's DEFAULT MENU is
+   what makes ⌘C/⌘V/⌘X/⌘A work inside a text field — they are Edit-menu key
+   equivalents, not something Chromium handles by itself. Losing them would
+   break pasting a job description into setup and copying an answer out of the
+   panel, which is most of what anyone does with this app. A menu still
+   dispatches its key equivalents when the bar is not drawn, so this restores
+   the shortcuts without putting anything back on screen. */
+function installEditMenu() {
+  if (process.platform !== 'darwin') return
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    /* NOT `role: 'appMenu'`. That submenu's Quit is `role: 'quit'`, which calls
+       app.quit() directly and walks straight past confirmQuit() — an accidental
+       ⌘Q mid-interview, with no Dock icon to relaunch from, is precisely what
+       the confirmation exists to prevent. It also carries `role: 'hide'` (⌘H),
+       and DockHide()'s setCanHide:NO does not protect a window that did not
+       exist when the dock was hidden, so ⌘H would really hide the overlay.
+       { role: 'appMenu' }, */
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        // A second way out, and it asks first like every other one.
+        { label: `Quit ${app.name}`, accelerator: 'Command+Q', click: () => { confirmQuit() } },
+      ],
+    },
+    // The reason this function exists at all: cut/copy/paste/selectAll/undo.
+    { role: 'editMenu' },
+    /* No fileMenu — its only mac entry is Close ⌘W. No windowMenu — ⌘M would
+       minimise into a Dock that is not there. viewMenu only in dev, where ⌘R is
+       how you recover from a wedged Vite HMR; ⌘R and ⌘⌥I have no business in a
+       packaged build of this app. */
+    ...(isDev ? [{ role: 'viewMenu' }] : []),
+  ]))
+}
+
+/* DOCK 2026-09-06 ─ one way back, spelled once ────────────────────────────────
+   ⌘⇧H, `activate` and `second-instance` all mean the same thing: put this window
+   in front of the user. They used to be spelled three different ways, or not at
+   all.
+
+   .show() alone is NOT enough for an accessory app. With no Dock tile macOS has
+   no reason to bring us forward, so the window comes back BEHIND the
+   interviewer's video — which reads as "the shortcut is broken", the exact
+   failure this change cannot afford. app.focus({ steal: true }) is
+   [NSApp activateIgnoringOtherApps:YES] and is the only thing that raises an app
+   with no tile. It is inert on Windows, where show() + focus() already raise.
+
+   isDestroyed() and not just null: the 'closed' handler nulls mainWindow, but a
+   renderer crash can leave a destroyed BrowserWindow reachable for a tick, and
+   every method on it throws. */
+async function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    await createMainWindow()
+    applyDockVisibility()
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  if (!mainWindow.isVisible()) mainWindow.show()
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  mainWindow.focus()
+}
+
+/* DOCK 2026-09-06: the only thing that quits this app. ⌘⇧Q and the Quit rows in
+   both ⋮ menus all route through here, so the confirmation exists in one place.
+   Everything else — ⌘W, the red traffic light, ⌘⇧H — only hides. */
+async function confirmQuit() {
+  if (isQuitting) return
+
+  // A sheet on a hidden window is invisible, and an accessory app does not come
+  // to the front on its own. Do both before asking, or ⌘⇧Q looks like a hang.
+  await showMainWindow()
+  app.focus({ steal: true })
+
+  const opts = {
+    type: 'question',
+    buttons: ['Cancel', 'Quit'],
+    defaultId: 0,
+    cancelId: 0,
+    message: 'Quit Smart Hire AI?',
+    detail: 'Any running session will be ended.',
+  }
+  const { response } = (mainWindow && !mainWindow.isDestroyed())
+    ? await dialog.showMessageBox(mainWindow, opts)
+    : await dialog.showMessageBox(opts)
+
+  if (response !== 1) return
+
+  isQuitting = true
+  app.quit()
 }
 
 /** Panel home: horizontally centred, high enough to clear the speaker's face. */
@@ -324,7 +523,58 @@ function exitSessionMode() {
   savedBounds = null
 }
 
+/* DOCK 2026-09-06 ─ the lock, and why the loser must not run will-quit ────────
+   With no Dock tile and no menu bar there is no "click the running app", so
+   relaunching the bundle IS the way back — and that only works if a second
+   launch hands off to the first instead of opening a second copy.
+
+   PLATFORM NOTE, because it decides which half matters where. On macOS,
+   double-clicking an already-running .app does NOT start a second process:
+   LaunchServices re-activates the existing one and Electron emits `activate`.
+   So 'second-instance' below is what covers WINDOWS, and the `activate` repair
+   further down is what covers macOS. Both call showMainWindow(); neither is
+   sufficient on its own.
+
+   THE MONEY HAZARD, AND WHY THIS SPELLING AVOIDS IT. The obvious exit for the
+   loser is app.quit() — which is what Electron's own docs example uses. That
+   emits will-quit, and will-quit calls endSession('client_stop'), in a SECOND
+   process, while the FIRST is running a paid interview. Today it cannot post
+   (liveSessionId and beatTimer are module-level and null in the loser, so
+   endSession returns at its first line) but that is structural luck:
+   electron-store is shared on disk, and moving liveSessionId into it — a
+   plausible "survive a crash" change — would have the loser settle the WINNER's
+   session. app.exit(0) is documented to skip before-quit and will-quit
+   entirely, which makes the guarantee explicit rather than inherited. The loser
+   has nothing to clean up: it never reaches whenReady, so it registers no
+   shortcuts, opens no window and holds no session. */
+const isPrimaryInstance = app.requestSingleInstanceLock()
+if (!isPrimaryInstance) {
+  app.exit(0)
+} else {
+  // Electron guarantees this fires only after `ready`, so showMainWindow can
+  // assume the app is up. Function declarations are hoisted, so it is defined.
+  app.on('second-instance', () => { showMainWindow() })
+}
+
 app.whenReady().then(async () => {
+  /* DOCK 2026-09-06 ─ both of these run BEFORE the first window, on purpose ───
+     applyDockVisibility() sets the activation policy. createMainWindow() below
+     passes skipTransformProcessType: !dockVisible() to
+     setVisibleOnAllWorkspaces, and that flag is only honest once the process is
+     ALREADY UIElementApplication — Electron's SetVisibleOnAllWorkspaces calls
+     Browser::DockHide() itself when the flag is false, so skipping it without
+     having hidden the dock first would remove the one call that used to.
+
+     It cannot go before whenReady: AppKit sets the activation policy from
+     Info.plist during finishLaunching, so an earlier call gets overwritten.
+
+     LSUIElement in electron-builder.config.cjs makes this a no-op in PACKAGED
+     builds — no tile is ever drawn. In dev, `electron .` runs the stock
+     Electron.app whose Info.plist has no LSUIElement, so a generic "Electron"
+     icon shows for a few hundred ms and then vanishes here. Expected. */
+  applyDockVisibility()
+  installEditMenu()
+
   const { session, systemPreferences } = require('electron')
   if (process.platform === 'darwin') systemPreferences.askForMediaAccess('microphone')
 
@@ -415,14 +665,42 @@ app.whenReady().then(async () => {
   })
 
   await createMainWindow()
+  /* DOCK 2026-09-06: a SECOND pass, now that the window exists. Two things only
+     work with a window in hand. setSkipTaskbar is the Windows half. And
+     Browser::DockHide() walks WindowList setting `[window setCanHide:NO]` —
+     that list was empty when this ran at the top of whenReady, so without this
+     call ⌘H would genuinely hide the overlay, and with no Dock icon ⌘⇧H would
+     be the only way back. */
+  applyDockVisibility()
   registerShortcuts()
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
-  })
+  /* DOCK 2026-09-06: this only ever CREATED a window, and only when zero
+     existed. A HIDDEN window still counts in getAllWindows(), so ⌘⇧H followed by
+     any re-activation left this handler doing precisely nothing — the app was
+     running, the window existed, and the user could reach neither.
+
+     This is the load-bearing recovery path on macOS. Relaunching an
+     already-running .app does not start a second process, so 'second-instance'
+     never fires there; LaunchServices sends a reopen and Electron emits this.
+     // app.on('activate', () => {
+     //   if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+     // }) */
+  app.on('activate', () => { showMainWindow() })
 })
+
+/* DOCK 2026-09-06: EVERY quit, not only ours. A system logout, a restart,
+   app:quit and confirmQuit all reach app.quit() — and the window's 'close'
+   handler would preventDefault every one of them, which is how an app becomes
+   the thing that blocks a shutdown. Set once, before any window is asked to
+   close. */
+app.on('before-quit', () => { isQuitting = true })
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('will-quit', () => {
+  /* DOCK 2026-09-06: a losing second instance exits via app.exit(0) and should
+     never arrive here. This is the assertion that it stays that way — endSession
+     below reads module state that is null in that process, but it also reads
+     store.get('licenseKey') from a file BOTH processes share. */
+  if (!isPrimaryInstance) return
   globalShortcut.unregisterAll()
   // SESSION GATE 2026-08-29: best effort only, and deliberately not awaited —
   // session/stop/route.js says not to rely on this landing, because on macOS the
@@ -448,11 +726,33 @@ app.on('will-quit', () => {
   endSession('client_stop')
 })
 
+/* DOCK 2026-09-06 ─ what happens when a chord is already taken ────────────────
+   register() returns false when another application owns the accelerator, and
+   this function threw that answer away. Survivable while there was a Dock icon;
+   not any more. ⌘⇧H is the way back to a hidden window and ⌘⇧Q is the way out,
+   so a silent registration failure is how this app becomes unreachable.
+
+   ⌘⇧Q is the one to watch: it is macOS's OWN Log Out shortcut, so it is much
+   the likeliest of the three to be refused. The Quit rows in both ⋮ menus exist
+   precisely so that refusal is survivable rather than terminal. */
+const shortcutStatus = { toggle: false, quit: false, move: false }
+
 function registerShortcuts() {
-  globalShortcut.register('CommandOrControl+Shift+H', () => {
-    if (!mainWindow) return
-    mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
+  // globalShortcut.register('CommandOrControl+Shift+H', () => {
+  //   if (!mainWindow) return
+  //   mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
+  // })
+  shortcutStatus.toggle = globalShortcut.register('CommandOrControl+Shift+H', () => {
+    // showMainWindow and not .show(): an accessory app that shows without
+    // activating comes back BEHIND the video call, and that gets reported as
+    // "the shortcut is broken".
+    if (!mainWindow || mainWindow.isDestroyed()) { showMainWindow(); return }
+    mainWindow.isVisible() ? mainWindow.hide() : showMainWindow()
   })
+
+  // DOCK 2026-09-06: the replacement for the ⌘Q that went with the menu bar.
+  // It asks before it acts — see confirmQuit().
+  shortcutStatus.quit = globalShortcut.register('CommandOrControl+Shift+Q', () => { confirmQuit() })
   /* PLACEMENT 2026-09-01 ─ REVERTED. A six-zone picker popover hung off this
      accelerator during a session (ZONES/zoneBounds here, window:moveToZone,
      components/overlay/MovePicker.jsx). It did not work well enough to keep and
@@ -467,7 +767,17 @@ function registerShortcuts() {
      made a live layout bug worse.
 
      Back to the blind cycle this always was. */
-  globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
+  // globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
+  shortcutStatus.move = globalShortcut.register('CommandOrControl+Shift+M', () => moveToNextCorner())
+
+  // DOCK 2026-09-06: ⌘⇧M is a convenience and its failure is logged only. The
+  // other two are product-level conditions with no Dock icon to fall back on.
+  if (!shortcutStatus.toggle) {
+    console.warn('[main] Cmd+Shift+H is owned by another app — no global show/hide.')
+  }
+  if (!shortcutStatus.quit) {
+    console.warn('[main] Cmd+Shift+Q is owned by another app (macOS Log Out?) — quit from the ⋮ menu.')
+  }
 }
 
 ipcMain.handle('license:validate', async (_, licenseKey, opts) => {
@@ -547,6 +857,24 @@ ipcMain.handle('license:clear', () => {
 
 ipcMain.handle('app:getWebUrl',  () => WEB_URL)
 ipcMain.handle('app:getVersion', () => app.getVersion())
+
+/* DOCK 2026-09-06 ─ the Dock/taskbar toggle, and the only quit path left ──────
+   The preference is main's and not the renderer's — see the DOCK note at the
+   head of this file for why it cannot live in the zustand store. The renderer
+   reads it once on mount and writes it on change, so there is no second copy to
+   drift out of step. */
+ipcMain.handle('app:getDockVisible', () => dockVisible())
+ipcMain.handle('app:setDockVisible', (_, visible) => {
+  store.set(DOCK_KEY, !!visible)
+  return applyDockVisibility()
+})
+/* Deliberately the plainest thing in this file: a quit that needs the renderer
+   to be healthy is not a quit. confirmQuit() asks first, and it is the same
+   function ⌘⇧Q calls, so the confirmation exists in exactly one place. */
+ipcMain.handle('app:quit', () => { confirmQuit(); return true })
+// Lets the UI say so when ⌘⇧H or ⌘⇧Q could not be registered — with no Dock
+// icon, a chord that silently did not bind is how the app becomes unreachable.
+ipcMain.handle('app:shortcuts', () => ({ ...shortcutStatus }))
 ipcMain.handle('overlay:enterSession', () => { enterSessionMode(); return true })
 ipcMain.handle('overlay:exitSession',  () => { exitSessionMode();  return true })
 

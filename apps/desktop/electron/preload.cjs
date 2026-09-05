@@ -24,6 +24,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getVersion: ()           => ipcRenderer.invoke('app:getVersion'),
   platform:   process.platform,
 
+  /* DOCK 2026-09-06: hiding the Dock icon takes BOTH stock quits with it — an
+     accessory app has no tile to right-click, and no menu bar for ⌘Q to live
+     in. The ⋮ menus are the quit affordance now, so quitApp is the one bridge
+     whose absence strands a running process. It asks for confirmation on the
+     main side, so callers do not need their own. */
+  quitApp:           ()    => ipcRenderer.invoke('app:quit'),
+  getDockVisible:    ()    => ipcRenderer.invoke('app:getDockVisible'),
+  setDockVisible:    (v)   => ipcRenderer.invoke('app:setDockVisible', v),
+  // Whether the global chords actually bound. With no Dock icon, a ⌘⇧H that
+  // silently failed to register is how the window becomes unreachable.
+  getShortcutStatus: ()    => ipcRenderer.invoke('app:shortcuts'),
+
   // ── PDF Parsing ───────────────────────────────────────────────────────────
   parsePdf: (filePath)     => ipcRenderer.invoke('parse-pdf', filePath),
 

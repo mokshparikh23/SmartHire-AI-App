@@ -169,6 +169,12 @@ export const HOTKEYS = [
 
   { group: 'Window', combo: 'mod shift h', label: 'Hide and show the panel' },
   { group: 'Window', combo: 'mod shift m', label: 'Move to the next corner' },
+  /* DOCK 2026-09-06: listed here even though it is a globalShortcut owned by
+     main, not one of usePanelHotkeys' renderer bindings — this array is what
+     HotkeySheet renders, and with no Dock icon and no menu bar this chord is
+     one of only two ways out of the app. `destructive` is the same flag
+     'mod shift x' uses to mark itself in the sheet. */
+  { group: 'Window', combo: 'mod shift q', label: 'Quit the app (asks first)', destructive: true },
   { group: 'Window', combo: 'esc',         label: 'Back out of whatever is open', bare: true },
 
   { group: 'Session', combo: 'mod shift x', label: 'End the session (press twice)', destructive: true },

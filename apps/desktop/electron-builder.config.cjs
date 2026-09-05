@@ -92,7 +92,30 @@ module.exports = {
     */
     identity: null,
     extendInfo: {
-      NSMicrophoneUsageDescription: 'Smart Hire AI needs microphone access.',
+      /* DOCK 2026-09-06 ─ no Dock tile is ever drawn for this bundle ───────────
+       LaunchServices reads this BEFORE the process starts, which is the only
+       way to avoid a launch flash: applyDockVisibility() in main.cjs cannot run
+       until app.whenReady(), by which point macOS has already put the icon up.
+
+       Belt AND braces. This key kills the flash; the runtime call is the source
+       of truth and is what honours the showInDock preference, because
+       LSUIElement only sets the INITIAL activation policy — so
+       setActivationPolicy('regular') can still bring the icon back.
+
+       PACKAGED BUILDS ONLY. `npm run dev:electron` runs the stock Electron.app,
+       whose Info.plist has no LSUIElement, so dev always flashes a generic
+       "Electron" icon for a few hundred ms before main.cjs hides it. Not a bug
+       in this key.
+
+       Wanted side effects: the app also drops out of ⌘Tab, Mission Control and
+       the Force Quit window. And out of the menu bar — see installEditMenu() in
+       main.cjs, which puts the Edit-menu key equivalents (⌘C/⌘V/⌘X/⌘A) back
+       without drawing a menu bar.
+
+       scripts/afterPack.cjs ad-hoc signs AFTER electron-builder writes this
+       plist, so adding a key here cannot invalidate the signature. */
+    LSUIElement: true,
+    NSMicrophoneUsageDescription: 'Smart Hire AI needs microphone access.',
       /*
         Added 2026-08-30. main.cjs already calls desktopCapturer and deep-links
         into the Screen Recording pane, but the bundle declared no reason

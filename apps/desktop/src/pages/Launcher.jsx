@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { CHAT_MODELS } from '../services/aiRouter'
 import Icon from '../components/ui/Icon'
-import Kbd from '../components/overlay/Kbd'
+// DOCK 2026-09-06: comboLabel so the "no Dock icon" note names the right keys
+// on each platform (⌘⇧H on macOS, Ctrl+Shift+H on Windows) instead of lying on one.
+import Kbd, { comboLabel } from '../components/overlay/Kbd'
 // PREMIUM-UX 2026-08-31: so a server-side session kill can explain itself here,
 // after the panel that raised it is gone.
 import Notices from '../components/overlay/Notices'
@@ -417,6 +419,22 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
   const answerStyle       = useSettingsStore((s) => s.answerStyle)
   const setAnswerStyle    = useSettingsStore((s) => s.setAnswerStyle)
 
+  /* DOCK 2026-09-06 ─ the one setting that is NOT in settingsStore ────────────
+     Every other row here reads zustand, which persists to the renderer's
+     localStorage. This one cannot: the main process has to know it at launch,
+     before any renderer exists, or the Dock icon appears for a second on every
+     start and then vanishes — the exact flash the setting exists to prevent. It
+     lives in main's electron-store and is read over IPC into local state, not
+     mirrored into zustand, where it would be a second copy free to drift. */
+  const [showInDock, setShowInDock] = useState(false)
+  useEffect(() => {
+    let alive = true
+    window.electronAPI?.getDockVisible?.()
+      .then((v) => { if (alive) setShowInDock(!!v) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   // GEMINI-FALLBACK 2026-08-30: the list is the server's, not ours — which
   // provider is live depends on the key the server holds, so CHAT_MODELS here
   // would offer GPT names on a Gemini backend that resolveModel() then silently
@@ -557,6 +575,42 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
             />
           </div>
 
+          {/* DOCK 2026-09-06: next to Overlay opacity because both answer "what
+              can other people see", which is a different question from the three
+              rows above about what the answer says. Default is Hidden. */}
+          <div className="ia-menu-row" style={{ height: 'auto', padding: '8px 9px' }}>
+            <Icon name="monitor" size={13} />
+            <span style={{ flex: 1 }}>Show in Dock</span>
+            <select
+              value={showInDock ? 'yes' : 'no'}
+              onChange={(e) => {
+                const next = e.target.value === 'yes'
+                setShowInDock(next)
+                window.electronAPI?.setDockVisible?.(next)
+              }}
+              style={MENU_SELECT}
+            >
+              <option value="no"  style={MENU_OPTION}>Hidden</option>
+              <option value="yes" style={MENU_OPTION}>Visible</option>
+            </select>
+          </div>
+
+          {/* Same shape as the Desi Mode note above: says the one thing someone
+              could get wrong, where they would get it wrong. With no Dock icon
+              there is also no menu bar, so the two chords below are the app —
+              worth stating before someone hides it and looks for a way back. */}
+          {!showInDock && (
+            <div
+              className="ia-menu-row"
+              style={{ height: 'auto', padding: '0 9px 8px 31px', color: 'rgba(255,255,255,.38)' }}
+            >
+              <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.35 }}>
+                No Dock icon and no app-switcher entry. {comboLabel('mod shift h')} hides
+                and shows this window; {comboLabel('mod shift q')} quits.
+              </span>
+            </div>
+          )}
+
           <div className="ia-menu-sep" />
 
           <button onClick={() => { onOpenWeb('/dashboard/billing'); setOpen(false) }}>
@@ -564,6 +618,17 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
           </button>
           <button onClick={() => { setOpen(false); onLogout() }}>
             <Icon name="lock" size={13} /><span>Sign out</span>
+          </button>
+
+          {/* DOCK 2026-09-06: behind its own separator, last, because it is the
+              only irreversible row in this menu — and, with the Dock icon and
+              menu bar both gone, one of only two quit affordances left. The
+              confirmation lives in main's confirmQuit(), so there is no second
+              one here. */}
+          <div className="ia-menu-sep" />
+          <button onClick={() => { setOpen(false); window.electronAPI?.quitApp?.() }}>
+            <Icon name="power" size={13} /><span>Quit Smart Hire AI</span>
+            <Kbd combo="mod shift q" />
           </button>
         </div>
       )}

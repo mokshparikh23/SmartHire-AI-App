@@ -328,6 +328,19 @@ function OverflowMenu({ session, onHelp }) {
             <Icon name="keyboard" size={13} /><span>Keyboard shortcuts</span>
             <Kbd combo="?" />
           </button>
+
+          {/* DOCK 2026-09-06: the same row as the launcher's, here as well
+              because MainApp unmounts Launcher while a session runs — without
+              it there is no way to quit mid-interview now that the Dock icon
+              and the menu bar are gone. No arming pattern like the End pill:
+              confirmQuit() in main puts a real dialog up, and two
+              confirmations for one action is just noise. Quitting settles the
+              metered session through will-quit's endSession, same as End. */}
+          <div className="ia-menu-sep" />
+          <button onClick={() => { setOpen(false); window.electronAPI?.quitApp?.() }}>
+            <Icon name="power" size={13} /><span>Quit Smart Hire AI</span>
+            <Kbd combo="mod shift q" />
+          </button>
         </div>
       )}
     </span>

@@ -26,6 +26,10 @@ const PATHS = {
   reset:      <><path d="M3 12a9 9 0 1 0 2.6-6.36" /><path d="M3 4v5h5" /></>,
   eyeOff:     <><path d="M9.9 5.2A9.7 9.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3 4" /><path d="M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.8 9.8 0 0 0 4.5-1.1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /><path d="m3 3 18 18" /></>,
   stop:       <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />,
+  // DOCK 2026-09-06: the Quit row in both ⋮ menus. `close` was the near miss and
+  // it now reads as the wrong promise — after this change the red traffic light
+  // HIDES the window, and this is the one control that really ends the process.
+  power:      <><path d="M12 3v8.5" /><path d="M7.05 6.55a8 8 0 1 0 9.9 0" /></>,
   sparkle:    <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.3l-1.8-5.7L4.5 10.8 10.2 9z" />,
   bulb:       <><path d="M9.5 17.5h5" /><path d="M10 21h4" /><path d="M12 3a6 6 0 0 1 3.6 10.8c-.5.4-.8 1-.85 1.7h-5.5c-.05-.7-.35-1.3-.85-1.7A6 6 0 0 1 12 3z" /></>,
   file:       <><path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z" /><path d="M13.5 3v5.5H19" /></>,
