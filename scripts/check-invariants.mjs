@@ -23,6 +23,15 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/*
+  Imported by path, not as '@smarthire/data/public-key'. This script runs from
+  the repo root before anyone has necessarily installed anything, and the point
+  of it is to check a tree rather than a linked node_modules. packages/data
+  declares "type": "module", so a plain relative import of a pure, import-free
+  file is safe here — unlike the auth-cookie modules further down, which live in
+  apps that cannot declare it.
+*/
+import { isSecretKey } from '../packages/data/src/public-key.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => readFileSync(join(root, p), 'utf8')
@@ -300,6 +309,66 @@ check(
       .filter((f) => !f.endsWith('.example'))
     return tracked.length
       ? `these are committed and should not be: ${tracked.join(', ')}`
+      : null
+  },
+)
+
+check(
+  'no NEXT_PUBLIC_ variable holds a secret key',
+  'Next inlines every NEXT_PUBLIC_ value into the client bundle at build time. On 2026-09-06 the admin project was deployed with the sb_secret_ service-role key in NEXT_PUBLIC_SUPABASE_ANON_KEY, and it was served as plain JavaScript from a public URL — a green build, a rendered page, and a key that bypasses row-level security on every table, fetchable with curl.',
+  () => {
+    // Every .env* on disk, tracked or not: the .local files are the ones that
+    // actually get read, and they are gitignored precisely because they hold
+    // real values. .example files are checked too — that is where a wrong shape
+    // gets copied from.
+    const envFiles = []
+    for (const parent of ['.', 'apps', 'packages']) {
+      const base = join(root, parent)
+      if (!existsSync(base)) continue
+      for (const entry of readdirSync(base)) {
+        const dir = parent === '.' ? base : join(base, entry)
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+          if (parent === '.' && /^\.env/.test(entry)) envFiles.push(join(base, entry))
+          continue
+        }
+        for (const f of readdirSync(dir)) {
+          if (/^\.env/.test(f)) envFiles.push(join(dir, f))
+        }
+      }
+    }
+
+    const problems = []
+    for (const file of envFiles) {
+      for (const line of readFileSync(file, 'utf8').split('\n')) {
+        const m = line.match(/^\s*(NEXT_PUBLIC_[A-Z0-9_]*)\s*=\s*(.+?)\s*$/)
+        if (!m) continue
+        const [, name, value] = m
+        if (isSecretKey(value.replace(/^["']|["']$/g, ''))) {
+          problems.push(`${relative(root, file)}: ${name} holds a secret key`)
+        }
+      }
+    }
+    return problems.length ? problems.join('; ') : null
+  },
+)
+
+check(
+  'every createBrowserClient call guards its key',
+  'The variables live in a hosting dashboard, where no check in this repo runs and no diff exists. The consuming call is the only place the variable NAME and its VALUE are in the same room, so the assert has to be there — and it only helps while it is still wired in.',
+  () => {
+    const unguarded = []
+    for (const file of FILES) {
+      const src = readFileSync(file, 'utf8')
+      if (!/\bcreateBrowserClient\s*\(/.test(src)) continue
+      // The definition inside @supabase/ssr is not ours; only call sites count,
+      // and every one of ours lives in an app's lib/supabase.js.
+      if (!/from\s+['"]@supabase\/ssr['"]/.test(src)) continue
+      if (!/assertPublishableKey\s*\(/.test(src)) {
+        unguarded.push(relative(root, file))
+      }
+    }
+    return unguarded.length
+      ? `these call createBrowserClient without assertPublishableKey(): ${unguarded.join(', ')}`
       : null
   },
 )

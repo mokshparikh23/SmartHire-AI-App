@@ -7,9 +7,10 @@
   "_comment_deps": "WHAT IS ABSENT IS THE SECURITY ARGUMENT OF THE WHOLE SPLIT, so read this before adding anything. No stripe, no razorpay, no OpenAI or Gemini key, no Brandfetch, no unpdf: this deployment charges nobody and calls no model. It holds the Supabase keys and nothing else, which is what makes the SECOND copy of SUPABASE_SERVICE_ROLE_KEY (see .env.local.example) an acceptable trade rather than a straight widening. Every addition here is a decision, not a convenience.",
   "_comment_data_dep": "ADDED 2026-09-06 after the first Vercel build of this project failed. @smarthire/data was imported by every page and route here — createAdminClient, formatBalance — but never declared, and npm hoists workspace packages to the root node_modules, so a local build and a local `npm ci` both resolved it anyway and the omission was invisible until a real deployment. This is NOT the widening the note above warns about: it declares a package the console already ran on. apps/dashboard has always declared it.",
   "_comment_lint": "HARDENED 2026-09-06: was `next lint`, which Next 16 removed — so this script had been exiting non-zero on every invocation, and nothing invoked it. eslint.config.mjs was scaffolded here from the start but eslint itself was never a dependency; it and eslint-config-next are root devDependencies now, and the rules live in @smarthire/config. Run from the repo root with `npm run lint`.",
+  "_comment_build": "KEY-SHAPE 2026-09-06: the build is wrapped, not plain `next build`. The env pass fails before a bundle exists and names the offending variable; the bundle pass then scans the emitted client chunks, which is the half that still holds when a secret arrives under a variable name nobody predicted. Both are needed - see the header of scripts/assert-no-public-secrets.mjs for the measurement showing why the runtime assert in @smarthire/data/public-key is not enough on its own.",
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=512' next dev --port 3003",
-    "build": "next build",
+    "build": "node ../../scripts/assert-no-public-secrets.mjs env && next build && node ../../scripts/assert-no-public-secrets.mjs bundle .next/static",
     "start": "next start --port 3003",
     "lint": "eslint ."
   },

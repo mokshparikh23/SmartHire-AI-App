@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { assertPublishableKey } from '@smarthire/data/public-key'
 import { AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 
 /**
@@ -46,7 +47,9 @@ import { AUTH_STORAGE_KEY } from '@/lib/auth-cookie'
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    // KEY-SHAPE 2026-09-06: this project shipped a build with the service-role
+    // key inlined here. See packages/data/src/public-key.js for the account.
+    assertPublishableKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     { cookieOptions: { name: AUTH_STORAGE_KEY } }
   )
 }

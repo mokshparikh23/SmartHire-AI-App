@@ -113,8 +113,22 @@ export default function AdminAuthForm({ next }) {
           anonymous visitor which of the two halves they got right — and on this
           origin the set of valid emails is a much smaller and more interesting
           thing to enumerate than on the app.
+
+          KEY-SHAPE 2026-09-06: but "any error means bad credentials" hid a real
+          one for an afternoon. The deployment had NEXT_PUBLIC_SUPABASE_URL
+          pointing at 127.0.0.1:54321, so every attempt was a failed fetch to a
+          host that was not there, and this form reported it as a wrong password
+          — against an account whose password was provably correct. A request
+          that never reached Supabase is a fact about THIS deployment, not about
+          the visitor's credentials, and it enumerates nothing: it is identical
+          for an email that exists and one that does not.
         */
-        setError('That email and password do not match an account.')
+        const unreachable = signInError.name === 'AuthRetryableFetchError' ||
+                            signInError.status === 0 ||
+                            signInError.status === undefined
+        setError(unreachable
+          ? 'Cannot reach the sign-in service. This deployment is misconfigured — check NEXT_PUBLIC_SUPABASE_URL.'
+          : 'That email and password do not match an account.')
         return
       }
 

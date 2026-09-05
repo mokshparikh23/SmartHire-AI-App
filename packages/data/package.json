@@ -7,7 +7,7 @@
 
   "_comment_no_root_export": "THERE IS NO \".\" EXPORT AND THAT IS THE WHOLE DESIGN. It is the mirror image of packages/ui's rule. That package's root must never gain 'use client'; this one must never gain a root barrel, because a barrel puts next/headers and the SUPABASE_SERVICE_ROLE_KEY factory onto the import graph of every client component that only wanted formatBalance(). credits.js is imported by three 'use client' files, so this is not hypothetical. `import x from '@smarthire/data'` is ERR_PACKAGE_PATH_NOT_EXPORTED at build time, deliberately, and the phase gate is: grep '\"\\.\"' packages/data/package.json must return nothing.",
 
-  "_comment_exports": "ONE SUBPATH PER FILE, AND THE NAMES MIRROR THE OLD FILENAMES - same reasoning as packages/ui's _comment_names: the rewrite in apps/dashboard is then one reviewable substitution of @/lib for @smarthire/data, not forty judgement calls. The split is by WHAT A CLIENT BUNDLE MAY SEE, not by tidiness:  ./credits and ./next-url are pure, import nothing, and are safe in a browser.  ./supabase-server, ./metering, ./license and ./auth are server-only - next/headers, react cache(), and createAdminClient() reading the service-role key. Merging any of the last four into the first two would work today and would be one careless import away from shipping a service-role call site to a browser.",
+  "_comment_exports": "ONE SUBPATH PER FILE, AND THE NAMES MIRROR THE OLD FILENAMES - same reasoning as packages/ui's _comment_names: the rewrite in apps/dashboard is then one reviewable substitution of @/lib for @smarthire/data, not forty judgement calls. The split is by WHAT A CLIENT BUNDLE MAY SEE, not by tidiness:  ./credits, ./next-url and ./public-key are pure, import nothing, and are safe in a browser - ./public-key is REACHED from browser code by design, since it guards the key a browser client is being handed.  ./supabase-server, ./metering, ./license and ./auth are server-only - next/headers, react cache(), and createAdminClient() reading the service-role key. Merging any of the last four into the first two would work today and would be one careless import away from shipping a service-role call site to a browser.",
 
   "_comment_peers": "next AND react ARE PEERS BECAUSE THEIR MODULE IDENTITY IS LOAD-BEARING, not for version hygiene. auth.js leans on react's cache() to collapse getUser() into one GET /auth/v1/user per render pass - the whole reason that file exists. cache() reads the async dispatcher off ReactSharedInternals and cookies() reads an AsyncLocalStorage that Next's server runtime populates, so A SECOND COPY OF EITHER DOES NOT THROW: React 19 finds no dispatcher and quietly stops memoising, and the dashboard goes back to three serial round trips with a green build. react-dom is deliberately absent - nothing here renders. @supabase/ssr and @supabase/supabase-js are REAL dependencies at the ranges apps/dashboard already carries: createServerClient() hands back a fresh object and holds no shared module state, so a duplicate costs bundle size and not correctness. That is the line between a dep and a peer here. Verify after install: npm ls react next must say deduped.",
 
@@ -28,7 +28,8 @@
     "./metering":        "./src/metering.js",
     "./license":         "./src/license.js",
     "./credits":         "./src/credits.js",
-    "./next-url":        "./src/next-url.js"
+    "./next-url":        "./src/next-url.js",
+    "./public-key":      "./src/public-key.js"
   },
 
   "peerDependencies": {
