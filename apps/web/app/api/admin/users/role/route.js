@@ -8,7 +8,7 @@ import { fail } from '@/lib/http'
 
   It used to take whatever arrived and hand it to the service-role client:
 
-  // import { createAdminClient } from 'smarthire-data/supabase-server'
+  // import { createAdminClient } from '@/lib/supabase-server'
   //
   //     const { userId, role } = await request.json()
   //     if (!userId || !role)

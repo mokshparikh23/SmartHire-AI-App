@@ -15,7 +15,7 @@ import DeviceGate from '@/components/dashboard/DeviceGate'
 
   The previous body, for reference:
 
-  // import { createClient } from 'smarthire-data/supabase-server'
+  // import { createClient } from '@/lib/supabase-server'
   // import { redirect } from 'next/navigation'
   //
   // export default async function DashboardLayout({ children }) {

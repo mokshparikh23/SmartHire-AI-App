@@ -1,5 +1,7 @@
 import { Container } from 'smarthire-ui'
 import Icon, { Logo } from 'smarthire-ui/Icon'
+import { requireAdminPage } from '@/lib/auth'
+import SignOutButton from '@/components/SignOutButton'
 
 /*
   ADMIN SPLIT 2026-09-01 ─ A PLACEHOLDER, AND IT IS TEMPORARY BY DESIGN.
@@ -33,7 +35,18 @@ import Icon, { Logo } from 'smarthire-ui/Icon'
        Icon and Logo from the subpath, which is the split that keeps 'use client'
        off the root.
 */
-export default function Placeholder() {
+export default async function Placeholder() {
+  /*
+    ADMIN SPLIT 2026-09-01 ─ the gate, added with the auth surface.
+
+    It is on the placeholder deliberately: until the console moves in, this page
+    IS the proof that the gate works end to end. Signed out it must reach /login;
+    signed in as a non-admin it must reach the 403; and — the assertion the whole
+    split rests on — a browser already signed in at localhost:3000 must still be
+    asked to sign in here, because the two apps write differently named cookies.
+  */
+  const profile = await requireAdminPage()
+
   return (
     <Container className="flex min-h-screen flex-col items-center justify-center text-center">
       <Logo size={44} />
@@ -45,14 +58,19 @@ export default function Placeholder() {
       </p>
 
       <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-muted">
-        Nothing is here yet. The console moves onto this origin in the commit that
-        takes it out of the app.
+        Signed in as <span className="font-medium text-ink">{profile?.email}</span>.
+        The console itself moves onto this origin in the commit that takes it out
+        of the app.
       </p>
 
       <p className="mt-10 flex items-center gap-2 text-[13px] text-faint">
         <Icon name="lock" size={14} />
         This deployment holds no payment or model credentials.
       </p>
+
+      <div className="mt-8 w-full max-w-[200px]">
+        <SignOutButton className="justify-center border border-line !text-ink-soft" />
+      </div>
     </Container>
   )
 }

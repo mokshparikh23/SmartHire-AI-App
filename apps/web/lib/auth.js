@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { getSupabase, getUser, profileFor, adminProfileFor } from 'smarthire-data/auth'
+import { makeSession, adminProfileFor } from 'smarthire-data/auth'
 import { safeNext } from 'smarthire-data/next-url'
 import { AUTH_COOKIE } from '@/lib/auth-cookie'
 
@@ -16,8 +16,8 @@ import { AUTH_COOKIE } from '@/lib/auth-cookie'
  *
  * The imports that used to head this file, for the record:
  *
- *   // import { createClient, createAdminClient } from 'smarthire-data/supabase-server'
- *   // import { safeNext } from 'smarthire-data/next-url'
+ *   // import { createClient, createAdminClient } from '@/lib/supabase-server'
+ *   // import { safeNext } from '@/lib/next-url'
  *
  * getSupabase and getUser are re-exported rather than re-wrapped. They are
  * already cache()'d in the package, and wrapping a cached function in another
@@ -30,6 +30,14 @@ import { AUTH_COOKIE } from '@/lib/auth-cookie'
  * `next-router-state-tree` header. A layout-only gate would render a sibling
  * page with no auth check in that pass at all.
  */
+/*
+  No cookieName: this app keeps writing @supabase/ssr's default,
+  `sb-<project-ref>-auth-token`, which is the name every existing session in
+  every browser already carries and the one lib/auth-cookie.js matches. Passing
+  anything here would sign out every user at once.
+*/
+const { getSupabase, getUser, profileFor } = makeSession()
+
 export { getSupabase, getUser }
 
 /**

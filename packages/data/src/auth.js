@@ -48,34 +48,57 @@ import { createClient, createAdminClient } from './supabase-server'
  * optimistic redirect in a proxy and is NOT fine for anything that reads data.
  */
 
-/** One Supabase cookie client per request. cache() keys on the empty arg list. */
-export const getSupabase = cache(createClient)
-
-/** The authoritative call. Returns null rather than throwing, so callers choose. */
-export const getUser = cache(async () => {
-  const supabase = await getSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user ?? null
-})
-
 /**
- * A profile row through the caller's own session, so RLS applies.
+ * The session-scoped trio, built once per app.
  *
- * Takes a userId rather than calling requireUser() itself, which is what the old
- * getProfile() did. That inversion is deliberate: a function in a shared package
- * must not decide to redirect, because the destination is app-specific — see the
- * header. Each app's getProfile() wraps this with its own requireUser() and its
- * own cache().
+ * A FACTORY RATHER THAN THREE PLAIN EXPORTS, because the cookie name is
+ * per-deployment and these three all read it. apps/web writes
+ * `sb-<project-ref>-auth-token`; apps/admin writes `shai-admin-auth` so that the
+ * two do not share a session in development, where cookies ignore ports. See
+ * createClient() in supabase-server.js for the full argument.
+ *
+ * CALL IT ONCE, AT MODULE SCOPE, in each app's lib/auth.js. `cache()` returns a
+ * memoised wrapper, and the memo is keyed on the wrapper identity — so calling
+ * this per request would hand out a fresh wrapper every time and dedupe nothing,
+ * which is the entire cost this file exists to remove. One call per app, and the
+ * three functions it returns are module constants from then on.
+ *
+ * // export const getSupabase = cache(createClient)
+ * // export const getUser = cache(async () => { ... })
+ * // export const profileFor = cache(async (userId) => { ... })
  */
-export const profileFor = cache(async (userId) => {
-  const supabase = await getSupabase()
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-  return data ?? null
-})
+export function makeSession({ cookieName } = {}) {
+  /** One Supabase cookie client per request. cache() keys on the empty arg list. */
+  const getSupabase = cache(() => createClient({ cookieName }))
+
+  /** The authoritative call. Returns null rather than throwing, so callers choose. */
+  const getUser = cache(async () => {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    return user ?? null
+  })
+
+  /**
+   * A profile row through the caller's own session, so RLS applies.
+   *
+   * Takes a userId rather than calling requireUser() itself, which is what the
+   * old getProfile() did. That inversion is deliberate: a function in a shared
+   * package must not decide to redirect, because the destination is
+   * app-specific — see the header. Each app's getProfile() wraps this with its
+   * own requireUser().
+   */
+  const profileFor = cache(async (userId) => {
+    const supabase = await getSupabase()
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    return data ?? null
+  })
+
+  return { getSupabase, getUser, profileFor }
+}
 
 /**
  * The same row through the service-role client, which bypasses RLS.

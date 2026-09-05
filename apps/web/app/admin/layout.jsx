@@ -5,7 +5,7 @@ import AdminSidebar from '@/components/admin/AdminSidebar'
 // layout and every admin page share ONE cached pair of round trips instead of
 // each paying for its own. The old body is kept below for reference.
 //
-// import { createClient, createAdminClient } from 'smarthire-data/supabase-server'
+// import { createClient, createAdminClient } from '@/lib/supabase-server'
 // import { redirect } from 'next/navigation'
 //
 //   // Session check goes through the cookie client…

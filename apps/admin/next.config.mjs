@@ -4,9 +4,23 @@ const nextConfig = {
      sidebar's account block. Compile and runtime errors still surface. */
   devIndicators: false,
 
-  /* Matching apps/web, so the two admin-adjacent apps agree. */
   experimental: {
-    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr']
+    /* Matching apps/web, so the two admin-adjacent apps agree. */
+    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
+
+    /* ADMIN SPLIT 2026-09-01 ─ REQUIRED BY app/forbidden.jsx. DO NOT DROP IT.
+
+       forbidden() from next/navigation throws unless this is on
+       (node_modules/next/dist/client/components/forbidden.js:25). The failure of
+       removing it is NOT a build error at the call site: forbidden() throws a
+       plain E488 Error at RUNTIME, inside requireAdminPage(), on the deny path
+       only — and the deny path is by definition the one nobody exercises. So a
+       future tidy-up of this block would turn every non-admin's 403 into an
+       error page, and nothing would notice until someone was turned away.
+
+       The drill that catches it: sign in as a non-admin and expect a 403 page,
+       not error.jsx. */
+    authInterrupts: true,
   },
 
   /* ADMIN SPLIT 2026-09-01 ─ DEV ONLY, AND IT PREVENTS A SILENT SIGN-IN FAILURE.
