@@ -1,6 +1,6 @@
 # SmartHire AI
 
-One repo, four apps and three shared packages, one `node_modules`. Managed with
+One repo, four apps and four shared packages, one `node_modules`. Managed with
 npm workspaces.
 
 ```
@@ -15,6 +15,9 @@ packages/pricing  What we sell and for how much. Zero dependencies, so
                   apps/desktop could consume it without pulling in a React
 packages/data     The Supabase clients, the credit meter, the licence. Shared by
                   dashboard and admin, server-only, no root export
+packages/config   The eslint rules, shared by all six workspaces above. The
+                  jsconfig deliberately is NOT shared — see the note in its
+                  package.json for the attempt and why it was reverted
 ```
 
 Every workspace is published under the `@smarthire/` scope — `@smarthire/ui`,
@@ -75,8 +78,8 @@ All run from the repo root.
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | All four apps |
-| `npm run dev:front` | Site + web only, which is the usual loop |
-| `npm run dev:console` | Web + admin, the loop for admin work |
+| `npm run dev:front` | Marketing + dashboard only, which is the usual loop |
+| `npm run dev:console` | Dashboard + admin, the loop for admin work |
 | `npm run dev:marketing` | Marketing site on :3002 |
 | `npm run dev:dashboard` | Next.js dev server on :3000 |
 | `npm run dev:admin` | Admin console on :3003 |
@@ -86,6 +89,48 @@ All run from the repo root.
 | `npm run build:dashboard` | Next.js production build |
 | `npm run build:admin` | Admin console production build |
 | `npm run build:mac` / `build:win` / `build:all` | Packaged desktop installers |
+| `npm run check` | Everything CI checks: invariants, schema sync, lint |
+| `npm run lint` | eslint across all six workspaces |
+| `npm run check:invariants` | The boundary rules, as code |
+| `npm run check:schema` | `supabase-schema.sql` still matches its sources |
+
+## Checks
+
+Added 2026-09-06. Before that date the only workflow was `release.yml`, which
+fires on `v*` tags — so nothing built, linted or schema-checked a commit until
+it was already a release. `ci.yml` now runs on every push and pull request:
+invariants, lint, the three Next builds and the desktop renderer build. It needs
+no secrets; the dashboard build gets placeholder Supabase variables, which is
+enough because nothing reaches the network at build time.
+
+`npm run check` is the same thing locally, minus the builds.
+
+**`check:invariants` is the interesting one.** This repo documents its
+boundaries carefully and in several places wrote out the command that would
+verify one — `packages/data`'s note ends *"the phase gate is: grep '\".\"'
+packages/data/package.json must return nothing"*, and its desktop note names its
+own *"review tripwire"*. Nobody ran them. [scripts/check-invariants.mjs](scripts/check-invariants.mjs)
+runs all eight, each with the cost of breaking it written beside the assertion:
+
+- `packages/data` has no `"."` export — a barrel puts the service-role factory on the import graph of every client component
+- `packages/ui`'s root export has no `'use client'`
+- `apps/desktop` depends on no `@smarthire/*` workspace, and resolves React 18
+- `apps/marketing` reaches no database and reads no Supabase credential
+- every workspace directory is actually listed in root `workspaces` — `apps/*` is not globbed, so a missing entry silently links nothing
+- every `@smarthire/*` import resolves to a subpath the target package really exports
+- no `.env` file is tracked by git
+
+Each was verified by breaking it on purpose and confirming the check fails.
+
+### Known lint debt
+
+Turning eslint on for the first time found ten violations in the apps and two in
+`packages/ui`. They are baselined by exact file and exact rule — not downgraded
+to warnings — in [packages/config/eslint-next.mjs](packages/config/eslint-next.mjs)
+and [packages/config/eslint-package.mjs](packages/config/eslint-package.mjs).
+A new violation anywhere else still fails the build. Both lists carry the
+reasoning and both should shrink. They are all `react-hooks` rules whose fixes
+change how a live component behaves, which is work that deserves its own commit.
 
 ## Releasing the desktop app
 

@@ -1,16 +1,5 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
-
-export default eslintConfig;
+// HARDENED 2026-09-06: this file was byte-identical in all three Next apps.
+// The rules — and the baselined violations, and the reasoning for both — live
+// in packages/config/eslint-next.mjs now. Add an app-specific rule by appending
+// to the array here; anything that should apply to all three belongs there.
+export { default } from '@smarthire/config/eslint-next'

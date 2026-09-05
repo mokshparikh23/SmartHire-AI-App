@@ -1,0 +1,93 @@
+# HARDENED 2026-09-06 ─ the first workflow in this repo that runs before a merge.
+#
+# release.yml existed, but it triggers on `v*` tags only: by the time it ran, the
+# commit was already the release. Nothing built the three Next apps, nothing
+# linted, and nothing checked that supabase-schema.sql still matched its sources
+# — the drift that generated file exists to prevent was itself unguarded.
+#
+# Nothing here needs a secret. The dashboard build DOES need Supabase variables
+# to exist (its /login page is statically prerendered and constructs a browser
+# client while doing it — verified by moving .env.local aside and watching the
+# build fail on "Export encountered an error on /(auth)/login/page"), but it
+# never calls the API at build time, so placeholders are enough. Keeping real
+# credentials out of CI is worth more than the small chance a build-time network
+# call appears later and fails confusingly.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast, no build. Fails in under a minute when a boundary has been crossed,
+  # so the expensive jobs are not what tells you.
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Repo invariants
+        run: npm run check:invariants
+      - name: supabase-schema.sql is in sync with its sources
+        run: npm run check:schema
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      # One red square should not hide the state of the other three.
+      fail-fast: false
+      matrix:
+        app: [marketing, dashboard, admin]
+    env:
+      # Placeholders. Shape-valid so client construction succeeds; not real, and
+      # nothing here reaches the network during a build.
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_WWW_URL: http://localhost:3002
+      NEXT_PUBLIC_SITE_URL: http://localhost:3002
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # Root install: npm workspaces hoist to the root node_modules. Installing
+      # inside apps/* would not resolve them — same rule as release.yml.
+      - run: npm ci
+      - run: npm run build:${{ matrix.app }}
+
+  # The Vite renderer build only. Packaging the Electron binaries is release.yml's
+  # job and needs macOS and Windows runners; this catches a broken import or a
+  # bad JSX edit in apps/desktop at PR time for the price of a Linux minute.
+  build-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace apps/desktop

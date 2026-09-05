@@ -1,0 +1,24 @@
+{
+  "name": "@smarthire/config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The shared lint and path configuration. Raw source, no build step — the three Next apps and the three library packages all point at this instead of carrying their own copy.",
+
+  "_comment_why": "HARDENED 2026-09-06: apps/marketing, apps/dashboard and apps/admin each carried an eslint.config.mjs and a jsconfig.json that were BYTE-IDENTICAL — verified with md5. Three copies of a rule set is three chances to fix a rule in two places, and the drift is invisible because nothing compares them. The eslint config is one file now and the three apps re-export it.",
+
+  "_comment_no_jsconfig": "THE jsconfig COULD NOT BE SHARED AND THE ATTEMPT IS RECORDED SO IT IS NOT REPEATED. A jsconfig.base.json lived here briefly, with the apps pointing at it. Both `\"extends\": \"@smarthire/config/jsconfig\"` and a plain relative `\"extends\": \"../../packages/config/jsconfig.base.json\"` produce a config that looks right and that Turbopack does not read: it does not follow `extends` in a jsconfig, so the @/* alias silently disappears and every aliased import fails — 45 unresolved modules in marketing, 78 in dashboard, 25 in admin. Caught by building all three, which is why the build job exists. The three jsconfig.json files stay literal copies and each says so at the top. The eslint config is shareable precisely because it is real JavaScript that eslint imports rather than a JSON file a bundler half-reads.",
+
+  "_comment_no_root_export": "Subpaths only, same as the other packages. There is no single sensible default here: ./eslint-next is for a Next app, ./eslint-package is for a plain library, and picking one as the root would make the wrong one the easy import.",
+
+  "exports": {
+    "./eslint-next": "./eslint-next.mjs",
+    "./eslint-package": "./eslint-package.mjs"
+  },
+
+  "_comment_peers": "eslint and eslint-config-next are devDependencies at the ROOT, not here. This package is consumed only by config files that npm has already hoisted those into scope for, and making them real dependencies here would install a second eslint into the tree for no benefit.",
+  "peerDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "^16"
+  }
+}

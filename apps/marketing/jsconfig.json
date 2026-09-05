@@ -1,4 +1,5 @@
 {
+  "_comment": "HARDENED 2026-09-06: this file is a deliberate copy in each of the three apps, and an attempt to share it was made and REVERTED — record it here so it is not attempted a third time. Both `\"extends\": \"@smarthire/config/jsconfig\"` and the relative `\"extends\": \"../../packages/config/jsconfig.base.json\"` build clean-looking configs that Turbopack does not read: it does not follow `extends` in a jsconfig at all, so the @/* alias simply vanishes and every aliased import fails with `Module not found`, 45 of them in marketing alone. The eslint config IS shared, because that one is real JavaScript that the linter imports. This one has to stay literal.",
   "compilerOptions": {
     "paths": {
       "@/*": ["./*"]

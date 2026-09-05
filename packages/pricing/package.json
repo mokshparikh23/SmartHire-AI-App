@@ -4,9 +4,16 @@
   "private": true,
   "type": "module",
   "description": "What Smart Hire AI sells and for how much. Shared by apps/dashboard and apps/marketing so a price cannot differ between the page that quotes it and the route that charges it.",
+  "_comment_lint": "HARDENED 2026-09-06: this package had no scripts and no lint config at all. Rules in @smarthire/config/eslint-package. Note this one DOES have a \".\" export, unlike packages/data — nothing here touches next/headers or a credential, so there is no client/server line for a barrel to cross.",
+  "scripts": {
+    "lint": "eslint ."
+  },
   "sideEffects": false,
   "exports": {
     ".": "./src/index.js",
     "./gateway": "./src/gateway.js"
+  },
+  "devDependencies": {
+    "@smarthire/config": "*"
   }
 }

@@ -13,6 +13,7 @@
     "apps/admin"
   ],
   "_comment_dev": "SPLIT 2026-09-01: `dev` keeps meaning \"everything\", which is now FOUR processes. `dev:front` is the loop most work actually needs, and it deliberately does NOT include admin: three Next servers plus Electron under the 512MB cap is heavy, and most work touches marketing and dashboard. Reach for `dev:console` when the work is on admin — it runs the app beside it, which is what you want, because the two share a Supabase project and the cookie-isolation check (sign in at 3000, open 3003, it must still ask you to sign in) needs both. The ports are not interchangeable: apps/desktop/.env points WEB_URL at 127.0.0.1:3000, so if another app could take that port the desktop would silently talk to it.",
+  "_comment_check": "HARDENED 2026-09-06: `npm run check` is what CI runs and what should be run before a push — invariants, then schema sync, then lint. `lint` is --workspaces --if-present rather than a hand-written list of three apps, so a new workspace is linted the day it is added rather than the day someone remembers this line; packages/* are covered by it now, and before this they had no lint config at all. There was no CI on push or PR before this date: release.yml fires on v* tags only, so nothing built, linted or schema-checked anything until it was already a release.",
   "scripts": {
     "dev": "concurrently -n marketing,dashboard,admin,desktop -c green,cyan,yellow,magenta \"npm run dev:marketing\" \"npm run dev:dashboard\" \"npm run dev:admin\" \"npm run dev:desktop\"",
     "dev:front": "concurrently -n marketing,dashboard -c green,cyan \"npm run dev:marketing\" \"npm run dev:dashboard\"",
@@ -25,12 +26,27 @@
     "build:marketing": "npm run build --workspace apps/marketing",
     "build:dashboard": "npm run build --workspace apps/dashboard",
     "build:admin": "npm run build --workspace apps/admin",
+    "lint": "npm run lint --workspaces --if-present",
+    "check:invariants": "node scripts/check-invariants.mjs",
+    "check:schema": "node scripts/sync-schema.mjs --check",
+    "check": "npm run check:invariants && npm run check:schema && npm run lint",
     "build:mac": "npm run build:mac --workspace apps/desktop",
     "build:win": "npm run build:win --workspace apps/desktop",
     "build:all": "npm run build:all --workspace apps/desktop"
   },
+  "_comment_engines": "HARDENED 2026-09-06: .nvmrc is the ONE place the Node version is written, and both CI workflows read it with actions/setup-node's node-version-file rather than repeating a number. It says 22 because 22 is what has been building the published desktop binaries — the machine this was set up on was running 26, and that gap was invisible until someone went looking. engines is the floor rather than the pin, so a 26 already installed locally is not rejected; .nvmrc is what an `nvm use` lands on. Raise the version in .nvmrc and CI follows on the next run.",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "concurrently": "^8.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   }

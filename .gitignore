@@ -4,8 +4,25 @@ release/
 release.noindex/
 .next/
 out/
-.env
-.env.local
+
+# HARDENED 2026-09-06 ─ these two lines were the whole env story, and they only
+# covered two of the filenames dotenv actually loads.
+#
+#   .env
+#   .env.local
+#
+# Next reads .env, .env.local, .env.<mode> and .env.<mode>.local. Only
+# apps/dashboard had its own .gitignore with a `.env*` glob; apps/admin,
+# apps/marketing and apps/desktop fell through to this file, so
+# `apps/admin/.env.production` — a file holding SUPABASE_SERVICE_ROLE_KEY —
+# was a tracked file waiting for someone to type `git add -A`. Verified with
+# `git check-ignore` before and after.
+#
+# The glob is deliberately wider than the loader: anything starting .env is
+# ignored, and the *.example files are named back in. A new secret filename
+# is therefore ignored by default rather than committed by default.
+.env*
+!.env*.example
 *.log
 .DS_Store
 Thumbs.db

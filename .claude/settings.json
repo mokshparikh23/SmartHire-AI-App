@@ -78,7 +78,23 @@
       "Bash(git ls-tree *)",
       "Bash(awk '/^## Deploying/,/^## [^D]/')",
       "Bash(awk '$1+$2 > 0 {print \"  \" $3 \"  \\(+\"$1\" -\"$2\"\\)\"}')",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(git show *)",
+      "Bash(grep -n \"four apps\\\\|project \\\\`admin\\\\`\\\\|Break glass\\\\|Production only\\\\|packages\\\\` is not optional\")",
+      "Bash(grep -oE '\\\\.[a-z]+$')",
+      "Bash(node -p \"Object.entries\\(require\\('./package.json'\\).scripts\\).filter\\(\\([k]\\)=>k.startsWith\\('build'\\)\\).map\\(\\([k,v]\\)=>k+' -> '+v\\).join\\('\\\\n'\\)\")",
+      "Bash(node -p \"require\\('./package.json'\\).workspaces.join\\(', '\\)\")",
+      "Bash(grep -nE \"^on:|^\\\\s+\\(push|pull_request|workflow_dispatch|tags|branches\\):|^\\\\s*[a-z-]+:\\\\s*$|runs-on|- run:|- uses:\" .github/workflows/release.yml)",
+      "Bash(md5 -q apps/admin/eslint.config.mjs apps/dashboard/eslint.config.mjs apps/marketing/eslint.config.mjs)",
+      "Bash(md5 -q apps/*/jsconfig.json)",
+      "Bash(awk '/^## Deploying/,/^## Version note/' README.md)",
+      "Bash(node -p \"require\\('./apps/desktop/package.json'\\).scripts['test:segment']\")",
+      "Bash(npm -v)",
+      "Bash(node -e \"const p=require\\('./apps/desktop/package.json'\\);console.log\\('deps:',JSON.stringify\\(p.dependencies,null,1\\)\\);console.log\\('devDeps react:',p.devDependencies?.react, p.devDependencies?.['react-dom']\\)\")",
+      "Bash(node scripts/check-invariants.mjs)",
+      "Bash(node -e \"const p=require\\('next/package.json'\\);console.log\\(Object.keys\\(p.bin\\)\\)\")",
+      "Bash(node -p \"const d=require\\('./package.json'\\).devDependencies; JSON.stringify\\(d,null,2\\)\")",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; const bad=Object.keys\\(s\\).filter\\(k=>k.startsWith\\('_'\\)\\); console.log\\(bad.length?'BOGUS SCRIPTS: '+bad:'scripts clean ✓'\\); console.log\\('scripts:', Object.keys\\(s\\).join\\(', '\\)\\)\")"
     ]
   }
 }

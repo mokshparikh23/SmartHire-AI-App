@@ -46,9 +46,13 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # HARDENED 2026-09-06: reads .nvmrc instead of repeating "22" here, so the
+      # version that packages a released binary cannot drift from the one a
+      # developer gets from `nvm use`. Changing .nvmrc changes both.
+      # - node-version: 22
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       # Root install: this is an npm-workspaces repo and the desktop app's

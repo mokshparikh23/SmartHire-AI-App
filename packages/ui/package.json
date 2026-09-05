@@ -6,6 +6,10 @@
   "description": "The design system shared by apps/dashboard and apps/marketing. Raw JSX, no build step — the consuming app's compiler is what turns it into a bundle, which is the only way a 'use client' directive is guaranteed to survive.",
   "_comment_exports": "SUBPATH EXPORTS, NOT ONE BARREL, AND THAT IS LOAD-BEARING. The root export has no 'use client' directive and must never gain one: adding it there would turn Container, Button, Card and Badge into client components at every call site in both apps. PillTabs, PricingPlans, NavItem and CopyButton ALL carry the directive, so each gets its own entry point and the root never re-exports them. ADMIN SPLIT 2026-09-01 added the last two: they were apps/dashboard/components/dashboard/NavItem.jsx and CopyButton.jsx, and they moved here because the admin sidebar and the dashboard sidebar both draw them once admin lives on its own origin. SignOutButton, which sits beside them in both sidebars, deliberately did NOT move - it constructs a Supabase browser client, and the two apps use different cookie names, so a shared one would be the file that silently clears the wrong session. The same reasoning is written out at the top of src/PillTabs.jsx, where it was discovered.",
   "_comment_names": "Subpath names deliberately mirror the old filenames, so the ~50-file import rewrite was one reviewable substitution of @/components/ui for @smarthire/ui rather than fifty judgement calls.",
+  "_comment_lint": "HARDENED 2026-09-06: this package had no scripts and no lint config at all. Rules in @smarthire/config/eslint-package — the plain rule set plus react-hooks, not the Next preset, because there is no app here and no build step.",
+  "scripts": {
+    "lint": "eslint ."
+  },
   "sideEffects": [
     "*.css"
   ],
@@ -23,5 +27,8 @@
     "next": "^16.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@smarthire/config": "*"
   }
 }

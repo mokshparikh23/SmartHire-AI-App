@@ -15,6 +15,11 @@
 
   "_comment_no_server_only": "`server-only` is deliberately NOT a dependency yet. It would turn a client component importing ./metering into a build error naming the file, which is worth having - but it is a new package and a lockfile change inside the one phase whose entire claim is that it changes no output. If it is added later, sideEffects must stop being false and become an explicit array naming the four server modules, or the bundler is free to drop the import and the guard silently does nothing.",
 
+  "_comment_lint": "HARDENED 2026-09-06: this package had no scripts and no lint config at all, so nothing in it was ever checked — the auth primitives, the credit meter and the service-role client were the least-inspected code in the repo. Rules in @smarthire/config/eslint-package: the Next preset is not used here because there is no app and no build step.",
+  "scripts": {
+    "lint": "eslint ."
+  },
+
   "sideEffects": false,
 
   "exports": {
@@ -33,5 +38,8 @@
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.1"
+  },
+  "devDependencies": {
+    "@smarthire/config": "*"
   }
 }
