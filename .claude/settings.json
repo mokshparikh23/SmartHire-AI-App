@@ -107,7 +107,9 @@
       "Bash(git -C /private/tmp/claude-501/-Users-mokshparikh-SmartHire-AI-App/bb0971ec-c621-4bc0-bfa2-adc12ea8981a/scratchpad/repro/app log --oneline -1)",
       "Bash(npm ci *)",
       "Bash(node -p \"JSON.stringify\\(require\\('./apps/dashboard/package.json'\\).dependencies,null,2\\)\")",
-      "Bash(node -e \"const l=require\\('./package-lock.json'\\);console.log\\(JSON.stringify\\(l.packages['apps/admin'].dependencies,null,2\\)\\)\")"
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\);console.log\\(JSON.stringify\\(l.packages['apps/admin'].dependencies,null,2\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"web-moksh-8946s-projects.vercel.app -> HTTP %{http_code}\\\\n\" --max-time 15 https://web-moksh-8946s-projects.vercel.app/)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const f='apps/admin/package.json';const j=JSON.parse\\(fs.readFileSync\\(f\\)\\);delete j.dependencies['@smarthire/data'];fs.writeFileSync\\(f,JSON.stringify\\(j,null,2\\)+'\\\\n'\\)\")"
     ]
   }
 }

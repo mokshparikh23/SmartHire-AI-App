@@ -119,6 +119,7 @@ runs all eight, each with the cost of breaking it written beside the assertion:
 - `apps/marketing` reaches no database and reads no Supabase credential
 - every workspace directory is actually listed in root `workspaces` — `apps/*` is not globbed, so a missing entry silently links nothing
 - every `@smarthire/*` import resolves to a subpath the target package really exports
+- every workspace **declares** the `@smarthire/*` packages it imports — npm hoists to the root `node_modules`, so an undeclared one works locally and fails only on Vercel, which scopes its install to the workspace it is building. That is exactly how the admin console's first deployment failed
 - the admin and dashboard auth cookie patterns cannot match each other, and each still matches its own chunked `.0`/`.1` form
 - no `.env` file is tracked by git
 

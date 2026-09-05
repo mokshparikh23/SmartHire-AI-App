@@ -191,6 +191,41 @@ check(
   },
 )
 
+check(
+  'every workspace declares the @smarthire/* packages it imports',
+  'npm hoists workspace packages into the ROOT node_modules, so an undeclared one resolves fine locally and in a clean `npm ci`. Vercel scopes its install to the workspace it is building, where an undeclared package is never linked — which is why the admin console deployed for the first time on 2026-09-06 and failed with module-not-found on 24 lines. Nothing before this caught it, because locally there was nothing to catch.',
+  () => {
+    const problems = []
+    for (const parent of ['apps', 'packages']) {
+      for (const entry of readdirSync(join(root, parent))) {
+        const dir = `${parent}/${entry}`
+        if (!existsSync(join(root, dir, 'package.json'))) continue
+
+        const pkg = json(`${dir}/package.json`)
+        const declared = new Set([
+          ...Object.keys(pkg.dependencies ?? {}),
+          ...Object.keys(pkg.devDependencies ?? {}),
+          ...Object.keys(pkg.peerDependencies ?? {}),
+        ])
+
+        const imported = new Set()
+        for (const file of FILES.filter((f) => f.startsWith(join(root, dir) + '/'))) {
+          for (const [, spec] of readFileSync(file, 'utf8').matchAll(/from\s+['"](@smarthire\/[^'"]+)['"]/g)) {
+            const [scope, name] = spec.split('/')
+            imported.add(`${scope}/${name}`)
+          }
+        }
+
+        for (const name of imported) {
+          if (name === pkg.name) continue // a package importing its own subpath
+          if (!declared.has(name)) problems.push(`${dir} imports ${name} without declaring it`)
+        }
+      }
+    }
+    return problems.length ? problems.join('; ') : null
+  },
+)
+
 /*
   Loaded up front because check() is synchronous.
 
