@@ -15,7 +15,7 @@ import '../styles/overlay.css'   // pulls in glass.css, and the shared .ia-btn /
  * press Start. It replaces Dashboard.jsx (a 27KB green two-pane review screen)
  * and InterviewSetup.jsx (a three-step wizard), both retired.
  *
- * Nothing is authored here any more. Company, role, résumé, JD and the résumé
+ * Nothing is authored here any more. Company, role, resume, JD and the resume
  * consent flag are created on the web and arrive as a list; picking a row copies
  * it into `interviewContext`, which is where buildSystemPrompt() already reads
  * from — so the consent gate keeps working untouched.
@@ -26,7 +26,7 @@ import '../styles/overlay.css'   // pulls in glass.css, and the shared .ia-btn /
  *
  * ANSWER-STYLE 2026-08-30: the answer style travels with the rest of a
  * candidate's context. It is created on the web alongside the company, role and
- * résumé — but unlike those it is a preference rather than a fact, so it is
+ * resume — but unlike those it is a preference rather than a fact, so it is
  * seeded into the store when a candidate is PICKED and the ⋮ menu can override
  * it. See the seed effect below for the precedence rule.
  */
@@ -174,10 +174,10 @@ export default function Launcher({ session, licenseData, onLogout }) {
        The clear is load-bearing, not tidiness. setInterviewContext MERGES
        (store/settingsStore.js) and interviewContext is persisted, so without it
        a blank start would quietly reuse the previous interview's company and
-       role — wrong on screen and wrong in the prompt. The résumé fields cannot
+       role — wrong on screen and wrong in the prompt. The resume fields cannot
        leak this way (partialize blanks them), but company and role can. */
     // Copy the chosen profile into the store buildSystemPrompt() reads. The
-    // résumé and its consent flag travel together — a résumé without its flag
+    // resume and its consent flag travel together — a resume without its flag
     // would be treated as unconsented, which is the safe direction but not the
     // right one.
     //
@@ -192,13 +192,22 @@ export default function Launcher({ session, licenseData, onLogout }) {
        newly returned by /api/profiles.
 
        This call is also what makes the tightened partialize in settingsStore
-       safe: every résumé field is rewritten here from a freshly fetched row on
+       safe: every resume field is rewritten here from a freshly fetched row on
        every start, so nothing depends on the persisted copy. */
     // setInterviewContext({
     //   company: profile.company, role: profile.role, resume: profile.resume,
     //   resumeConsent: profile.resumeConsent, jobDescription: profile.jobDescription,
     // })
+    /* OWN-CV 2026-09-01: resumeConsent stops being copied in. buildSystemPrompt()
+       no longer reads it (see the note there), and carrying a value nothing
+       consumes is how a retired gate comes back to life by accident — the next
+       person to add a resume field copies the line above it.
+
+       /api/profiles still RETURNS the field, and that is deliberate: a desktop
+       build older than this one does still gate on it, so the column has to keep
+       telling the truth even though this build ignores it. */
     if (profile) {
+      // setInterviewContext({ …, resumeConsent: profile.resumeConsent, … })
       setInterviewContext({
         company:        profile.company,
         companyDomain:  profile.companyDomain || '',
@@ -206,7 +215,6 @@ export default function Launcher({ session, licenseData, onLogout }) {
         candidateName:  profile.candidateName || '',
         resume:         profile.resume,
         resumeBrief:    profile.resumeBrief || '',
-        resumeConsent:  profile.resumeConsent,
         jobDescription: profile.jobDescription,
       })
     } else {
@@ -276,7 +284,7 @@ export default function Launcher({ session, licenseData, onLogout }) {
           <div className="ia-lempty">
             <Icon name="inbox" size={22} strokeWidth={1.4} />
             {/* QUICK-START 2026-09-01: this said "Add a candidate on the web —
-                name, role, résumé — then pick them here when the interview
+                name, role, resume — then pick them here when the interview
                 starts", which is the interviewer's voice in a candidate product,
                 and it was a dead end: the only action was to leave. */}
             <strong>Nothing set up yet</strong>
@@ -298,7 +306,7 @@ export default function Launcher({ session, licenseData, onLogout }) {
             </button>
             {/* A user upgrading from the wizard has a local setup that would
                 otherwise vanish silently. Offer it rather than migrating behind
-                their back — the résumé is theirs to re-consent to. */}
+                their back — the resume is theirs to re-consent to. */}
             {interviewContext?.isSetup && (
               <span style={{ marginTop: 10, fontSize: 11, maxWidth: 300 }}>
                 Your previous local setup ({interviewContext.role || 'no role'}
@@ -333,11 +341,19 @@ export default function Launcher({ session, licenseData, onLogout }) {
 
                 {/* The consent state is worth seeing BEFORE starting, not
                     inferred later from whether follow-ups cite [resume]. */}
+                {/* OWN-CV 2026-09-01: there are two states now, not three. A
+                    resume on the interview is a resume in the prompt, so the
+                    "No consent" tag described a condition that can no longer
+                    happen — and while it could, it was the one that sent people
+                    into an interview wondering why nothing cited [resume].
                 {p.resume
                   ? <span className={`ia-ltag ${p.resumeConsent ? 'ia-ltag--on' : 'ia-ltag--off'}`}>
-                      {p.resumeConsent ? 'Résumé' : 'No consent'}
+                      {p.resumeConsent ? 'Resume' : 'No consent'}
                     </span>
-                  : <span className="ia-ltag">No résumé</span>}
+                  : <span className="ia-ltag">No resume</span>} */}
+                {p.resume
+                  ? <span className="ia-ltag ia-ltag--on">Resume</span>
+                  : <span className="ia-ltag">No resume</span>}
 
                 {p.id === selected && <Icon name="check" size={14} />}
               </button>
@@ -393,8 +409,11 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
   // setAnswerStyle is also written by the profile seed in Launcher above, and
   // last write wins between them — which is the precedence rule, documented at
   // the seed rather than repeated here.
-  const answerMode        = useSettingsStore((s) => s.answerMode)
-  const setAnswerMode     = useSettingsStore((s) => s.setAnswerMode)
+  // CANDIDATE-ONLY 2026-09-01: unread now that the Answer mode row is retired.
+  // Left commented rather than deleted so the row above it can come back in one
+  // piece if the interviewer copilot is ever revived as its own product.
+  // const answerMode        = useSettingsStore((s) => s.answerMode)
+  // const setAnswerMode     = useSettingsStore((s) => s.setAnswerMode)
   const answerStyle       = useSettingsStore((s) => s.answerStyle)
   const setAnswerStyle    = useSettingsStore((s) => s.setAnswerStyle)
 
@@ -441,6 +460,11 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
               "what for" and "in what words". The labels match the store keys, so
               a bug report quoting the UI greps straight to settingsStore.js and
               on to buildSystemPrompt(). */}
+          {/* CANDIDATE-ONLY 2026-09-01: the Answer mode row is retired. This was
+              the only way to reach the interviewer copilot, and the product is
+              for the person being interviewed. Removing the control is what makes
+              "what the copilot is FOR" stop being a question the user is asked;
+              Answer style below is still a real choice, so it stays.
           <div className="ia-menu-row" style={{ height: 'auto', padding: '8px 9px' }}>
             <Icon name="bulb" size={13} />
             <span style={{ flex: 1 }}>Answer mode</span>
@@ -453,6 +477,7 @@ function LauncherMenu({ onLogout, onOpenWeb }) {
               <option value="answer"    style={MENU_OPTION}>Answer the question</option>
             </select>
           </div>
+          */}
 
           <div className="ia-menu-row" style={{ height: 'auto', padding: '8px 9px' }}>
             <Icon name="pen" size={13} />

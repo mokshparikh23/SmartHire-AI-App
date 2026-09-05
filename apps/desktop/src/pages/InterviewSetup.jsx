@@ -14,9 +14,17 @@ const STEPS = ['Company & Role', 'Resume', 'Job Description']
 export default function InterviewSetup({ onComplete }) {
   const setInterviewContext = useSettingsStore(s=>s.setInterviewContext)
   const [step,setStep] = useState(0)
-  // PIVOT 2026-08-30: resumeConsent added. buildSystemPrompt() drops the résumé
+  // PIVOT 2026-08-30: resumeConsent added. buildSystemPrompt() drops the resume
   // entirely unless this is true, so an unticked box is not a soft warning —
   // the text never reaches the model.
+  /* OWN-CV 2026-09-01: NO LONGER TRUE, and this whole file is retired code —
+     MainApp.jsx stopped routing to it when setup moved to the web dashboard.
+     buildSystemPrompt() no longer reads resumeConsent at all: a resume present
+     is a resume used. The wizard below is left exactly as it was, per the
+     keep-don't-delete rule, but if any of it is ever revived, the consent
+     checkbox, the `next()` guard on step 1 and the summary row must not come
+     with it. The reasoning is in services/systemPrompt.js and in
+     apps/web/components/dashboard/interview/ResumePanel.jsx. */
   // const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'' })
   const [form,setForm] = useState({ company:'', role:'', resume:'', jobDescription:'', resumeConsent:false })
   const [resumeFileName,setResumeFileName] = useState('')
@@ -49,12 +57,12 @@ export default function InterviewSetup({ onComplete }) {
       if(!form.company.trim()) return setError('Please enter company name.')
       if(!form.role.trim()) return setError('Please enter job role.')
     }
-    // PIVOT 2026-08-30: a résumé with no confirmed consent is a dead weight —
+    // PIVOT 2026-08-30: a resume with no confirmed consent is a dead weight —
     // buildSystemPrompt() would silently drop it and the interviewer would spend
     // the interview wondering why no follow-up ever cites it. Better to stop
     // here and make the choice explicit: confirm, or clear the text.
     if(step===1 && form.resume.trim() && !form.resumeConsent){
-      return setError('Confirm the candidate agreed to their résumé being used, or clear it.')
+      return setError('Confirm the candidate agreed to their resume being used, or clear it.')
     }
     setError('')
     if(step<STEPS.length-1) setStep(step+1)
@@ -62,7 +70,7 @@ export default function InterviewSetup({ onComplete }) {
   }
 
   /**
-   * PIVOT 2026-08-30: skipping the résumé step discards whatever is in the box
+   * PIVOT 2026-08-30: skipping the resume step discards whatever is in the box
    * along with any consent given for it, then advances. Leaving the text behind
    * would send it to the model on the strength of a box ticked before the
    * interviewer changed their mind.
@@ -74,7 +82,7 @@ export default function InterviewSetup({ onComplete }) {
       setError(''); setStep(2)
       return
     }
-    // Step 2 skips the JOB DESCRIPTION, not the résumé — that decision was
+    // Step 2 skips the JOB DESCRIPTION, not the resume — that decision was
     // already made and consented to on the previous step, so `form` goes through
     // untouched.
     setError('')
@@ -230,7 +238,7 @@ export default function InterviewSetup({ onComplete }) {
 
               {/*
                 PIVOT 2026-08-30: the consent gate the site has been advertising
-                since the pivot. Only rendered once there is a résumé to consent
+                since the pivot. Only rendered once there is a resume to consent
                 to — an empty checkbox above an empty box is noise, and there is
                 nothing to authorise yet.
               */}
@@ -246,10 +254,10 @@ export default function InterviewSetup({ onComplete }) {
                     onChange={e=>update('resumeConsent', e.target.checked)}
                     style={{ marginTop:1, width:14, height:14, accentColor:G.primary, cursor:'pointer', flexShrink:0 }} />
                   <span style={{ fontSize:10.5, lineHeight:1.5, color:G.text2 }}>
-                    The candidate knows this résumé is being used to shape the
+                    The candidate knows this resume is being used to shape the
                     questions I ask them.
                     <span style={{ display:'block', color:G.muted, marginTop:3 }}>
-                      Without this the résumé is left out of the prompt entirely.
+                      Without this the resume is left out of the prompt entirely.
                     </span>
                   </span>
                 </label>
@@ -326,7 +334,7 @@ export default function InterviewSetup({ onComplete }) {
             {/*
               PIVOT 2026-08-30: "Skip resume" now actually discards it. It used
               to call next() straight through, which since the consent gate would
-              mean a skip that refuses to advance while a résumé sits in the box
+              mean a skip that refuses to advance while a resume sits in the box
               — asking someone to consent to something they just said to skip.
             */}
             <button onClick={skip} style={{ fontSize:11, color:G.muted2, background:'none', border:'none', cursor:'pointer', textDecoration:'underline' }}>

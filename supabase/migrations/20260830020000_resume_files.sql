@@ -3,7 +3,7 @@
 -- A dropped PDF is now parsed into a structured, editable record, and THE
 -- ORIGINAL FILE IS KEPT. That second half is the part worth reading twice.
 --
--- Until today the most sensitive thing this table held was résumé text the
+-- Until today the most sensitive thing this table held was resume text the
 -- interviewer had pasted in themselves. Now it holds the candidate's actual
 -- document, at rest, in our storage — belonging to a person who is not a user
 -- of this product, did not create this account, and cannot delete their own
@@ -18,7 +18,7 @@
 --   * deleting a row queues the file for actual deletion, rather than leaving
 --     unreachable bytes in a bucket forever.
 --
--- WHAT THIS DOES NOT DO: it does not touch the enforcement point. The résumé
+-- WHAT THIS DOES NOT DO: it does not touch the enforcement point. The resume
 -- still reaches the model only through buildSystemPrompt() in
 -- apps/desktop/src/services/systemPrompt.js, which still omits the RESUME
 -- section entirely when the flag is false. Structured parsing changes how the
@@ -35,7 +35,7 @@ alter table public.interview_profiles
   -- policies each re-deriving ownership through a join back to this one —
   -- tripling the surface 20260830000000 worked to keep at a single table, and
   -- join-based policies are the ones that get subtly wrong. Order is also
-  -- semantic in a résumé; a JSON array preserves it without a position column.
+  -- semantic in a resume; a JSON array preserves it without a position column.
   add column if not exists resume_parsed      jsonb,
 
   -- Storage pointer: 'resumes' bucket, path {user_id}/{profile_id}/{uuid}.pdf.
@@ -60,7 +60,7 @@ alter table public.interview_profiles
   add column if not exists company_domain     text;
 
 comment on column public.interview_profiles.resume_parsed is
-  'Structured résumé: {personal, introduction, education[], jobs[], other[]}. Flattened into resume on save; shape lives in apps/web/lib/resume.js.';
+  'Structured resume: {personal, introduction, education[], jobs[], other[]}. Flattened into resume on save; shape lives in apps/web/lib/resume.js.';
 comment on column public.interview_profiles.resume_file_path is
   'Object path in the private `resumes` bucket. First path segment is the owner and is what the storage policies key on.';
 
@@ -79,7 +79,7 @@ alter table public.interview_profiles
 
   -- normalizeParsed() in apps/web/lib/resume.js is the real shape check. These
   -- two are the floor under it: whatever bug ships in that file, a row can never
-  -- hold a bare string or a quarter-megabyte of model output. A résumé is
+  -- hold a bare string or a quarter-megabyte of model output. A resume is
   -- attacker-supplied text going into a model, so "the model returned 5 MB of X"
   -- is a real case and not a hypothetical one.
   add constraint interview_profiles_resume_parsed_object
@@ -141,7 +141,7 @@ grant update (
 ) on public.interview_profiles to authenticated;
 
 -- select and delete are unchanged and deliberately still granted. DELETE in
--- particular: a user must be able to remove a candidate's résumé from their
+-- particular: a user must be able to remove a candidate's resume from their
 -- account even when our API route is down. That is a privacy right, not a
 -- convenience — and the tombstone trigger below means a direct client delete
 -- still gets the bytes reclaimed.
@@ -160,7 +160,7 @@ begin
   -- RESUME-UPLOAD 2026-08-30: CONSENT BELONGS TO A DOCUMENT, NOT TO A PROFILE.
   --
   -- InterviewProfiles.jsx already refuses to carry a tick across a cleared
-  -- résumé, on the grounds that "the flag is meaningless without the text it
+  -- resume, on the grounds that "the flag is meaningless without the text it
   -- governs". This is the same rule applied to the file: if the stored PDF
   -- changed, nobody has been asked about the NEW one, so the old answer is not
   -- an answer to the question being asked.
@@ -183,7 +183,7 @@ end;
 $$;
 
 -- ============================================================ storage bucket
--- Private: a résumé is the most sensitive thing this product stores, and a
+-- Private: a resume is the most sensitive thing this product stores, and a
 -- public bucket means a guessable URL is the only thing between it and the web.
 --
 -- The bucket's own limit (6 MiB) sits ABOVE the route's (4 MB). Two ceilings on

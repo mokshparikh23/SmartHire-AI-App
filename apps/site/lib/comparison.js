@@ -27,7 +27,7 @@
  *   Never in your voice    the first-person rules are commented out at that file's head
  *   Screen capture         askAboutScreen() → captureScreen() → image_url part
  *   Live transcription     useVoice.js acquire('system' | mic) → Whisper
- *   Résumé context         /api/resume/parse, gated in buildSystemPrompt()
+ *   Resume context         /api/resume/parse, gated in buildSystemPrompt()
  *   No practice mode       nothing in apps/desktop runs without a live session
  *   Credits never expire   packages/pricing, and the FAQ on the landing page
  *   Pay-per-use            CREDIT_PACKS exist alongside SUBSCRIPTION_TIERS
@@ -170,7 +170,7 @@ export function competitorPrice(column, currency) {
       { label: 'Suggests questions to ask', values: { [US]: 'yes', … }, notes: { [US]: 'Two or three after every answer, strongest first' } },
       { label: 'Writes answers in the candidate’s voice', values: { [US]: 'no', parakeet: 'yes', finalround: 'yes', lockedin: 'yes', warmup: 'no' }, notes: { [US]: 'The prompt forbids speaking as anyone' } },
       { label: 'Meant to be disclosed to the other person', values: { [US]: 'yes', parakeet: 'no', … }, notes: { warmup: 'Nobody else is in the room' } },
-      { label: 'Consent gate enforced in code', values: { [US]: 'yes', parakeet: 'unknown', … }, notes: { [US]: 'No tick, no résumé in the prompt' } },
+      { label: 'Consent gate enforced in code', values: { [US]: 'yes', parakeet: 'unknown', … }, notes: { [US]: 'No tick, no resume in the prompt' } },
     ],
   },
 */
@@ -310,7 +310,7 @@ export const FEATURE_GROUPS = [
         notes: { [US]: 'Screenshot the shared editor and ask — it answers' },
       },
       {
-        label: 'Résumé upload and context',
+        label: 'Resume upload and context',
         values: {
           [US]: 'yes', parakeet: 'yes', finalround: 'yes', lockedin: 'yes', warmup: 'partial',
         },

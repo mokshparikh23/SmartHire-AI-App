@@ -8,7 +8,18 @@ export const useSettingsStore = create(
       // Installs from before the OpenAI switch have a Groq or Claude model name
       // persisted here; resolveModel() in services/aiRouter.js falls back to the
       // default, and the server re-checks it against its own allowlist.
-      model: 'gpt-4o',
+      /* INTENT-ROUTING 2026-09-01: was 'gpt-4o', matching the server's old
+         default. Both moved to the fast model together, and they HAVE to move
+         together: Launcher's snap-to-default only fires when the persisted model
+         is absent from the server's list, and 'gpt-4o' is still in it — so
+         leaving this alone would mean a fresh install never reached the fast
+         default at all, whatever the server said.
+
+         An existing install keeps whatever it stored, which is correct: that is
+         a choice someone made, and gpt-4o is the better model anyway. Coding and
+         screenshots escalate regardless of what is stored here. */
+      // model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       setModel: (m) => set({ model: m }),
 
       // ── Overlay opacity ─────────────────────────────────────────────────────
@@ -40,8 +51,25 @@ export const useSettingsStore = create(
       // ever released with the flip, so there is no install to migrate — and now
       // that the ⋮ menu exists, a value someone dislikes is one click away
       // rather than something the store has to reach in and correct.
+      /* CANDIDATE-ONLY 2026-09-01 ─ the interviewer copilot is retired.
+         The product is for the person BEING interviewed, and a second product
+         living behind a dropdown in the same binary is what kept every shared
+         string in systemPrompt.js written for two different readers at once.
+
+         Pinned here rather than deleted, per the repo's keep-don't-delete rule.
+         Three things make the retirement complete and none of them is a file
+         rename:
+           1. setAnswerMode ignores its argument — nothing can set 'followups'.
+           2. answerMode is excluded from partialize below, so an install that
+              already stored 'followups' comes back as 'answer' on next launch.
+              That is why no zustand `migrate` is needed; see the note there.
+           3. buildSystemPrompt() no longer branches (services/systemPrompt.js).
+         The `followups ? … : …` ternaries in the overlay components are left
+         alone deliberately: with the value pinned they all resolve to the answer
+         side, so they are dead branches rather than wrong ones. */
       answerMode: 'answer',
-      setAnswerMode: (m) => set({ answerMode: m === 'followups' ? 'followups' : 'answer' }),
+      // setAnswerMode: (m) => set({ answerMode: m === 'followups' ? 'followups' : 'answer' }),
+      setAnswerMode: () => set({ answerMode: 'answer' }),
 
       // ── Answer style ────────────────────────────────────────────────────────
       //
@@ -76,7 +104,7 @@ export const useSettingsStore = create(
       // ── Interview context ───────────────────────────────────────────────────
       //
       // PIVOT 2026-08-30: `resumeConsent` added. The marketing site has claimed
-      // since the pivot that "the résumé is used only after you confirm the
+      // since the pivot that "the resume is used only after you confirm the
       // candidate agreed to it" — there was no such flag anywhere, so the claim
       // was false. buildSystemPrompt() in services/systemPrompt.js is what
       // actually enforces it; this is only where the answer is kept.
@@ -84,6 +112,16 @@ export const useSettingsStore = create(
       // It is deliberately NOT persisted across interviews — see the partialize
       // note at the bottom of this file. Consent is given for one candidate, not
       // once for the life of the install.
+      //
+      /* OWN-CV 2026-09-01 ─ the flag is now vestigial, and stays anyway.
+         buildSystemPrompt() no longer reads it and Launcher no longer writes it:
+         a resume on the interview is a resume in the prompt. The KEY is kept
+         here, in clearInterviewContext and in partialize because all three are
+         about what this object may hold, and a key that is always false and
+         always blanked cannot hurt — whereas removing it from partialize would
+         leave a stale `true` from an older build sitting in localStorage under
+         a name a future reader might trust. Nothing may start reading it again;
+         if you need the resume, test the resume. */
       //
       // interviewContext: { company: '', role: '', resume: '', jobDescription: '', isSetup: false },
       /* CONTEXT 2026-08-31: candidateName, companyDomain and resumeBrief added.
@@ -156,11 +194,11 @@ export const useSettingsStore = create(
         cost the interviewer their typing. `resumeConsent` is different: it is a
         statement about one candidate in one interview, not a setting. Persisting
         it would mean a box ticked for Monday's candidate silently authorising
-        Tuesday's résumé.
+        Tuesday's resume.
 
-        The résumé text itself still persists. That is the safe pairing — on a
+        The resume text itself still persists. That is the safe pairing — on a
         restart the text is present but the flag is false, so buildSystemPrompt()
-        omits the résumé until consent is confirmed again for the new candidate.
+        omits the resume until consent is confirmed again for the new candidate.
 
         ANSWER-STYLE 2026-08-30: answerMode and answerStyle both persist, and
         that is chosen rather than inherited from the spread below. Neither is a
@@ -176,7 +214,7 @@ export const useSettingsStore = create(
          Launcher.start() rewrites resume, resumeBrief and resumeConsent from a
          freshly fetched /api/profiles row on every single session start, and it
          is the only live caller of session.start(). So the persisted copy is
-         redundant — and a résumé sitting in localStorage under a false flag is a
+         redundant — and a resume sitting in localStorage under a false flag is a
          landmine rather than a safety property.
 
          This is STRICTLY STRICTER than what it replaces. Nothing that was gated
@@ -185,8 +223,33 @@ export const useSettingsStore = create(
       //   ...s,
       //   interviewContext: { ...s.interviewContext, resumeConsent: false },
       // }),
+      /* CANDIDATE-ONLY 2026-09-01: answerMode stops persisting.
+         An install that stored 'followups' before the retirement would otherwise
+         rehydrate straight back into the interviewer prompt — rehydration merges
+         the stored blob OVER the initial state, so pinning the default alone
+         reaches nobody who has already opened the app. Dropping the key is the
+         whole migration, and it needs no `version`/`migrate` pair.
+
+         Note this is `answerMode: undefined`, not a delete: the object spread has
+         already copied it in, and persist's own serializer drops undefined. */
+      /* CANDIDATE-ONLY 2026-09-01: partialize alone does not finish the job.
+         It only changes what is WRITTEN from now on. An install that stored
+         'followups' before this build still has it in localStorage, and
+         rehydration merges the stored blob OVER the initial state — so on the
+         first launch after updating, the labels would still say "Ask next:".
+         (The prompt would not: buildSystemPrompt() stopped branching.)
+
+         This is the default shallow merge with one value pinned after it. It is
+         `merge`, not `migrate`, on purpose — see the note above about why the
+         migrate path is easy to configure into never running. */
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted || {}),
+        answerMode: 'answer',
+      }),
       partialize: (s) => ({
         ...s,
+        answerMode: undefined,
         interviewContext: {
           ...s.interviewContext,
           resume: '',

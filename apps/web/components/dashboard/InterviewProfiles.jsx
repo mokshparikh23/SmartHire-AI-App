@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Card, Button, Badge, EmptyState, PageHeader } from 'smarthire-ui'
 import Icon from 'smarthire-ui/Icon'
-import { BLANK_ROW, hydrate, toRow } from '@/lib/resume'
+// ONE-RESUME-CHIP 2026-09-01: RESUME_BUCKET, to mint the signed URL the chip
+// opens. Same bucket constant OriginalPdf uses, from the same module.
+// import { BLANK_ROW, hydrate, toRow } from '@/lib/resume'
+import { BLANK_ROW, RESUME_BUCKET, hydrate, toRow } from '@/lib/resume'
 import { logoUrl } from '@/lib/company'
 import InterviewForm from './interview/InterviewForm'
 import CompanyLogo from './interview/CompanyLogo'
@@ -99,8 +102,58 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
      with it, and until now one click on a 15px icon did all of that with no way
      back — no undo, no confirm, and the row gone before the pointer moved. */
   const [confirming, setConfirming] = useState(null)
+  /* ONE-RESUME-CHIP 2026-09-01: the id of the row whose signed URL is in flight.
+     Minting one is a round trip to Supabase, and without this the chip is a
+     button that looks unchanged while it works — two impatient clicks then open
+     two tabs. */
+  const [opening, setOpening] = useState(null)
 
   const supabase = createClient()
+
+  /**
+   * Open an interview's stored PDF in a new tab.
+   *
+   * ONE-RESUME-CHIP 2026-09-01. The URL is minted HERE, in the browser, with the
+   * anon key — the bucket's one permissive policy (select, own folder) is what
+   * that is for, and it saves a route. Sixty seconds, because a signed URL is a
+   * bearer token: it should outlive the click that produced it and nothing more.
+   * Both facts are OriginalPdf's, which does the same thing for the form's
+   * viewer; lib/storage.js `signResume()` is the server-side twin.
+   *
+   * THE TAB IS OPENED BEFORE THE AWAIT, and navigated afterwards. A
+   * window.open() that runs after an await has lost the user gesture that
+   * justified it, and Chrome and Safari both block it as a popup — the click
+   * would appear to do nothing at all. Opening it empty first keeps the gesture,
+   * and gives the reader a tab that is visibly loading while the URL is minted.
+   */
+  const openResume = async (p) => {
+    const tab = window.open('', '_blank')
+    // Nulled while the tab is still about:blank and therefore same-origin. The
+    // destination is our own storage URL, but a handle back to this page is not
+    // something the PDF viewer needs.
+    if (tab) tab.opener = null
+
+    setOpening(p.id)
+    setError(null)
+
+    try {
+      const { data, error: err } = await supabase
+        .storage.from(RESUME_BUCKET)
+        .createSignedUrl(p.resume_file_path, 60)
+
+      if (err || !data?.signedUrl) throw new Error(err?.message || 'Could not open that PDF.')
+
+      if (tab) tab.location = data.signedUrl
+      // A blocked popup is the one failure with nothing on screen to explain it:
+      // the click did work, and the tab it asked for was refused by the browser.
+      else setError('Your browser blocked the new tab. Allow pop-ups for this site, or open the interview and use the Original PDF tab.')
+    } catch (e) {
+      tab?.close()
+      setError(e.message)
+    } finally {
+      setOpening(null)
+    }
+  }
 
   const merge = (row) =>
     setProfiles(prev => prev.some(p => p.id === row.id)
@@ -474,10 +527,58 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
                       {p.resume
                         ? <Badge tone="positive">Resume</Badge>
                         : <Badge>No resume</Badge>} */}
+                      {/* ONE-RESUME-CHIP 2026-09-01 ─ ONE CHIP, AND IT OPENS.
+
+                          There were two: "Resume" for the parsed text and "PDF"
+                          for the stored file. That is a distinction from inside
+                          the database — a row with both has one resume, not two,
+                          and printing the same fact twice is what made the chip
+                          group read as wider than the interview it describes.
+
+                          So the file becomes the chip's BEHAVIOUR instead of a
+                          second chip. Three states, one slot:
+
+                            a stored PDF   → a chip you can click, which opens it
+                            text only      → the same chip, inert
+                            neither        → plain text, not a pill
+
+                          The middle state stays a plain Badge rather than a
+                          disabled button on purpose: a resume typed or pasted
+                          into the form has no file to open, and a control that
+                          is dead on arrival invites the click it cannot answer.
+                          Nothing is lost by it — the row still opens the
+                          interview, where the text is.
+
+                          The chip is `pointer-events-auto` for the same reason
+                          Edit and the bin are: the content layer above the
+                          stretched link is pointer-events-none, so without it
+                          the click falls through to "open the interview".
+
                       {p.resume
                         ? <Badge><Icon name="file" size={11} />Resume</Badge>
                         : <span className="text-[12px] text-faint">No resume</span>}
-                      {p.resume_file_path && <Badge>PDF</Badge>}
+                      {p.resume_file_path && <Badge>PDF</Badge>} */}
+                      {p.resume_file_path ? (
+                        <Badge
+                          as="button"
+                          type="button"
+                          interactive
+                          className="pointer-events-auto"
+                          onClick={() => openResume(p)}
+                          disabled={opening === p.id}
+                          /* Names the interview, not just the action: "Open the
+                             resume PDF", read out on five rows in a row, says
+                             which one no better than "Edit" did. */
+                          aria-label={`Open the resume PDF for ${p.candidate_name}`}
+                        >
+                          <Icon name="file" size={11} />
+                          {opening === p.id ? 'Opening…' : 'Resume'}
+                        </Badge>
+                      ) : p.resume ? (
+                        <Badge><Icon name="file" size={11} />Resume</Badge>
+                      ) : (
+                        <span className="text-[12px] text-faint">No resume</span>
+                      )}
                       {p.job_description && <Badge>JD</Badge>}
                       {/* ANSWER-STYLE 2026-08-30: only the non-default is worth
                           a badge. A row reading "Standard" on every candidate is
@@ -576,9 +677,21 @@ export default function InterviewProfiles({ initialProfiles, userId }) {
                           <Button size="sm" variant="quiet" onClick={() => setConfirming(p.id)}
                             disabled={busy} aria-label={`Delete ${p.candidate_name}`}>
                             <Icon name="trash" size={15} /> */}
+                          {/* ROW-CHIP-PARITY 2026-09-01: 16px in a 24px circle.
+
+                              It went 15 → 14 → 13 as the button shrank, on the
+                              theory that the glyph should keep its ring — and
+                              at 13 the bin had become the faintest thing in the
+                              row, a mark you had to look for to find. The
+                              BUTTON is what got smaller here; the icon inside it
+                              is the only part the eye actually reads, so it goes
+                              the other way. 16 in 24 leaves a 4px ring, which is
+                              enough for the hover disc to read as a disc.
+                            <Icon name="trash" size={14} />
+                            <Icon name="trash" size={13} /> */}
                           <Button size="xs" variant="quiet" iconOnly onClick={() => setConfirming(p.id)}
                             disabled={busy} aria-label={`Delete ${p.candidate_name}`}>
-                            <Icon name="trash" size={14} />
+                            <Icon name="trash" size={16} />
                           </Button>
                         </>
                       )}

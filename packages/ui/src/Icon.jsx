@@ -18,6 +18,9 @@ const PATHS = {
   check: <path d="m4.5 12.5 5 5 10-11" />,
   copy: <><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M15 5.5A2.5 2.5 0 0 0 12.5 3h-7A2.5 2.5 0 0 0 3 5.5v7A2.5 2.5 0 0 0 5.5 15" /></>,
   arrowRight: <><path d="M4 12h15" /><path d="m13 6 6 6-6 6" /></>,
+  // The mirror of arrowRight, to the same measurements, so a back control and a
+  // forward one on the same screen are the same weight and length.
+  arrowLeft: <><path d="M20 12H5" /><path d="m11 6-6 6 6 6" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5.2l3.4 2" /></>,
   download: <><path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20.5h16" /></>,
   apple: <><path d="M16.3 12.6c0-2.5 2-3.7 2.1-3.8-1.1-1.7-2.9-1.9-3.6-1.9-1.5-.2-3 .9-3.8.9s-2-.9-3.2-.9c-1.7 0-3.2 1-4 2.5-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.2.8 2.2-1.2 3-2.4c.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.4-1-2.3-3.9z" /><path d="M14.4 4.8c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z" /></>,
@@ -49,7 +52,7 @@ const PATHS = {
   monitor: <><rect x="2.5" y="4" width="19" height="12.5" rx="2" /><path d="M8.5 20.5h7" /><path d="M12 16.5v4" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><path d="M3.2 9.5h17.6M3.2 14.5h17.6" /><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" /></>,
 
-  /* RESUME-UPLOAD 2026-08-30: the résumé dropzone and the company field.
+  /* RESUME-UPLOAD 2026-08-30: the resume dropzone and the company field.
      The first three are copied verbatim from the desktop kit
      (apps/desktop/src/components/ui/Icon.jsx) rather than redrawn — the two sets
      have drifted enough already, and a second `upload` at a different stroke
@@ -76,6 +79,12 @@ const PATHS = {
      margin top and bottom. Stroke only, so it is deliberately absent from the
      `filled` list below. */
   speech:   <path d="M6 3h12a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H10l-4 3v-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />,
+
+  /* RESUME-VIEW 2026-09-01: "make this bigger", for the original-PDF pane.
+     Four corners with arrows pushing outward, drawn as corner brackets rather
+     than a single box — a box outline at 15px is indistinguishable from `card`,
+     and the meaning here is the movement, not the frame. */
+  expand:   <><path d="M9 3.5H3.5V9" /><path d="M15 3.5h5.5V9" /><path d="M9 20.5H3.5V15" /><path d="M15 20.5h5.5V15" /><path d="m3.5 3.5 6 6" /><path d="m20.5 3.5-6 6" /><path d="m3.5 20.5 6-6" /><path d="m20.5 20.5-6-6" /></>,
 }
 
 export default function Icon({ name, size = 20, strokeWidth = 1.5, className = '', ...rest }) {

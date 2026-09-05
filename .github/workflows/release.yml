@@ -66,11 +66,24 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           # Only the installable artifacts. The unpacked mac-arm64/ and win-unpacked/
-          # trees are also in release/ and would add hundreds of MB for nothing.
+          # trees are also in the output dir and would add hundreds of MB for nothing.
+          #
+          # release.noindex/, not release/ — the suffix keeps macOS from indexing
+          # the packaged .app as a launchable app on dev machines. The name comes
+          # from directories.output in apps/desktop/electron-builder.config.cjs;
+          # these paths must track it or the upload matches nothing and
+          # if-no-files-found: error fails the job.
+          #
+          # Was, before the rename (kept out of the block below on purpose —
+          # `path: |` is a literal scalar, so a leading # in there is not a YAML
+          # comment, it is a glob pattern that silently matches nothing):
+          #   apps/desktop/release/*.dmg
+          #   apps/desktop/release/*.exe
+          #   apps/desktop/release/*.blockmap
           path: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.blockmap
+            apps/desktop/release.noindex/*.dmg
+            apps/desktop/release.noindex/*.exe
+            apps/desktop/release.noindex/*.blockmap
 
   publish:
     name: Attach to release

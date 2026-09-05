@@ -1018,7 +1018,7 @@ ipcMain.handle('capture:openSettings', () => {
 })
 
 // SETUP-TO-WEB 2026-08-30: no live caller any more — its only user was the
-// résumé step of InterviewSetup.jsx, which is unrouted now that setup happens on
+// resume step of InterviewSetup.jsx, which is unrouted now that setup happens on
 // the web. Left working rather than commented out: the retired screen still
 // calls it, so anything that re-routes that file keeps a functioning app.
 ipcMain.handle('parse-pdf', async (_, filePath) => {

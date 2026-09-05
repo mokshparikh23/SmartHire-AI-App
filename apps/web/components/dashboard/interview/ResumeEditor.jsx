@@ -8,7 +8,7 @@ import { blankEntry } from '@/lib/resume'
 /*
   RESUME-UPLOAD 2026-08-30
 
-  The parsed résumé, as editable fields.
+  The parsed resume, as editable fields.
 
   ON THE REFERENCE DESIGN: this reproduces ParakeetAI's structure — Personal
   Details, Introduction, Education, Job Experience, Other Experience, each
@@ -190,7 +190,7 @@ export default function ResumeEditor({ value, onChange }) {
             </Entry>
           ))}
           {value.jobs.length === 0 && (
-            <Empty>Nothing found in the résumé. Add a job if you want the copilot to know about one.</Empty>
+            <Empty>Nothing found in the resume. Add a job if you want the copilot to know about one.</Empty>
           )}
         </div>
         <AddButton innerRef={addRef('jobs')} onClick={() => add('jobs')}>Add job</AddButton>
@@ -224,7 +224,7 @@ export default function ResumeEditor({ value, onChange }) {
               </Wide>
             </Entry>
           ))}
-          {value.education.length === 0 && <Empty>No education found in the résumé.</Empty>}
+          {value.education.length === 0 && <Empty>No education found in the resume.</Empty>}
         </div>
         <AddButton innerRef={addRef('education')} onClick={() => add('education')}>Add education</AddButton>
       </Section>
@@ -247,7 +247,7 @@ export default function ResumeEditor({ value, onChange }) {
               </Wide>
             </Entry>
           ))}
-          {value.other.length === 0 && <Empty>No skills or certifications found in the résumé.</Empty>}
+          {value.other.length === 0 && <Empty>No skills or certifications found in the resume.</Empty>}
         </div>
         <AddButton innerRef={addRef('other')} onClick={() => add('other')}>Add section</AddButton>
       </Section>

@@ -90,6 +90,10 @@ export function askAI(transcript, model, sessionId) {
  * @param {string} [model]
  * @param {string} [sessionId]
  * @param {AbortSignal} [signal]  SEGMENTATION 2026-08-30 — supersede a stream
+ * @param {'general'|'coding'|'screen'} [intent]  INTENT-ROUTING 2026-09-01 — what
+ *   KIND of question this is. Passed straight through: resolveModel below is the
+ *   only thing this layer is allowed to have an opinion about, and it has none
+ *   about the intent. The server maps it to a model.
  */
 // export function askAIStream(transcript, onChunk, onDone, model) {
 //   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model))
@@ -97,8 +101,11 @@ export function askAI(transcript, model, sessionId) {
 // export function askAIStream(transcript, onChunk, onDone, model, sessionId) {
 //   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId)
 // }
-export function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
-  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId, signal)
+// export function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
+//   return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId, signal)
+// }
+export function askAIStream(transcript, onChunk, onDone, model, sessionId, signal, intent) {
+  return backendAskAIStream(transcript, onChunk, onDone, resolveModel(model), sessionId, signal, intent)
 }
 
 /**

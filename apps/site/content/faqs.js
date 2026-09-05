@@ -49,13 +49,13 @@ export const HOME_FAQ_QUESTIONS = [
   PIVOT 2026-08-29: three of the four below are no longer true.
 
   ['Can the interviewer see it?', 'No. The overlay is marked as excluded from screen capture, so it does not appear in Zoom, Meet, Teams or any recording — even when you share your entire screen.'],
-  ['Where does my résumé go?', 'It stays on your machine. When a question is asked, only the question and the context needed to answer it are sent for processing.'],
+  ['Where does my resume go?', 'It stays on your machine. When a question is asked, only the question and the context needed to answer it are sent for processing.'],
   ['Which platforms are supported?', 'macOS and Windows. One licence key activates the app, and your balance lives on your account — so it follows you to either machine.'],
 
   The first was written for a candidate hiding from their interviewer, which is
   not the product; it is replaced by the consent question, which is the
   commitment this app actually makes and enforces. The second was never
-  accurate — résumé text, the job description and every transcribed utterance
+  accurate — resume text, the job description and every transcribed utterance
   are sent to our server and on to OpenAI; only PDF text extraction happens on
   the machine. The third was fine but under-specified the builds.
 */
@@ -66,7 +66,7 @@ export const HOME_FAQ_QUESTIONS = [
   file rather than a promise about a third party. What replaces it is the
   question people actually arrive with — whether the thing answers as you.
 
-  ['Does the candidate have to agree to this?', 'For their résumé, yes — and the app enforces it rather than trusting you to remember. …'],
+  ['Does the candidate have to agree to this?', 'For their resume, yes — and the app enforces it rather than trusting you to remember. …'],
 */
 
 /** Questions about what the thing is and does. Rendered on /how-it-works. */

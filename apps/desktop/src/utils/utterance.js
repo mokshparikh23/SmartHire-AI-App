@@ -126,7 +126,7 @@ export function worthAnswering(text) {
    The model is instructed to read that tag FIRST and to treat what follows
    accordingly, so text containing a tag is text that can rewrite who said it.
 
-   The web app already strips these from résumés, which is where the risk is
+   The web app already strips these from resumes, which is where the risk is
    largest and where the class of bug has already occurred once. This closes the
    other door: text that arrives through the transcript. It is unlikely from
    speech — a transcriber has little reason to emit square brackets — but

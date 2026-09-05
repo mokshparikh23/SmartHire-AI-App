@@ -2,7 +2,9 @@ import { requireUser, getProfile, getSupabase } from '@/lib/auth'
 import { getEntitlement } from '@/lib/entitlement'
 import { formatBalance, balanceTone, LOW_BALANCE_MINUTES } from 'smarthire-data/credits'
 import { sweepStaleSessions } from 'smarthire-data/metering'
-import { getLatestRelease, formatSize } from '@/lib/releases'
+// import { getLatestRelease, formatSize } from '@/lib/releases'
+// SIZE-LABEL 2026-09-01: formatSize is no longer called here — see DownloadButton.
+import { getLatestRelease } from '@/lib/releases'
 import CopyButton from '@/components/dashboard/CopyButton'
 import Icon from 'smarthire-ui/Icon'
 import { Card, Badge, Button, Stat, PageHeader } from 'smarthire-ui'
@@ -34,10 +36,18 @@ function DownloadButton({ platform, icon, label, asset }) {
     through next/link by default, which would try to client-navigate to a
     binary instead of downloading it.
   */
-  const size = formatSize(asset.size)
+  /*
+    SIZE-LABEL 2026-09-01: removed on request. The byte count came from the
+    release asset and was correct, but it is not something the buyer decides
+    on — they have already paid, and the only question left is which platform.
+    formatSize() stays exported from lib/releases so this can come straight
+    back by uncommenting both lines.
+  */
+  // const size = formatSize(asset.size)
   return (
     <Button as="a" href={`/api/download/${platform}`} variant="secondary" icon={icon}>
-      {size ? `${label} · ${size}` : label}
+      {/* {size ? `${label} · ${size}` : label} */}
+      {label}
     </Button>
   )
 }

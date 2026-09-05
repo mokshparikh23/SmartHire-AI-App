@@ -1,7 +1,7 @@
 import { CORS, jsonError } from '@/lib/http'
 import { requireLicense } from '@/lib/ai'
 import { createAdminClient } from 'smarthire-data/supabase-server'
-// CONTEXT 2026-08-31: the compressed résumé is computed server-side, where the
+// CONTEXT 2026-08-31: the compressed resume is computed server-side, where the
 // prompt-injection stripping in lib/resume.js's clean() already lives.
 import { briefResume, normalizeParsed } from '@/lib/resume'
 
@@ -27,7 +27,7 @@ export async function OPTIONS() {
  * BEFORE a metered session exists, so gating this on a session id would make it
  * unreachable. It is also free — no model call — so there is nothing to meter.
  *
- * The résumé text is returned in full. That is the point: buildSystemPrompt()
+ * The resume text is returned in full. That is the point: buildSystemPrompt()
  * on the desktop needs both the text and resume_consent to decide whether the
  * RESUME section is assembled at all, and the flag is worthless without the
  * text it governs travelling alongside it.
@@ -101,7 +101,7 @@ export async function POST(request) {
       /* CONTEXT 2026-08-31: derived here, not shipped raw. Coerced at the
          boundary for the same reason answerStyle is below — the desktop should
          never have to decide what a malformed parse means mid-interview. It is
-         a projection of the résumé and carries no consent of its own;
+         a projection of the resume and carries no consent of its own;
          buildSystemPrompt() gates it on the same useResume condition as the
          full text, in the same expression. */
       resumeBrief:     briefResume(normalizeParsed(r.resume_parsed)),

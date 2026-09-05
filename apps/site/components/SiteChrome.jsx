@@ -46,13 +46,13 @@ export function SiteFooter() {
               <span className="text-[14px] font-semibold tracking-tight text-ink">Smart Hire AI</span>
             </div>
             {/* PIVOT 2026-08-29: was "Real-time answers during live interviews,
-                drawn from your own résumé." — the candidate-side pitch.
+                drawn from your own resume." — the candidate-side pitch.
                 CONCEPT 2026-08-30: which is the pitch again, so it is restored
                 verbatim. The interviewer-side line it replaced: "A copilot for
                 the person running the interview, used with the candidate's
                 knowledge." */}
             <p className="mt-3 text-[13px] leading-relaxed text-muted">
-              Real-time answers during live interviews, drawn from your own résumé.
+              Real-time answers during live interviews, drawn from your own resume.
             </p>
           </div>
 
@@ -144,7 +144,7 @@ export function SiteFooter() {
           <p className="text-[12px] text-faint">
             © {new Date().getFullYear()} Smart Hire AI. All rights reserved.
           </p>
-          {/* PIVOT 2026-08-29: this claimed "Your résumé and transcripts stay on
+          {/* PIVOT 2026-08-29: this claimed "Your resume and transcripts stay on
               your machine", which was never true — both are sent to our server
               and on to OpenAI. Replaced with the part that IS true. */}
           <p className="flex items-center gap-1.5 text-[12px] text-faint">

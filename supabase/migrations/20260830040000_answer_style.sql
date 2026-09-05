@@ -13,8 +13,8 @@
 --
 -- So this is a REGISTER switch and nothing more. 'desi' changes word choice,
 -- sentence length and the kind of example reached for. It does not change what
--- a follow-up may claim, what the résumé is allowed to contribute, or whether
--- the résumé is used at all — that gate is still resume_consent, still enforced
+-- a follow-up may claim, what the resume is allowed to contribute, or whether
+-- the resume is used at all — that gate is still resume_consent, still enforced
 -- in buildSystemPrompt() on the desktop, and this column is nowhere near it.
 -- styleBlock() in apps/desktop/src/services/systemPrompt.js is the only consumer,
 -- and its doc comment is where the boundary is written down.
@@ -25,7 +25,7 @@
 -- interviewer's. One account interviews a Bengaluru SDE2 on Monday and a
 -- Singapore PM on Tuesday, and an account-level setting would silently carry
 -- Monday's register into Tuesday's room. It lives in the same row as the
--- company, the role and the résumé for the same reason those do: it is the
+-- company, the role and the resume for the same reason those do: it is the
 -- context of one interview, created once on the web and picked in the desktop
 -- launcher.
 --

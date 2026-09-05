@@ -61,7 +61,7 @@ export function logoUrl(domain, px = 64) {
   // return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}` +
   //        `/w/${px}/h/${px}/icon?c=${encodeURIComponent(CLIENT_ID)}&fallback=404`
   return `https://cdn.brandfetch.io/${encodeURIComponent(domain)}` +
-         `/w/${px}/h/${px}/fallback/404/icon?c=${encodeURIComponent(CLIENT_ID)}`
+    `/w/${px}/h/${px}/fallback/404/icon?c=${encodeURIComponent(CLIENT_ID)}`
 }
 
 /**
@@ -93,10 +93,10 @@ export async function searchCompanies(query, { signal } = {}) {
     .filter((b) => b && typeof b.domain === 'string' && b.domain)
     .slice(0, 6)
     .map((b) => ({
-      name:   typeof b.name === 'string' && b.name ? b.name : b.domain,
+      name: typeof b.name === 'string' && b.name ? b.name : b.domain,
       domain: b.domain,
       // Live only. Rendered in the open dropdown, never persisted — see the
       // header note on the 24-hour expiry.
-      icon:   typeof b.icon === 'string' && b.icon.startsWith('https://') ? b.icon : null,
+      icon: typeof b.icon === 'string' && b.icon.startsWith('https://') ? b.icon : null,
     }))
 }

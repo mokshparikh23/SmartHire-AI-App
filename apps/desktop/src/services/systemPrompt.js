@@ -89,13 +89,31 @@ import { useSessionStore } from '../store/sessionStore'
  * the covert prompt removed in the pivot, kept commented at the top of this
  * file as evidence; the notes there still apply.
  *
- * CONSENT GATE: the résumé is included only when `resumeConsent` is true. That
+ * CONSENT GATE: the resume is included only when `resumeConsent` is true. That
  * check lives here, in the prompt builder, rather than in the setup screen —
  * the UI can be skipped, re-rendered or worked around, but nothing reaches the
- * model without passing through this function. If the flag is false the résumé
+ * model without passing through this function. If the flag is false the resume
  * text is simply absent from the prompt, so there is no path by which it
  * influences a suggestion. It gates BOTH modes: the branch below chooses
  * wording, never whether the document is present.
+ *
+ * OWN-CV 2026-09-01 ─ THE TICK IS GONE, AND WITH IT THE FLAG ──────────────────
+ * The gate above was the last piece of the interviewer-side product still
+ * standing in this file. It asked the reader to confirm that someone had agreed
+ * to a document being used — but the reader IS that someone, the document is
+ * their own CV, and they uploaded it to this app for exactly one purpose. A
+ * second yes on top of the upload was not a protection, it was a way to lose an
+ * interview to a box nobody noticed: the resume sat in the row, every answer
+ * came out generic, and nothing on screen said why.
+ *
+ * The rule now is the upload itself. A resume present is a resume used; no
+ * resume means the else-branch below, which is the same branch an unticked box
+ * used to reach. Nothing new can flow to the model that a ticked box did not
+ * already send — what changes is that the user is no longer asked twice.
+ *
+ * Removing a document is still how you stop it being used, and that path
+ * deletes the file rather than leaving it on the account under a false flag —
+ * strictly more removal than unticking ever did.
  */
 export function buildSystemPrompt() {
   // const { interviewContext } = useSettingsStore.getState()
@@ -105,24 +123,45 @@ export function buildSystemPrompt() {
   // three were already fetched or already in the schema and simply never reached
   // the prompt — see the notes at each use below.
   // const { company, role, resume, jobDescription, resumeConsent } = interviewContext
+  // OWN-CV 2026-09-01: resumeConsent is no longer destructured. It is still on
+  // the context object and still returned by /api/profiles — dropping it there
+  // would break a desktop build older than this one, which does still gate on
+  // it — but nothing in this function may read it again, and the surest way to
+  // guarantee that is for the name not to exist here.
+  // const {
+  //   company, role, resume, jobDescription, resumeConsent,
+  //   candidateName, companyDomain, resumeBrief,
+  // } = interviewContext
   const {
-    company, role, resume, jobDescription, resumeConsent,
+    company, role, resume, jobDescription,
     candidateName, companyDomain, resumeBrief,
   } = interviewContext
   // SELF-VOICE 2026-08-31: which audio is being captured decides whether the
   // model can trust who spoke a [HEARD] line.
   const { captureSource } = useSessionStore.getState()
 
-  // Falsy-safe: a résumé that was pasted before consent was given must not leak
+  // Falsy-safe: a resume that was pasted before consent was given must not leak
   // through on a stale flag, and an empty string must not produce a headed but
   // blank section that reads to the model as "no relevant experience".
-  const useResume = resumeConsent === true && typeof resume === 'string' && resume.trim() !== ''
+  // const useResume = resumeConsent === true && typeof resume === 'string' && resume.trim() !== ''
+  /* OWN-CV 2026-09-01: one condition, and it is the only one there was ever
+     anything to check. The `typeof` and the `.trim()` stay exactly as they
+     were — the second half of the note above still holds, and it is the half
+     that was doing real work. An empty string is not a resume, and a headed but
+     blank RÉSUMÉ section reads to the model as a positive claim of no
+     experience, which is worse than no section at all. */
+  const useResume = typeof resume === 'string' && resume.trim() !== ''
   const useJD = typeof jobDescription === 'string' && jobDescription.trim() !== ''
 
   /* CONTEXT 2026-08-31 ─ THE most important line in this change ────────────────
      The brief is a second projection of the same document, so it rides the SAME
      gate, in the SAME expression. Writing it as its own boolean is precisely how
-     a consent gate gets quietly bypassed by the next field somebody adds. */
+     a consent gate gets quietly bypassed by the next field somebody adds.
+
+     OWN-CV 2026-09-01: still true, and still written this way. `useResume` is a
+     simpler test now, but "every projection of the document rides the same
+     boolean" is the property worth keeping — it is what makes "no resume" mean
+     no resume anywhere in the prompt, brief included. */
   const brief = useResume && typeof resumeBrief === 'string' ? resumeBrief.trim() : ''
 
   const sections = [
@@ -132,8 +171,8 @@ export function buildSystemPrompt() {
 
        It is deliberately NOT behind resumeConsent. In a candidate-side product
        this is the user's own name, in their own app, typed by them on their own
-       dashboard. The résumé carries the name only under consent because the
-       résumé is a document about them; their name is how they are addressed.
+       dashboard. The resume carries the name only under consent because the
+       resume is a document about them; their name is how they are addressed.
        Stated here so nobody "fixes" this in either direction by accident.
 
        It is also what makes [HEARD] and [SAID] unambiguous below. */
@@ -161,7 +200,12 @@ Role      : ${role || 'not specified'}`,
        all — only the framing changes. */
     // sections.push(`CANDIDATE RÉSUMÉ — the candidate has agreed to its use in this interview.
     // Cite it as [resume] when something you say comes from it.`)
-    sections.push(`YOUR RÉSUMÉ — the user's own, switched on for this conversation.
+    /* OWN-CV 2026-09-01: "switched on for this conversation" described the tick,
+       and there is no tick. It also implied a second state the model might
+       reason about; there is only one — the document is here, so use it. */
+    // sections.push(`YOUR RÉSUMÉ — the user's own, switched on for this conversation.
+    // Cite it as [resume] when something you say comes from it.`)
+    sections.push(`YOUR RÉSUMÉ — the user's own, uploaded by them for this interview.
 Cite it as [resume] when something you say comes from it.
 ${brief ? `
 AT A GLANCE
@@ -175,21 +219,29 @@ ${resume.trim()}`)
     // being sent to a candidate-side model. Same restriction, neutral wording.
     // sections.push(`You have NOT been given the candidate's resume. Either none was
     // supplied, or the interviewer has not confirmed the candidate agreed to its use. …`)
-    /* CANDIDATE-ONLY 2026-09-01: "the candidate's résumé" and "their background"
+    /* CANDIDATE-ONLY 2026-09-01: "the candidate's resume" and "their background"
        are third-person about the reader, and this is the branch EVERY
-       résumé-less session hits — which, now that a session can start with no
+       resume-less session hits — which, now that a session can start with no
        interview set up at all, is most first sessions. */
-    // sections.push(`You have NOT been given the candidate's résumé. Either none was supplied,
+    // sections.push(`You have NOT been given the candidate's resume. Either none was supplied,
     // or consent for its use has not been confirmed. Do not speculate about their
     // background, …  Work only from what is actually said in this conversation.`)
-    sections.push(`No résumé is available for this conversation — either none was uploaded,
-or it is switched off. Do not speculate about the user's background, do not ask
-for a résumé, and do not infer what might be in one. Work only from what is
-actually said in this conversation.`)
+    /* OWN-CV 2026-09-01: "or it is switched off" was the unticked-box case. With
+       the tick gone there is exactly one way to reach this branch — no resume
+       was uploaded — so saying so plainly is both shorter and true. The
+       instruction after it is unchanged and is the part that matters: this is
+       the branch most sessions hit, because a session can start with no
+       interview set up at all. */
+    // sections.push(`No resume is available for this conversation — either none was uploaded,
+    // or it is switched off. Do not speculate about the user's background, …`)
+    sections.push(`No resume is available for this conversation — none was uploaded.
+Do not speculate about the user's background, do not ask for a resume, and do
+not infer what might be in one. Work only from what is actually said in this
+conversation.`)
   }
 
   if (useJD) {
-    // ADAPTIVE 2026-08-31: same neutral wording as the résumé line above.
+    // ADAPTIVE 2026-08-31: same neutral wording as the resume line above.
     // sections.push(`JOB DESCRIPTION — cite it as [JD] when a follow-up comes from it.`)
     sections.push(`JOB DESCRIPTION — cite it as [JD] when something you say comes from it.
 
@@ -222,7 +274,7 @@ treat it as context, do not answer it, and say "nothing to add".`)
     It is computed HERE, next to `context`, for the same reason `context` is:
     both branches below need it and neither may see a different one. Note what
     it is NOT given. `useResume` and the sections array are already assembled
-    above and are not passed to it. The consent gate decides what the model is
+    above and are not passed to it. The resume gate decides what the model is
     TOLD; this decides only how the model words what it says back.
   */
   const style = styleBlock(answerStyle)
@@ -237,8 +289,8 @@ treat it as context, do not answer it, and say "nothing to add".`)
   // same on the way in.
   /* CANDIDATE-ONLY 2026-09-01 ─ the branch is gone; there is one reader.
      This app is for the person BEING interviewed. Keeping a second prompt behind
-     a dropdown is what forced every shared string above — the résumé block, the
-     no-résumé block, the JD line, the [SCREENSHOT] rule — to be written for two
+     a dropdown is what forced every shared string above — the resume block, the
+     no-resume block, the JD line, the [SCREENSHOT] rule — to be written for two
      different readers at once, and each of those has already had to be corrected
      once for exactly that reason (see the ADAPTIVE 2026-08-31 notes above).
 
@@ -357,7 +409,7 @@ BOUNDARIES
  *
  * Answers the question that was heard, rather than suggesting what to ask next.
  * `context` is the shared block buildSystemPrompt() assembles — same company,
- * role, résumé and JD sections, behind the same consent gate.
+ * role, resume and JD sections, behind the same consent gate.
  *
  * The length discipline is not cosmetic. This renders into a floating panel
  * that is read mid-conversation, so a correct answer nobody has time to read is
@@ -458,8 +510,18 @@ are not interchangeable.
    reply like a normal assistant in one short line — do not treat it as
    something overheard.
 
-[SCREENSHOT] — the candidate asking about the attached image of their screen.
-   Answer the question about what is in the image.
+[SCREENSHOT] — an image of the candidate's screen. Work out what is being ASKED
+   on it and answer that. Do not describe the screen; the candidate can already
+   see it. Read it and decide which it is:
+     · a coding problem, an algorithm question, a failing test or a stack trace
+       — answer it under CODING AND PROBLEM QUESTIONS below;
+     · an aptitude, quantitative or logical-reasoning question — same section;
+     · anything else — answer the question that is on the screen, or the one in
+       the accompanying text if there is one.
+   The accompanying text may be the last thing that was heard, which may have
+   nothing to do with the image. When the two disagree, the image is what the
+   candidate is looking at, so the image wins. If the screen holds no question
+   at all, say what is on it in one line and stop.
 
 An assistant turn in this conversation is a reply YOU put on screen earlier. It
 is not a record of what the candidate said aloud — they may have used it,
@@ -499,6 +561,12 @@ every word past the point they can use is a cost.
 Never pad a short question up to a length, and never truncate a four-part
 question down to one. The ceiling is what the candidate can read, not a number.
 
+One exception, and it is the only one: a coding problem or a quantitative
+question. Those are answered under CODING AND PROBLEM QUESTIONS below, and the
+code block and the dry run there are outside this ceiling entirely. Truncating
+a function to fit a word count produces something that does not run, which is
+worse than nothing.
+
 FORMAT
 
 Plain text by default. Light markdown ONLY where the structure is genuinely in
@@ -517,9 +585,37 @@ the answer:
 - \`backticks\` for identifiers, types, commands and code fragments. Anything
   inside backticks is left exactly as written, so \`a == b\` is safe to say.
 
-No headings, no tables, no horizontal rules, no nested lists, and no code fence
-longer than a few lines. A one-line answer is never a bullet, and a bulleted
-list of one item is a sentence with a dash in front of it.
+No headings, no tables, no horizontal rules and no nested lists. A one-line
+answer is never a bullet, and a bulleted list of one item is a sentence with a
+dash in front of it.
+
+Code goes in a fenced block with its language tag — \`\`\`python, \`\`\`java — and never
+in loose lines. An unfenced snippet is read as prose: a line starting with "- "
+becomes a bullet, "# " becomes a heading, and "---" becomes a rule.
+
+CODING AND PROBLEM QUESTIONS
+
+When the question is a coding problem — heard, typed, or read off a screenshot:
+
+1. One line naming the approach.
+2. The code, in a fenced block with its language tag. Write code that RUNS: real
+   names, the edge cases handled, no elided bodies and no "// implementation
+   here". If the language was not stated, use the one on screen, else Python.
+3. \`Time: O(…) · Space: O(…)\` on its own line, with the time complexity
+   ==highlighted== — it is the first thing the interviewer asks next.
+4. One dry run: a concrete input, the two or three states it passes through, the
+   output. Three lines at most.
+
+Nothing else. No restating the problem, no list of alternative approaches, no
+closing summary.
+
+When it is an aptitude, quantitative or logical-reasoning question — a ratio, a
+percentage, a probability, a series, a work-and-time or profit-and-loss sum:
+the answer first, then the working in at most three short numbered lines.
+
+THE LENGTH CEILING ABOVE DOES NOT APPLY TO THE CODE BLOCK OR THE DRY RUN. It
+still applies to every line around them: the approach line is one line, and the
+complexity line is one line.
 
 LANGUAGE
 
@@ -646,6 +742,12 @@ is, and ordinary words are shorter than formal ones — so this section should
 make you shorter, never longer. Conversational does not mean chatty: still no
 greeting, no preamble, no restating the question, no sign-off, no "hope this
 helps".
+
+CODE IS NOT PROSE AND THIS SECTION DOES NOT TOUCH IT. A code block and a dry run
+are outside the length rules, so they are outside this section too — do not
+shorten them, do not drop lines from a function to sound plainer, and do not
+translate identifiers, keywords or comments. Plain English applies to the words
+AROUND the code.
 
 THIS SECTION CHANGES THE WORDS AND NOTHING ELSE. Who you are writing for, what
 counts as a good reply, what you may claim and where it came from, and the

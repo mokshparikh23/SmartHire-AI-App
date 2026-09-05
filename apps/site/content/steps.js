@@ -14,7 +14,7 @@
   the candidate hiding the app from their interviewer, and step 03 offered
   answers "in your own voice" — which systemPrompt.js explicitly forbids.
 
-  { n: '01', title: 'Add your context', body: 'Paste your résumé and the job description once. The assistant uses them to shape every answer it gives.' },
+  { n: '01', title: 'Add your context', body: 'Paste your resume and the job description once. The assistant uses them to shape every answer it gives.' },
   { n: '02', title: 'Start the session', body: 'Open the overlay before your call. It listens for questions and stays hidden from anything you share.' },
   { n: '03', title: 'Read and speak',    body: 'Answers appear the moment a question is asked, in your own voice and grounded in your own experience.' },
 */
@@ -22,7 +22,7 @@
   CONCEPT 2026-08-30: the interviewer-side steps, kept per the convention here.
 
   { n: '01', title: 'Set up the interview', body: 'Company and role, then the job description and the candidate’s CV if you have them. Three fields, and it remembers them between interviews.' },
-  { n: '02', title: 'Get the go-ahead',     body: 'Tell the candidate a copilot is helping you, and tick the box confirming they agreed before their résumé is used. Until you do, it is never sent.' },
+  { n: '02', title: 'Get the go-ahead',     body: 'Tell the candidate a copilot is helping you, and tick the box confirming they agreed before their resume is used. Until you do, it is never sent.' },
   { n: '03', title: 'Ask better questions', body: 'Follow-ups appear while the candidate is still answering. You choose what to ask, what to ignore, and what to write down.' },
 */
 export const STEPS = [

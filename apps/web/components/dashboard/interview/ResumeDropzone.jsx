@@ -160,7 +160,7 @@ export default function ResumeDropzone({
           <Icon name="upload" size={18} />
         </span>
         <span className="text-[14px] font-medium text-ink">
-          {over ? 'Drop to add' : 'Drop a résumé PDF, or click to choose'}
+          {over ? 'Drop to add' : 'Drop a resume PDF, or click to choose'}
         </span>
         <span id="resume-drop-hint" className="text-[12px] text-muted">
           PDF · up to {MB(MAX_RESUME_BYTES)} · optional, the copilot works from the conversation alone

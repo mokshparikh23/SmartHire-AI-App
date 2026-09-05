@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useSettingsStore } from '../store/settingsStore'
 import { useSessionStore }  from '../store/sessionStore'
 import Icon from '../components/ui/Icon'
+// PLACEMENT 2026-09-01: three shortcut labels on this screen were hard-coded
+// macOS glyphs, so on Windows they named keys the keyboard does not have.
+import { comboLabel } from '../components/overlay/Kbd'
 
 /* ── tokens ─────────────────────────────────────────────────────────────── */
 const G = {
@@ -240,7 +243,8 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
               </div>
             )}
             {/* Hide window */}
-            <button onClick={hideWindow} title="Hide window (⌘⇧H)"
+            {/* PLACEMENT 2026-09-01: title="Hide window (⌘⇧H)" */}
+            <button onClick={hideWindow} title={`Hide window (${comboLabel('mod shift h')})`}
               style={{ width:32, height:32, borderRadius:9, fontSize:13, cursor:'pointer',
                 background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)',
                 color:'rgba(255,255,255,.8)', display:'flex', alignItems:'center',
@@ -562,7 +566,11 @@ export default function Dashboard({ session, onLogout, onResetInterview, onGoSet
         background:G.card, borderTop:`1px solid ${G.border}`,
         display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          {[['⌘⇧H','Show/Hide'],['⌘⇧M','Move']].map(([k,a]) => (
+          {/* PLACEMENT 2026-09-01: the glyphs were literals, and "Move" now
+              opens the zone picker rather than cycling blindly.
+              {[['⌘⇧H','Show/Hide'],['⌘⇧M','Move']].map(([k,a]) => ( */}
+          {[[comboLabel('mod shift h'),'Show/Hide'],
+            [comboLabel('mod shift m'),'Move']].map(([k,a]) => (
             <div key={k} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <kbd style={{ fontSize:9, fontWeight:800, fontFamily:'monospace',
                 background:G.accent, color:G.primary, border:`1px solid ${G.border2}`,

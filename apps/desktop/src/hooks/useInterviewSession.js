@@ -6,6 +6,8 @@ import { createUtteranceAggregator } from '../utils/utteranceAggregator'
 import { createLogger } from '../utils/logger'
 // SELF-VOICE 2026-08-31: the desktop mirror of lib/resume.js's tag stripping.
 import { stripControlTags } from '../utils/utterance'
+// INTENT-ROUTING 2026-09-01: lexical, no model call — see the file header for why.
+import { classifyQuestion } from '../utils/questionType'
 import { useVoice } from './useVoice'
 import { useLiveVoice } from './useLiveVoice'
 // SELF-VOICE 2026-08-31: the candidate's own microphone, captured alongside the
@@ -48,7 +50,7 @@ const segLog = createLogger('seg')
    section is written around exactly that.
 
    buildSystemPrompt() reads these exact strings — change one, change both. And
-   lib/resume.js's CONTROL_TAGS must strip it, or a résumé line beginning
+   lib/resume.js's CONTROL_TAGS must strip it, or a resume line beginning
    "[SAID] " is interpolated into the system prompt as something the candidate
    actually said out loud in this interview. */
 const TAG = {
@@ -107,7 +109,7 @@ function tagContent(content, source, said) {
 
   // if (typeof content === 'string') return `${tag} ${content}`
   // SELF-VOICE 2026-08-31: strip any tag the text itself carries, for the same
-  // reason lib/resume.js strips them out of a résumé — the tag decides who the
+  // reason lib/resume.js strips them out of a resume — the tag decides who the
   // model thinks spoke, so text must never be able to supply its own.
   if (typeof content === 'string') return `${prefix}${tag} ${stripControlTags(content)}`
 
@@ -268,7 +270,19 @@ export function useInterviewSession() {
      so askManual, regenerate and askAboutScreen are untouched. */
   // const generate = useCallback(async (question, source = 'voice') => {
   // const generate = useCallback(async (question, source = 'voice', content = null) => {
-  const generate = useCallback(async (question, source = 'voice', content = null, utterance = null) => {
+  /* INTENT-ROUTING 2026-09-01: `intentOverride` is the fifth parameter, and this
+     function is the only place it needs to be worked out — every path into the
+     model (onQuestion, askManual, regenerate, askAboutScreen) funnels through
+     here, so there is exactly one insertion point.
+
+     A screenshot is ALWAYS escalated and never classified: the candidate has
+     stopped and pressed a key, so they are already waiting, and the thing that
+     would do the classifying cannot see the image anyway — that job belongs to
+     the model, and the [SCREENSHOT] section of the prompt gives it. */
+  // const generate = useCallback(async (question, source = 'voice', content = null, utterance = null) => {
+  const generate = useCallback(async (
+    question, source = 'voice', content = null, utterance = null, intentOverride = null,
+  ) => {
     const q = question?.trim()
     if (!q) return
 
@@ -373,6 +387,11 @@ export function useInterviewSession() {
         // Same reason: the id is not known when this callback is created.
         useSessionStore.getState().sessionId,
         controller.signal,
+        /* INTENT-ROUTING 2026-09-01. Note the model above is still sent: it is
+           what the server honours for an ordinary question, so a user's pick from
+           the ⋮ menu is not overridden by this — only coding and screenshots
+           escalate past it. */
+        intentOverride ?? (source === 'screen' ? 'screen' : classifyQuestion(asked)),
       )
     } catch (e) {
       // if (gen === genRef.current) useSessionStore.getState().setError(e.message)
@@ -723,7 +742,14 @@ export function useInterviewSession() {
     flush()
     abortRef.current?.abort()
     abortRef.current = null
-    useSessionStore.getState().setAnswerDone()
+    /* STOP-IS-NOT-AN-ERROR 2026-09-01: tell setAnswerDone this was the user.
+       Without the flag, stopping before the first token landed took its
+       "no answer" branch and reported a provider failure for something the user
+       had just chosen. This is the ONLY caller that passes it — generate()'s
+       finally must keep calling it bare, so a stream that genuinely returns
+       nothing is still reported as the fault it is. */
+    // useSessionStore.getState().setAnswerDone()
+    useSessionStore.getState().setAnswerDone({ stopped: true })
   }, [flush])
 
   /* SESSION GATE 2026-08-29 ────────────────────────────────────────────────────
@@ -947,11 +973,29 @@ export function useInterviewSession() {
       return
     }
 
-    const { currentQuestion } = useSessionStore.getState()
-    const prompt = currentQuestion?.trim() || 'What is on screen?'
+    /* SCREEN-ANSWERS 2026-09-01 ─ the display string and the wire string split ──
+       Both used to be the same value, and when the transcript was empty that
+       value was the literal 'What is on screen?'. So the one case where the
+       image is ALL the model has was also the one case where it was explicitly
+       asked to describe the screen rather than answer it — the opposite of what
+       ⌘⇧↵ is for. The [SCREENSHOT] section of the prompt now says "work out what
+       is being asked and answer that", and this line was arguing with it.
 
-    await generate(prompt, 'screen', [
-      { type: 'text', text: prompt },
+       generate() already takes the two separately: `question` is what the card
+       header and the turn history show, `content` is what goes up the wire. Only
+       the wire half needs to be a directive.
+
+       When there IS a transcript question, both stay exactly as before — that
+       question is genuinely what the candidate wants answered about the screen. */
+    const { currentQuestion } = useSessionStore.getState()
+    // const prompt = currentQuestion?.trim() || 'What is on screen?'
+    const asked  = currentQuestion?.trim()
+    const shown  = asked || 'What is being asked on screen?'
+    const wire   = asked || 'Answer whatever is being asked on this screen.'
+
+    // await generate(prompt, 'screen', [{ type: 'text', text: prompt }, …])
+    await generate(shown, 'screen', [
+      { type: 'text', text: wire },
       { type: 'image_url', image_url: { url: shot.dataUrl } },
     ])
   }, [generate])

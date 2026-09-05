@@ -6,7 +6,24 @@ module.exports = {
   copyright: `Copyright © ${new Date().getFullYear()} Smart Hire AI`,
 
   directories: {
-    output: 'release',
+    /*
+      SPOTLIGHT 2026-08-31: the `.noindex` suffix is what stops macOS indexing
+      the packaged .app inside this directory as a launchable application.
+
+      Without it, every local `build:mac` leaves a second "Smart Hire AI" in the
+      Apps/Spotlight view — same name, same icon, same appId as the copy in
+      /Applications, because it IS the same bundle at a different path. Nothing
+      on the tile says which is which, and the build output is by definition the
+      older version once you install, so the wrong tile launches a stale build
+      and the next "my fix isn't working" is a ghost hunt. Mounted dmgs left in
+      /Volumes do the same thing until they are ejected.
+
+      macOS honours the .noindex suffix on any directory; there is no in-file
+      equivalent (.metadata_never_index only works at a volume root). Keep the
+      three artifact paths in .github/workflows/release.yml in step with this.
+    */
+    // output: 'release',
+    output: 'release.noindex',
     // Where icon.png lives. electron-builder derives the .icns and the .ico
     // from it, so there is one source image rather than three that drift.
     buildResources: 'build'

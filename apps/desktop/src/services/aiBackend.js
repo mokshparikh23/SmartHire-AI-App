@@ -210,7 +210,11 @@ async function pumpStream(response, onChunk, signal, clock) {
    deliberately not in this commit. */
 // export async function askAIStream(transcript, onChunk, onDone, model) {
 // export async function askAIStream(transcript, onChunk, onDone, model, sessionId) {
-export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
+// INTENT-ROUTING 2026-09-01: `intent` — 'general' | 'coding' | 'screen'. The
+// server decides the model from it; see modelForIntent() in apps/web/lib/ai.js
+// for why that decision cannot live on this side.
+// export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal) {
+export async function askAIStream(transcript, onChunk, onDone, model, sessionId, signal, intent) {
   const { webUrl, licenseKey } = await requireCredentials()
   if (!transcript?.length) throw new Error('Transcript is empty')
 
@@ -254,7 +258,8 @@ export async function askAIStream(transcript, onChunk, onDone, model, sessionId,
       // signal,
       signal: guard.signal,
       // body: JSON.stringify({ licenseKey, model, messages: messagesFor(transcript) }),
-      body: JSON.stringify({ licenseKey, sessionId, model, messages: messagesFor(transcript) }),
+      // body: JSON.stringify({ licenseKey, sessionId, model, messages: messagesFor(transcript) }),
+      body: JSON.stringify({ licenseKey, sessionId, model, intent, messages: messagesFor(transcript) }),
     })
 
     if (!response.ok) {

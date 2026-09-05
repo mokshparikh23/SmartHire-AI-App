@@ -50,6 +50,16 @@ export const useSessionStore = create((set, get) => ({
   answerPending: false,
   source: 'voice',     // 'voice' | 'manual' — how the current question arrived
   error: null,
+  /* STOP-IS-NOT-AN-ERROR 2026-09-01 ─ "the user did this" vs "this broke" ──────
+     Pressing Stop before the first token produced a red
+     "The model returned nothing. Retry the question." — the app blaming the
+     provider for something the user had just chosen. It rides alongside `error`
+     rather than being a value of it because the two need different styling and
+     different words, and because an error must never be silently downgraded to
+     a stop: setAnswerDone only sets this when the caller says so.
+
+     Reset everywhere `error` is. If you add a reset for one, add it for both. */
+  stopped: false,
 
   // REDESIGN 2026-08-29: capture toggles in the new toolbar. `screenPermission`
   // mirrors the macOS TCC grant, which the app can read and open Settings for
@@ -173,6 +183,7 @@ export const useSessionStore = create((set, get) => ({
       answerPending: false,
       source: 'voice',
       error: null,
+      stopped: false,   // STOP-IS-NOT-AN-ERROR 2026-09-01
       chatMode: false,
       chatMessages: [],
       chatStreaming: false,
@@ -301,6 +312,7 @@ export const useSessionStore = create((set, get) => ({
       isThinking: true,
       source,
       error: null,
+      stopped: false,   // STOP-IS-NOT-AN-ERROR 2026-09-01
       activeTurnId: null,   // a new question always returns us to the live view
       /* PREMIUM-UX 2026-08-31 ─ do not take an answer off a reader mid-sentence ─
          The new question still supersedes and still starts streaming — only the
@@ -335,6 +347,7 @@ export const useSessionStore = create((set, get) => ({
       currentSaid: get().currentSaid,
       isThinking: true,
       error: null,
+      stopped: false,   // STOP-IS-NOT-AN-ERROR 2026-09-01
       activeTurnId: null,
     })
     return next
@@ -384,7 +397,14 @@ export const useSessionStore = create((set, get) => ({
     })
   },
 
-  setAnswerDone: () => {
+  /**
+   * @param {{stopped?: boolean}} [opts] - stopped:true means the USER ended this
+   *   generation (Stop, ⌘⌫, the toolbar). Only stopGenerating passes it; the
+   *   normal completion path in generate()'s finally must not, or a provider that
+   *   silently returns nothing would be reported as something the user did.
+   */
+  // setAnswerDone: () => {
+  setAnswerDone: (opts = {}) => {
     const { currentQuestion, currentAnswer, source, turns, error, currentSaid } = get()
     if (!currentQuestion) return set({ isThinking: false, answerPending: false })
 
@@ -399,7 +419,24 @@ export const useSessionStore = create((set, get) => ({
        Fixed here rather than in the panel so every caller is covered at once,
        and so the turn still lands in turns[] with a reason attached —
        turns[].error already exists and selectTurn already restores it. */
-    const failed = error || (!currentAnswer
+    /* STOP-IS-NOT-AN-ERROR 2026-09-01 ─ the bug this guard fixes ───────────────
+       stopGenerating() calls straight into here, so pressing Stop before the
+       first token arrived took the `!currentAnswer` branch and painted a red
+       "The model returned nothing. Retry the question." The provider had done
+       nothing wrong; the user had just cancelled. Reporting a user's own choice
+       as a provider failure is the kind of thing that gets a working app
+       uninstalled.
+
+       Note the asymmetry, which is deliberate: a REAL error still wins. `error`
+       is checked first, so a request that failed and was then stopped is still
+       reported as the failure it was. Stopping cannot mask a fault.
+
+       Stopping WITH a partial answer was already fine — `failed` is null when
+       currentAnswer is non-empty — and stays that way: a stopped answer is still
+       an answer worth keeping. */
+    // const failed = error || (!currentAnswer ? 'The model returned nothing. Retry the question.' : null)
+    const stopped = opts.stopped === true && !currentAnswer && !error
+    const failed = error || (!currentAnswer && !stopped
       ? 'The model returned nothing. Retry the question.'
       : null)
 
@@ -412,6 +449,10 @@ export const useSessionStore = create((set, get) => ({
       source,
       // error,
       error: failed,
+      // STOP-IS-NOT-AN-ERROR 2026-09-01: on the turn as well as in state, so
+      // paging back to it with ⌘← still says "you stopped this" rather than
+      // falling through to the generic "No answer came back."
+      stopped,
       feedback: null,      // REDESIGN 2026-08-29: 'up' | 'down' from the card footer
     }
     // set({ isThinking: false, turns: [...turns, turn], activeTurnId: turn.id })
@@ -423,6 +464,7 @@ export const useSessionStore = create((set, get) => ({
     // set({ isThinking: false, answerPending: false, error: failed, turns: […], activeTurnId: turn.id })
     set({
       isThinking: false, answerPending: false, error: failed,
+      stopped,   // STOP-IS-NOT-AN-ERROR 2026-09-01
       turns: [...turns, turn], activeTurnId: turn.id,
       ...unblocked,
     })
@@ -501,7 +543,7 @@ export const useSessionStore = create((set, get) => ({
   }),
 
   clearCurrent: () =>
-    set({ currentQuestion: '', currentAnswer: '', isThinking: false, answerPending: false, error: null, activeTurnId: null }),
+    set({ currentQuestion: '', currentAnswer: '', isThinking: false, answerPending: false, error: null, stopped: false, activeTurnId: null }),
 
   /* REDESIGN 2026-08-29 ─ the two Clear buttons in the new chrome ──────────── */
 
@@ -525,7 +567,7 @@ export const useSessionStore = create((set, get) => ({
 
   /** Answer card's Clear (⌘⌫) — empties the card without touching the log. */
   clearAnswer: () =>
-    set({ currentAnswer: '', questionAt: null, isThinking: false, answerPending: false, error: null }),
+    set({ currentAnswer: '', questionAt: null, isThinking: false, answerPending: false, error: null, stopped: false }),
 
   /* REDESIGN 2026-08-29 ─ Chat mode ────────────────────────────────────────── */
 

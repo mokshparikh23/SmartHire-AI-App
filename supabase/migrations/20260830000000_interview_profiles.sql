@@ -2,7 +2,7 @@
 --
 -- Interview setup moves out of the desktop app and onto the web.
 --
--- Until now company/role/résumé/JD lived only in the desktop's zustand store,
+-- Until now company/role/resume/JD lived only in the desktop's zustand store,
 -- persisted to localStorage under 'ia-settings' — invisible to the account,
 -- lost on reinstall, and re-entered through a three-step wizard before every
 -- interview. This table is the server-side home for it, one row per candidate
@@ -11,14 +11,14 @@
 --
 -- WHY THE CONSENT FLAG LIVES HERE
 --
--- resume_consent records that the candidate agreed to their résumé being used
--- by the copilot. It travels WITH the résumé, in the same row, because the two
--- are only ever meaningful together: a résumé whose consent state has been
--- separated from it is a résumé nobody can safely use.
+-- resume_consent records that the candidate agreed to their resume being used
+-- by the copilot. It travels WITH the resume, in the same row, because the two
+-- are only ever meaningful together: a resume whose consent state has been
+-- separated from it is a resume nobody can safely use.
 --
 -- This column is not the enforcement point. buildSystemPrompt() in
 -- apps/desktop/src/services/systemPrompt.js is — it omits the RESUME section
--- entirely when the flag is false, so an unconsented résumé cannot reach the
+-- entirely when the flag is false, so an unconsented resume cannot reach the
 -- model even if a UI or an API caller ignores this column. Storing the flag
 -- here just means the question is asked once, when the profile is created,
 -- instead of before every session.
@@ -57,7 +57,7 @@ create policy "read own interview profiles"
 
 -- with check on insert, using+with check on update: `using` decides which rows
 -- may be touched, `with check` decides what they may be turned INTO. Without
--- the latter on update, a user could re-assign user_id and hand a row — résumé
+-- the latter on update, a user could re-assign user_id and hand a row — resume
 -- included — to another account.
 create policy "insert own interview profiles"
   on public.interview_profiles for insert

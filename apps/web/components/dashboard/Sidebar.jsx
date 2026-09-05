@@ -71,7 +71,12 @@ function Brand() {
           <Link href="/" …> */}
       <a href={MARKETING_HOME} className="flex items-center gap-2.5">
         <Logo size={28} />
-        <span className="text-[14px] font-semibold tracking-tight text-ink">Interview&nbsp;AI</span>
+        {/* The wordmark was still the old working title. Every other shell —
+            SiteNav, SiteChrome, the auth layout, AdminSidebar — says "Smart
+            Hire AI", so this one followed. Non-breaking spaces because the
+            column is 240px and the name should never wrap mid-brand.
+        <span className="text-[14px] font-semibold tracking-tight text-ink">Interview&nbsp;AI</span> */}
+        <span className="text-[14px] font-semibold tracking-tight text-ink">Smart&nbsp;Hire&nbsp;AI</span>
       </a>
     </div>
   )

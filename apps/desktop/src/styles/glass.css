@@ -148,7 +148,7 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Résumé / consent state, so it is legible before the interview starts and not
+/* Resume / consent state, so it is legible before the interview starts and not
    only implicit in what the copilot does or does not cite. */
 .ia-ltag {
   flex-shrink: 0;

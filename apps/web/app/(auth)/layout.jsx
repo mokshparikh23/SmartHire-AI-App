@@ -61,14 +61,14 @@ export default function AuthLayout({ children }) {
           {[
             // PIVOT 2026-08-29: was
             //   ['eye',  'Hidden from screen sharing and recordings'],
-            //   ['file', 'Answers grounded in your own résumé'],
+            //   ['file', 'Answers grounded in your own resume'],
             // The first of those does not come back — it is a claim about window
             // compositing, and this app makes none. The second is simply true
             // again, so it is restored as it stood.
             // CONCEPT 2026-08-30: the interviewer-side pair it replaces —
-            // ['shield', 'Résumé used only once the candidate agrees'],
-            // ['file',   'Follow-ups grounded in the résumé and the job description'],
-            ['file',   'Answers grounded in your own résumé'],
+            // ['shield', 'Resume used only once the candidate agrees'],
+            // ['file',   'Follow-ups grounded in the resume and the job description'],
+            ['file',   'Answers grounded in your own resume'],
             ['shield', 'It never writes in your voice'],
             ['lock',   'No API key to set up or pay for'],
           ].map(([icon, text]) => (

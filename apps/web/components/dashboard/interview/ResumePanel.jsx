@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { CONTROL, Field } from 'smarthire-ui'
-import Icon from 'smarthire-ui/Icon'
+// Only the removed note used an icon here.
+// import Icon from 'smarthire-ui/Icon'
 import {
   BLANK_RESUME, MAX_RESUME_BYTES, isEmptyRecord, normalizeParsed, summarise,
 } from '@/lib/resume'
@@ -13,14 +14,17 @@ import OriginalPdf from './OriginalPdf'
 /*
   RESUME-UPLOAD 2026-08-30
 
-  The whole résumé half of the interview form: intake, the structured editor, the
+  The whole resume half of the interview form: intake, the structured editor, the
   original document, and consent.
+
+  OWN-CV 2026-09-01: and no longer consent — the tick was removed. The long note
+  at the bottom of this file, where it stood, is the record of why.
 
   WHY THIS NEEDS ensureProfileId(). The parse route writes resume_file_path, and
   the migration deliberately removed that column from the browser's update grant
   — only the service-role route may move it, which is what makes the
   consent-reset trigger trustworthy. A route that writes a row needs a row to
-  write to, so a résumé dropped on a never-saved interview has to create one
+  write to, so a resume dropped on a never-saved interview has to create one
   first. The parent owns that, because it owns the Supabase client and the list
   the new row has to appear in.
 */
@@ -29,7 +33,10 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
   const [view, setView] = useState('edit')
   const [error, setError] = useState(null)
   const [pasting, setPasting] = useState(false)
-  const [consentReset, setConsentReset] = useState(false)
+  // OWN-CV 2026-09-01: this drove the "the tick was cleared because the resume
+  // changed" warning under the checkbox. With no checkbox there is nothing to
+  // clear and nothing to warn about — a replaced resume is simply used.
+  // const [consentReset, setConsentReset] = useState(false)
   // The name of the file currently in flight, so the progress card shows what
   // the user actually dropped rather than a placeholder.
   const [pendingName, setPendingName] = useState('')
@@ -41,11 +48,17 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
 
   /*
     Anything to consent to → ask. Keeping `value.resume` in this test matters:
-    drop it and every interview whose résumé was pasted before this feature
+    drop it and every interview whose resume was pasted before this feature
     existed would silently lose its consent flag on the next save, because
-    toRow() forces consent false when there is no résumé.
+    toRow() forces consent false when there is no resume.
+
+    OWN-CV 2026-09-01: the test is unchanged and so is the reasoning behind its
+    three branches — a file, pasted text, or an edited record each count as a
+    resume, and toRow() uses the same rule to decide what to write. What it gates
+    is now a line of explanation rather than a checkbox.
   */
-  const hasResume = hasFile || value.resume.trim().length > 0 || hasRecord
+  // Its only reader was the note below, which is now commented out with it.
+  // const hasResume = hasFile || value.resume.trim().length > 0 || hasRecord
 
   const set = (k, v) => onChange({ ...value, [k]: v })
 
@@ -60,11 +73,11 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
     if (file.size > MAX_RESUME_BYTES) {
       return setError(
         `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is ` +
-        `${MAX_RESUME_BYTES / 1024 / 1024} MB — a résumé that large is usually a scan, ` +
+        `${MAX_RESUME_BYTES / 1024 / 1024} MB — a resume that large is usually a scan, ` +
         'which has no text to read anyway.')
     }
 
-    setPendingName(file.name || 'Résumé')
+    setPendingName(file.name || 'Resume')
     setPhase('uploading')
     const ac = new AbortController()
     abortRef.current = ac
@@ -88,7 +101,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
 
       if (!res.ok) {
         setPhase('idle')
-        return setError(json.error || 'Could not read that résumé. Paste the text instead.')
+        return setError(json.error || 'Could not read that resume. Paste the text instead.')
       }
 
       const p = json.profile
@@ -101,9 +114,14 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
         resume_file_name: p.resume_file_name,
         // The route forces this false and the trigger backs it up. Reflecting it
         // rather than preserving the old value is the point — see below.
-        resume_consent:   false,
+        // resume_consent:   false,
+        /* OWN-CV 2026-09-01: still reflecting what the route wrote, and the
+           route now writes true — a stored resume is a used resume. Mirroring
+           the response rather than assuming keeps this honest if the two ever
+           disagree again. */
+        resume_consent:   p.resume_consent === true,
       })
-      setConsentReset(value.resume_consent === true)
+      // setConsentReset(value.resume_consent === true)
       setPasting(false)
       setView('edit')
       setPhase('ready')
@@ -116,7 +134,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
       // if (e?.name !== 'AbortError') setError('Upload failed. Check your connection and try again.')
       if (e?.name !== 'AbortError') {
         setError(e?.message
-          ? `Could not attach the résumé: ${e.message}`
+          ? `Could not attach the resume: ${e.message}`
           : 'Upload failed. Check your connection and try again.')
       }
     } finally {
@@ -139,7 +157,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
       resume_file_path: null, resume_file_name: null,
       resume_consent: false,
     })
-    setConsentReset(false)
+    // setConsentReset(false)
     setError(null)
     setView('edit')
     setPhase('idle')
@@ -150,12 +168,12 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
   return (
     <div className="mt-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-[13px] font-medium text-ink">Résumé</h3>
+        <h3 className="text-[13px] font-medium text-ink">Resume</h3>
 
         {(hasRecord || hasFile) && (
           <div
             role="tablist"
-            aria-label="Résumé view"
+            aria-label="Resume view"
             className="inline-flex items-center gap-0.5 rounded-full border border-line bg-paper p-1"
           >
             {[['edit', 'Edit'], ['pdf', 'Original PDF']].map(([key, label]) => {
@@ -174,7 +192,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
                   aria-selected={on}
                   tabIndex={on ? 0 : -1}
                   disabled={dead}
-                  title={dead ? 'No file — this résumé was typed or pasted' : undefined}
+                  title={dead ? 'No file — this resume was typed or pasted' : undefined}
                   onClick={() => setView(key)}
                   className={[
                     'rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors duration-150',
@@ -213,12 +231,12 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
 
         {pasting && !busy && (
           <>
-            <Field label="Paste the résumé" hint="Optional — the copilot works from the conversation alone without it.">
+            <Field label="Paste the resume" hint="Optional — the copilot works from the conversation alone without it.">
               <textarea
                 className={`${CONTROL} h-40 resize-y py-3 leading-relaxed`}
                 value={value.resume}
                 onChange={(e) => set('resume', e.target.value)}
-                placeholder="Paste résumé text…"
+                placeholder="Paste resume text…"
                 autoFocus
               />
             </Field>
@@ -239,7 +257,7 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
             {/* CANDIDATE-FIRST 2026-09-01: error={error} was missing on this one.
                 The idle dropzone above had it, so a first upload reported its
                 failure and a REPLACEMENT reported nothing — the zone just snapped
-                back to the old résumé as if the drop had never happened. */}
+                back to the old resume as if the drop had never happened. */}
             <ResumeDropzone
               phase="ready"
               fileName={value.resume_file_name || 'Typed by hand'}
@@ -263,48 +281,76 @@ export default function ResumePanel({ value, onChange, ensureProfileId }) {
         )}
       </div>
 
-      {hasResume && (
-        <>
-          <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-            value.resume_consent ? 'border-positive/40 bg-positive-soft' : 'border-line bg-canvas-2'
-          }`}>
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 accent-current"
-              checked={value.resume_consent}
-              onChange={(e) => { set('resume_consent', e.target.checked); setConsentReset(false) }}
-            />
-            {/* CONCEPT 2026-08-30: this read "The candidate has agreed to their
-                résumé being used by the copilot during this interview." — the
-                interviewer confirming permission for someone else's document.
-                The résumé is the reader's own now, so the tick is a switch over
-                their own file. The GATE is unchanged: `resume_consent` still
-                decides whether buildSystemPrompt() includes the RÉSUMÉ block at
-                all, and unticked still means the text never reaches the model. */}
-            <span className="text-[13px] leading-relaxed text-ink">
-              Use my résumé in this interview.
-              <span className="mt-1 block text-muted">
-                {/* RESUME-UPLOAD 2026-08-30: the old copy said only that the
-                    résumé is "stored but never sent to the model". With the
-                    original PDF now kept at rest, that is no longer the whole
-                    truth, and unticking is no longer a way to get rid of it —
-                    so this has to say where the file lives and where delete is. */}
-                Leave this unticked and neither the details nor the file are sent to
+      {/*
+        OWN-CV 2026-09-01 ─ THE TICK IS GONE.
+
+        What stood here was a checkbox reading "Use my resume in this interview",
+        unticked by default, that decided whether buildSystemPrompt() included
+        the resume at all. It was the last of the interviewer-side product left
+        in this panel: a second yes, asked of the one person who had already said
+        yes by uploading their own CV to their own interview.
+
+        It did not protect anyone and it cost people interviews. Upload a
+        resume, miss the box — it starts unticked, and the parse route cleared it
+        again on every replacement — and the session runs generic, with nothing
+        on screen saying why. "Attached but unused" is not a state a user asked
+        for.
+
+        The rule is the upload. A resume on the interview is a resume in the
+        prompt; no resume and the copilot works from the conversation alone,
+        which is the same branch an unticked box used to reach. NOT using it is
+        still one click — Remove, above — and that path deletes the file
+        instead of leaving it on the account behind a false flag.
+
+        The COLUMN survives this. `resume_consent` is written true whenever a
+        resume exists (lib/resume.js toRow, /api/resume/parse) because a desktop
+        build older than this one still gates on it, and a stale false there
+        would silently drop the resume for exactly the users who cannot see why.
+
+          <label …>
+            <input type="checkbox" checked={value.resume_consent}
+                   onChange={(e) => { set('resume_consent', e.target.checked); setConsentReset(false) }} />
+            <span>Use my resume in this interview.
+              <span>Leave this unticked and neither the details nor the file are sent to
                 the model — answers will come only from what is said in the room.
                 {hasFile && ' The original PDF stays on your account either way; use Remove above to delete it.'}
               </span>
             </span>
           </label>
+          {consentReset && <p>The tick was cleared because the resume changed. Confirm again for the new file.</p>}
+      */}
+      {/*
+        The explanatory note is off the panel. The behaviour it described is
+        unchanged — the resume still goes into every session for this interview,
+        and Remove / clearing the box are still the ways off — but the panel
+        already shows the file, the Remove button and the parsed record, so the
+        paragraph was restating what is on screen.
 
-          {consentReset && (
-            <p className="mt-2 flex items-start gap-2 text-[12px] text-muted">
-              <Icon name="warning" size={13} className="mt-0.5 shrink-0 text-warning" />
-              {/* was "Consent was cleared because the résumé changed." */}
-              The tick was cleared because the résumé changed. Confirm again for the new file.
-            </p>
-          )}
-        </>
+      {hasResume && (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-canvas-2 p-4 text-[13px] leading-relaxed text-muted">
+          <Icon name="file" size={14} className="mt-0.5 shrink-0 text-muted" />
+          <span>
+            Says what happens, because it now happens without being asked
+            for — and says where the off switch is, since it is no longer a
+            box on this screen.
+
+            Three branches and not two, because "Remove above" is only true
+            where the button is: ResumeDropzone renders it at phase 'ready'
+            only, which this panel reaches when there is a file OR a parsed
+            record. Pasted text with neither shows the idle zone, where the
+            way to take a resume off is to clear the box. Pointing at a
+            button that is not on screen is the failure this whole change is
+            about, in miniature.
+
+            This resume is used in every session for this interview, and anything
+            drawn from it is tagged [resume] in the answer.
+            {hasFile ? ' The original PDF stays on your account until you remove it above.'
+              : hasRecord ? ' Use Remove above to take it off this interview.'
+                : ' Clear the pasted text to take it off this interview.'}
+          </span>
+        </p>
       )}
+      */}
     </div>
   )
 }

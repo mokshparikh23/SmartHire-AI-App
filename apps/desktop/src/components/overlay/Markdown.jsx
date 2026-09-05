@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react'
 import { parseBlocks, splitInline } from '../../utils/markdown'
+// SCREEN-ANSWERS 2026-09-01: for the code block's copy button below.
+import Icon from '../ui/Icon'
 
 /* PREMIUM-UX 2026-08-31 ─────────────────────────────────────────────────────────
    The answer used to render as a bare React text child. `white-space: pre-wrap`
@@ -55,8 +57,56 @@ function Inline({ text }) {
   })
 }
 
+/* SCREEN-ANSWERS 2026-09-01 ─ a code block you can get the code OUT of ─────────
+   Copy was answer-wide only (⌘⇧C and the ⋮ menu), and in a coding interview the
+   thing the candidate actually needs is THIS block in the shared editor — not the
+   approach line and the dry run around it. Selecting it by hand meant dragging
+   inside a ~310px scroller while someone watched.
+
+   Its own component because it is the only block with state. Block below is
+   memoised on primitive props precisely so a streamed token re-renders one leaf;
+   a `copied` flag inside Block would have re-rendered every block on every copy.
+
+   `window.electronAPI.copyText` is the same bridge Toolbar's Copy uses — there is
+   no navigator.clipboard here, and no document.execCommand fallback worth having
+   in a Chromium we control. */
+const CodeBlock = React.memo(function CodeBlock({ text, lang }) {
+  const [copied, setCopied] = React.useState(false)
+  const timer = React.useRef(0)
+
+  React.useEffect(() => () => clearTimeout(timer.current), [])
+
+  const copy = () => {
+    window.electronAPI?.copyText?.(text)
+    setCopied(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), 1400)
+  }
+
+  return (
+    <div className="ia-md-code">
+      <div className="ia-md-code-head">
+        {/* Empty when the model omitted the info string. The label is not worth
+            inventing — "code" tells the reader nothing they cannot see. */}
+        <span className="ia-md-code-lang">{lang || ''}</span>
+        <button
+          type="button"
+          className="ia-md-code-copy"
+          onClick={copy}
+          title="Copy this code"
+          aria-label="Copy this code"
+        >
+          <Icon name={copied ? 'check' : 'copy'} size={12} />
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="ia-md-pre">{text}</pre>
+    </div>
+  )
+})
+
 /* PRIMITIVE PROPS ONLY — see property 3 above. */
-const Block = React.memo(function Block({ type, text, n }) {
+const Block = React.memo(function Block({ type, text, n, lang }) {
   switch (type) {
     case 'h':
       return <h3 className="ia-md-h"><Inline text={text} /></h3>
@@ -76,8 +126,10 @@ const Block = React.memo(function Block({ type, text, n }) {
       )
     case 'quote':
       return <div className="ia-md-quote"><Inline text={text} /></div>
+    // case 'pre':
+    //   return <pre className="ia-md-pre">{text}</pre>
     case 'pre':
-      return <pre className="ia-md-pre">{text}</pre>
+      return <CodeBlock text={text} lang={lang} />
     case 'hr':
       return <div className="ia-md-hr" />
     case 'gap':
@@ -89,5 +141,8 @@ const Block = React.memo(function Block({ type, text, n }) {
 
 export default function Markdown({ text }) {
   const blocks = useMemo(() => parseBlocks(text), [text])
-  return blocks.map((b, i) => <Block key={i} type={b.type} text={b.text} n={b.n} />)
+  // SCREEN-ANSWERS 2026-09-01: `lang` threaded through. Still a primitive, so the
+  // memo above holds.
+  // return blocks.map((b, i) => <Block key={i} type={b.type} text={b.text} n={b.n} />)
+  return blocks.map((b, i) => <Block key={i} type={b.type} text={b.text} n={b.n} lang={b.lang} />)
 }

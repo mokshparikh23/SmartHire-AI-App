@@ -20,7 +20,7 @@ import { createAdminClient } from 'smarthire-data/supabase-server'
 import { RESUME_BUCKET } from '@/lib/resume'
 
 /**
- * The object path for a résumé.
+ * The object path for a resume.
  *
  * The FIRST SEGMENT IS THE OWNER, and the storage SELECT policy is a plain
  * string compare against it — `(storage.foldername(name))[1] = auth.uid()::text`
@@ -31,7 +31,7 @@ import { RESUME_BUCKET } from '@/lib/resume'
  * The filename is a fresh UUID rather than the candidate's own, for two reasons.
  * "Priya_Sharma_Resume_2026.pdf" is itself PII and would otherwise appear in
  * every access log and every signed URL we mint; and a new UUID per upload means
- * REPLACING a résumé is genuinely a new object, so an outstanding signed URL for
+ * REPLACING a resume is genuinely a new object, so an outstanding signed URL for
  * the old one can never quietly start serving different bytes. The display name
  * is kept in resume_file_name, as data rather than as an identifier.
  */
@@ -43,13 +43,23 @@ export function resumePath(userId, profileId) {
  * Store a validated PDF. Returns the path.
  *
  * upsert:false because the path is always new — combined with the migration's
- * omitted UPDATE policy, a stored résumé's bytes can never be swapped while its
+ * omitted UPDATE policy, a stored resume's bytes can never be swapped while its
  * row, its filename and its consent flag stay the same.
  *
  * cacheControl '0' so a shared or borrowed browser does not keep a stranger's
- * résumé on disk after the tab closes.
+ * resume on disk after the tab closes.
  */
 export async function putResume({ userId, profileId, bytes }) {
+  /* Storage accepts an empty body happily, and an empty object is the one
+     failure this whole file cannot detect later: the upload returns no error,
+     the row is written, and the break only appears when a browser is asked to
+     render zero bytes as a PDF. It has happened once — the parse route handed
+     its array to pdf.js first, which transferred the ArrayBuffer away and left
+     a detached, length-0 view behind. The caller is fixed; this is the guard
+     that makes the next such refactor fail at the write instead of in a viewer
+     days later. */
+  if (!bytes?.byteLength) throw new Error('Refusing to store an empty resume file')
+
   const path = resumePath(userId, profileId)
   const { error } = await createAdminClient()
     .storage.from(RESUME_BUCKET)
@@ -102,7 +112,7 @@ export async function tombstone({ path, userId, reason }) {
  *
  * Called fire-and-forget from the tail of the parse and delete routes rather
  * than on a cron. In practice the queue never holds more than a handful of rows
- * because every résumé action drains it, which makes the system self-healing
+ * because every resume action drains it, which makes the system self-healing
  * with no scheduled job to forget about. Never awaited by a request that a user
  * is waiting on.
  */

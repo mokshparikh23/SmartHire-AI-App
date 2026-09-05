@@ -22,11 +22,20 @@ import CompanyLogo from './CompanyLogo'
   a logo — so this must always behave at least as well as the plain text input it
   replaces, and must never be able to block a save.
 */
-export default function CompanyCombobox({ name, domain, onChange, id, placeholder = 'TCS' }) {
+export default function CompanyCombobox({ name, domain, onChange, id, placeholder = 'TCS', autoFocus = false }) {
   const listId = useId()
   const inputId = id || `${listId}-input`
   const wrapRef = useRef(null)
   const inputRef = useRef(null)
+
+  /* COMPANY-FIRST 2026-09-01: this is the form's first field now, so it carries
+     the autofocus. autoFocus fires a real focus event on mount, and onFocus
+     below opens the list — which would reopen the edit form with a dropdown
+     hanging over the fields, the same thing the `if (domain) return` guard in
+     the search effect exists to prevent. It only bites the one case that guard
+     misses: a company typed but never picked, so there is no domain to suppress
+     it. Swallow that first focus and nothing else. */
+  const skipOpenOnFocus = useRef(autoFocus)
 
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
@@ -141,7 +150,7 @@ export default function CompanyCombobox({ name, domain, onChange, id, placeholde
   // Without a client id this is exactly the input it replaced.
   if (!enabled) {
     return (
-      <input id={inputId} className={CONTROL} value={name} placeholder={placeholder}
+      <input id={inputId} className={CONTROL} value={name} placeholder={placeholder} autoFocus={autoFocus}
         onChange={(e) => onChange({ name: e.target.value, domain: '' })} />
     )
   }
@@ -165,12 +174,17 @@ export default function CompanyCombobox({ name, domain, onChange, id, placeholde
         aria-autocomplete="list"
         aria-activedescendant={open && active >= 0 ? `${listId}-opt-${active}` : undefined}
         autoComplete="off"
+        autoFocus={autoFocus}
         spellCheck={false}
         className={`${CONTROL_PADLESS} ${selectedLogo ? 'pl-10' : 'pl-9'} pr-9`}
         value={name}
         placeholder={placeholder}
         onChange={onInput}
-        onFocus={() => { if (!domain && (name || '').trim().length >= 2) setOpen(true) }}
+        // onFocus={() => { if (!domain && (name || '').trim().length >= 2) setOpen(true) }}
+        onFocus={() => {
+          if (skipOpenOnFocus.current) { skipOpenOnFocus.current = false; return }
+          if (!domain && (name || '').trim().length >= 2) setOpen(true)
+        }}
         onKeyDown={onKeyDown}
       />
 

@@ -46,6 +46,8 @@ export default function AnswerPanel({ onRetry, onRefine, readerPinnedRef }) {
   const questionAt    = useSessionStore((s) => s.questionAt)
   const isThinking    = useSessionStore((s) => s.isThinking)
   const error         = useSessionStore((s) => s.error)
+  // STOP-IS-NOT-AN-ERROR 2026-09-01: the user cancelled before anything arrived.
+  const stopped       = useSessionStore((s) => s.stopped)
   const blockedReason = useSessionStore((s) => s.blockedReason)
   const activeTurnId  = useSessionStore((s) => s.activeTurnId)
   const feedback      = useSessionStore((s) =>
@@ -139,6 +141,8 @@ export default function AnswerPanel({ onRetry, onRefine, readerPinnedRef }) {
      a finished answer the reader is still on. */
   const shownError    = pinned ? (pinned.error ?? null) : error
   const shownThinking = pinned ? false : isThinking
+  // STOP-IS-NOT-AN-ERROR 2026-09-01: same pinned-vs-live rule as the error above.
+  const shownStopped  = pinned ? pinned.stopped === true : stopped
 
   const heard  = source === 'voice'
   const qLabel = followups ? (heard ? 'Heard:'    : 'You asked:') : 'Question:'
@@ -201,6 +205,19 @@ export default function AnswerPanel({ onRetry, onRefine, readerPinnedRef }) {
           </div>
         ) : shownError ? (
           <p className="ia-error">{shownError}</p>
+        ) : shownStopped ? (
+          /* STOP-IS-NOT-AN-ERROR 2026-09-01 ─ says who did it, and offers the way
+             back. Deliberately the ia-empty treatment and not `ia-error`: nothing
+             failed. Placed AFTER shownError so a genuine failure that was then
+             stopped still reads as the failure — see the asymmetry note in
+             sessionStore.setAnswerDone. */
+          <div className="ia-empty ia-empty--result">
+            <Icon name="close" size={18} strokeWidth={1.4} />
+            <span>You stopped this before the answer started.</span>
+            <button className="ia-pill" onClick={onRetry}>
+              Try again <Kbd combo="mod shift r" />
+            </button>
+          </div>
         ) : shownThinking ? (
           <span className="ia-dots"><i /><i /><i /></span>
         ) : question ? (

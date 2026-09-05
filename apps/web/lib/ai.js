@@ -49,6 +49,16 @@ export const PROVIDERS = {
     id: 'openai',
     label: 'OpenAI',
     base: OPENAI_BASE,
+    /* 2026-09-01: this line was missing while gemini below had it, so
+       requireProvider() read process.env[undefined] and every OpenAI-configured
+       install sent `Authorization: Bearer undefined`. The provider answered 401
+       "Incorrect API key provided: undefined", which friendlyUpstreamMessage()
+       passed through verbatim — so the interviewer was told to go and fetch an
+       OpenAI key for a server-side misconfiguration. It hit chat, transcribe,
+       realtime and resume parsing alike; the resume dropzone is just where it
+       surfaced first, because that is the one path that shows upstream text in
+       the form itself. */
+    envKey: 'OPENAI_API_KEY',
     /* INTENT-ROUTING 2026-09-01: was 'gpt-4o'. The default is now the fast one,
        because it is what every heard question gets and most of them are ordinary.
        Coding and screenshots escalate on their own, so this costs nothing on the
@@ -138,7 +148,21 @@ export function requireProvider() {
       'No AI provider is configured on the server. Set OPENAI_API_KEY or GEMINI_API_KEY.'
     )
   }
-  return { provider, apiKey: process.env[provider.envKey] }
+  /* Read once and CHECKED, rather than returned blind. activeProvider() proves a
+     key exists in the environment; it does not prove this object names the right
+     variable to read it back from — which is exactly how the missing envKey above
+     turned into `Bearer undefined` at the provider instead of a 500 here. A
+     provider added without an envKey now fails loudly, on our side, with the
+     message an operator can act on. */
+  // return { provider, apiKey: process.env[provider.envKey] }
+  const apiKey = provider.envKey ? process.env[provider.envKey] : ''
+  if (!apiKey) {
+    throw new Error(
+      `${provider.label} is the active provider but its key could not be read ` +
+      `from the server environment (${provider.envKey || 'no envKey configured'}).`
+    )
+  }
+  return { provider, apiKey }
 }
 
 // Moved to lib/http.js so the session routes can share them. Re-exported here so
@@ -239,7 +263,7 @@ export const RESEARCH_MODEL = 'gpt-4.1'
 export const RESEARCH_MAX_TOKENS = 900
 
 /* RESUME-UPLOAD 2026-08-30 ──────────────────────────────────────────────────
-   Résumé parsing. Pinned per provider for the same reason as RESEARCH_MODEL —
+   Resume parsing. Pinned per provider for the same reason as RESEARCH_MODEL —
    this is a one-shot server-side call, so the caller does not get to choose and
    these stay out of ALLOWED_MODELS.
 
@@ -254,13 +278,13 @@ export const PARSE_MODEL = { openai: 'gpt-4o-mini', gemini: 'gemini-3.5-flash-li
 /* A SEPARATE budget from MAX_TOKENS even though the number matches today.
    MAX_TOKENS is the live-interview chat budget, tuned above against
    time-to-first-token in the room; coupling a batch extraction to it means the
-   next latency tune silently starts truncating résumés. The THINKING note above
+   next latency tune silently starts truncating resumes. The THINKING note above
    is the constraint that matters here: on Gemini 3 this budget is shared with
    thinking tokens, and exhausting it returns an EMPTY string — so the route
    treats empty content as a failure branch rather than as "no data". */
 export const PARSE_MAX_TOKENS = 4096
 
-/* ~6k tokens of résumé. Typical résumés are 3–8k characters, so this rarely
+/* ~6k tokens of resume. Typical resumes are 3–8k characters, so this rarely
    fires; truncateForParse() in lib/resume.js keeps the head AND the tail. */
 export const MAX_PARSE_CHARS = 24000
 
@@ -474,7 +498,7 @@ export async function chargeResearch(userId) {
 }
 
 /**
- * RESUME-UPLOAD 2026-08-30: the same charge for parsing a dropped résumé.
+ * RESUME-UPLOAD 2026-08-30: the same charge for parsing a dropped resume.
  *
  * Deliberately a clone of chargeResearch rather than a shared helper the two
  * call: the two costs are tuned independently (see the notes on each constant in
@@ -615,6 +639,21 @@ export function friendlyUpstreamMessage(status, detail, label = 'The AI provider
   }
   if (status === 503) {
     return `${label} is overloaded right now. This is on their side; try again in a moment.`
+  }
+  /* 2026-09-01: 401/403 is OUR key, never the caller's. The raw body — "Incorrect
+     API key provided: … You can find your API key at platform.openai.com" — was
+     rendered straight into the resume form, which reads as an instruction to the
+     interviewer to go and buy an OpenAI key for a fault they cannot see or fix.
+     `detail` is dropped rather than appended for the same reason it is dropped
+     from a 429: it names an upstream account that is not theirs, and on a 401 it
+     can echo key material back into the page. The server log keeps it. */
+  if (status === 401 || status === 403) {
+    // The only place the detail is seen before it is thrown away, and the one
+    // status where an operator has to know it happened — the routes log their
+    // successes, not their upstream refusals.
+    console.error('[upstream_auth]', status, label, detail)
+    return `${label} rejected this app's API key. That is a configuration problem ` +
+           `on our side, not something you can fix — please report it.`
   }
   return detail
 }

@@ -124,7 +124,7 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
-# RESUME-UPLOAD 2026-08-30: candidate résumé PDFs.
+# RESUME-UPLOAD 2026-08-30: candidate resume PDFs.
 #
 # Declared here for `supabase start` only. The authoritative definition is the
 # `insert into storage.buckets` in 20260830020000_resume_files.sql, because

@@ -41,7 +41,7 @@ export const LIMITS = [
   ['It does not join the call',
    'It listens to your machine’s audio or your microphone. Nothing is added to the meeting, there is no Zoom or Teams integration, and no other participant appears.'],
   ['It is not private to your machine',
-   'The résumé text, the job description and every transcribed line go to our server and on to OpenAI. Uploaded PDFs are read locally and the file never leaves, but its text does.'],
+   'The resume text, the job description and every transcribed line go to our server and on to OpenAI. Uploaded PDFs are read locally and the file never leaves, but its text does.'],
   ['It does not record the call',
    'No audio is written to disk and no recording is produced. It transcribes to get at the words, and keeps none of it.'],
   ['It is wrong sometimes',

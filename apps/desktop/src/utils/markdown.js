@@ -144,15 +144,27 @@ export function parseBlocks(text) {
   const lines = (typeof text === 'string' ? text : '').split('\n')
   const blocks = []
   let fence = null
+  /* SCREEN-ANSWERS 2026-09-01: the info string. ` ```python ` used to be matched
+     by a regex with no capture group and thrown away, so a `pre` block carried no
+     language at all — no label was possible and syntax highlighting could never
+     be added without coming back here first. Lower-cased at the boundary so the
+     renderer never has to think about `Python` vs `python`. */
+  let lang = ''
 
   for (const line of lines) {
     if (fence !== null) {
-      if (/^\s*```/.test(line)) { blocks.push({ type: 'pre', text: fence }); fence = null }
+      if (/^\s*```/.test(line)) { blocks.push({ type: 'pre', text: fence, lang }); fence = null; lang = '' }
       else fence += (fence ? '\n' : '') + line
       continue
     }
 
-    if (/^\s*```/.test(line)) { fence = ''; continue }
+    // if (/^\s*```/.test(line)) { fence = ''; continue }
+    let fm
+    if ((fm = /^\s*```\s*([\w+#.-]*)/.exec(line))) {
+      fence = ''
+      lang = (fm[1] || '').toLowerCase()
+      continue
+    }
     if (!line.trim()) { blocks.push({ type: 'gap', text: '' }); continue }
     if (/^\s*(?:---|___|\*\*\*)\s*$/.test(line)) { blocks.push({ type: 'hr', text: '' }); continue }
 
@@ -171,7 +183,7 @@ export function parseBlocks(text) {
   }
 
   // Render an unterminated fence as a code block immediately. See the header.
-  if (fence !== null) blocks.push({ type: 'pre', text: fence })
+  if (fence !== null) blocks.push({ type: 'pre', text: fence, lang })
 
   // Trailing blank lines are an artefact of streaming, not part of the answer.
   while (blocks.length && blocks[blocks.length - 1].type === 'gap') blocks.pop()

@@ -144,6 +144,43 @@ export default function SessionPanel({ session }) {
     })
   }, [])
 
+  /* SCREEN-ANSWERS 2026-09-01 ─ a code answer opens the panel for itself ───────
+     The answer body is about eleven lines (see the note above). A function is
+     twenty, so the default panel showed the top half of the code and nothing
+     else — not the complexity line, not the dry run. Asking the candidate to
+     press ⌘⇧F mid-interview to see the rest of an answer they asked for is the
+     wrong way round.
+
+     SUBSCRIPTION: a derived BOOLEAN, never currentAnswer itself. zustand
+     re-runs the selector on every store write but only re-renders when the
+     value changes, so this costs one `includes` per streamed token and zero
+     renders until the fence actually arrives. Subscribing to the string would
+     re-render this whole panel on every token — the trap Toolbar.jsx documents.
+
+     Fires on the OPENING fence, mid-stream, which is deliberate: the window
+     grows before the code fills it rather than after.
+
+     ONCE PER TURN, keyed on questionAt. If the candidate presses ⌘⇧F or Esc to
+     put it back, it stays back — the guard is already marked for this turn, so
+     nothing reopens it. Without that this would fight the user for the rest of
+     the answer. (extendQuestion deliberately leaves questionAt alone, so a
+     chained question is correctly still the same turn.) */
+  // `|| ''` is not decoration: this selector runs on EVERY store write and lives
+  // in the top-level session component, so one future writer leaving
+  // currentAnswer null would take the whole panel down mid-interview.
+  const answerHasCode = useSessionStore((s) => (s.currentAnswer || '').includes('```'))
+  const questionAt    = useSessionStore((s) => s.questionAt)
+  const autoFocusedAt = useRef(null)
+
+  useEffect(() => {
+    if (!answerHasCode || autoFocusedAt.current === questionAt) return
+    autoFocusedAt.current = questionAt
+    setFocused((v) => {
+      if (!v) window.electronAPI?.setOverlayFocus?.(true)
+      return true
+    })
+  }, [answerHasCode, questionAt])
+
   // The Screen Recording grant can be revoked while the app is open, and
   // askForMediaAccess cannot request it — so read it on mount and let the
   // toggle offer System Settings when it is denied.
