@@ -93,6 +93,70 @@ const TAG = {
    the screenshot carried something that history cannot carry. */
 const historySource = (source) => (source === 'screen' ? 'screenPast' : (source || 'voice'))
 
+/* SCREENSHOT-IN-CHAT 2026-09-06 ─ how far back a capture keeps travelling ───────
+   Messages, not turns, because chatMessages is a flat list of both roles — 12 is
+   six exchanges, the same reach recentHistory() gives the answer path. */
+export const CHAT_SHOT_REACH = 12
+
+/**
+ * SCREENSHOT-IN-CHAT 2026-09-06 ─ the chat thread as the model should see it.
+ *
+ * Exported and pure so it can be tested: it is the one piece of this feature with
+ * a real decision in it, and getting it wrong is expensive in both directions —
+ * too many images is megabytes per message, none at all is the blind follow-up
+ * that refine() had on the answer path.
+ *
+ * ONE image on the wire, never a thread of them. The newest capture within
+ * CHAT_SHOT_REACH is the one that travels; every other screenshot turn goes up as
+ * text under [EARLIER SCREENSHOT], the tag whose prompt section says outright that
+ * the image is no longer attached.
+ *
+ * Attaching all of them would be the obvious reading of "the model should see the
+ * conversation" and it is wrong twice over: a megabyte apiece, and a model shown
+ * four screens has to guess which one "explain step 3" is about. The newest is the
+ * one the candidate is looking at.
+ *
+ * It keeps travelling rather than being sent once, because a screenshot in a chat
+ * is almost never a one-shot — the whole reason the reply belongs in the thread is
+ * so the candidate can ask "why not a hash map" straight after, and that follow-up
+ * is worthless if the image is already gone.
+ *
+ * @param {Array} thread - chatMessages, WITHOUT the empty assistant turn
+ * @param {number} reach - how many messages back a capture may still be attached
+ * @returns {{messages: Array, shotAt: number}} shotAt is -1 when no image travels
+ */
+export function buildChatHistory(thread, reach = CHAT_SHOT_REACH) {
+  const list = Array.isArray(thread) ? thread : []
+
+  let shotAt = -1
+  const floor = Math.max(0, list.length - reach)
+  for (let i = list.length - 1; i >= floor; i--) {
+    if (list[i]?.role === 'user' && list[i]?.shot?.url) { shotAt = i; break }
+  }
+
+  const messages = list.map((m, i) => {
+    if (m?.role !== 'user') return { role: m?.role, content: m?.content }
+    if (i === shotAt) {
+      return {
+        role: 'user',
+        /* m.shot.wire, not m.content: the bubble text is the short human line —
+           see the note on startChatTurn for why sending THAT is the bug this
+           whole change is downstream of. */
+        content: tagContent([
+          { type: 'text', text: m.shot.wire || m.content },
+          { type: 'image_url', image_url: { url: m.shot.url, detail: 'high' } },
+        ], 'screen'),
+      }
+    }
+    /* A screenshot turn whose image has aged out is not an ordinary [TYPED] line
+       — it referred to something the model can no longer see, and the tag is the
+       only place strong enough to say so. */
+    return { role: 'user', content: tagContent(m.content, m.shot ? 'screenPast' : 'chat') }
+  })
+
+  return { messages, shotAt }
+}
+
 /**
  * Prefixes the tag. Handles both shapes the app sends: a plain string, and the
  * multimodal array a screenshot uses — where the tag belongs on the text part,
@@ -731,6 +795,10 @@ export function useInterviewSession() {
   // array is a TDZ ReferenceError at render, not merely at call time.
   const askAboutScreenRef = useRef(null)
 
+  // SCREENSHOT-IN-CHAT 2026-09-06: and sendChat is below askAboutScreen for the
+  // same reason, so the hop back down needs the same mirror.
+  const sendChatRef = useRef(null)
+
   // const regenerate = useCallback(() => {
   //   const { currentQuestion, source } = useSessionStore.getState()
   //   if (currentQuestion) generate(currentQuestion, source)
@@ -1132,8 +1200,14 @@ export function useInterviewSession() {
 
        Placed AFTER the capture guards above, deliberately: a denied or failed
        capture must not yank a mid-sentence typist out of chat for an answer that
-       is never going to arrive. */
-    useSessionStore.getState().setChatMode(false)
+       is never going to arrive.
+
+       SUPERSEDED 2026-09-06, same day. This moved the USER to the answer; the
+       branch further down moves the ANSWER to the user instead, which is what was
+       actually wanted. The bug this line fixed stays fixed — see the
+       SCREENSHOT-IN-CHAT note beside that branch. Kept because it records why
+       chatMode is touched on this path at all. */
+    // useSessionStore.getState().setChatMode(false)
 
     /* SCREEN-ANSWERS 2026-09-06 ─ the app was asking the model to describe ──────
        The split above was right and it still did not hold, because `asked` is
@@ -1201,13 +1275,43 @@ export function useInterviewSession() {
         + 'answer it. If it is not, ignore it and answer the screen.'
       : SCREEN_DIRECTIVE
 
+    /* SCREENSHOT-IN-CHAT 2026-09-06 ─ answer where the user is LOOKING ──────────
+       The line this replaces forced chat mode OFF, so pressing Screenshot from
+       the chat view threw the user out of the thread they were in. That was
+       written to fix the opposite bug — the answer streaming into an unmounted
+       panel — and it fixed it by moving the user instead of moving the answer.
+
+       Reported since: the interviewer pastes the question into the MEETING chat
+       (Zoom, Meet, Teams), the candidate has that chat open on screen and presses
+       Screenshot, and the answer belongs in the thread, where the follow-up is
+       going to be typed. Being bounced to the answer card mid-conversation is the
+       same interruption as before, pointing the other way.
+
+       So neither view wins: the answer goes where the user already is. Chat open
+       -> the thread. Answer view -> the card, exactly as before. Nothing is
+       forced, and the unmounted-panel bug stays fixed because the destination is
+       now chosen from the same flag that decides what is mounted.
+
+       Read at press time, not captured earlier: the capture above is awaited, and
+       the user may well have toggled Chat during it. */
+    if (useSessionStore.getState().chatMode) {
+      // `shown` is the bubble, `wire` is the instruction. See startChatTurn.
+      sendChatRef.current?.(shown, { url: shot.dataUrl, wire })
+      return
+    }
+
     /* SCREEN-ANSWERS 2026-09-06: keep the shot for refine() and regenerate(), and
        keep BOTH strings with it. `question` is what identifies this capture
        against the card; `wire` is what regenerate must re-send, because the
        display string is sometimes a placeholder and re-sending that is the
        original bug. Written immediately adjacent to the generate() call below and
        must stay that way — shotForCurrent() matches on the exact value passed as
-       generate's first argument. */
+       generate's first argument.
+
+       Deliberately after the chat branch above: refine() and regenerate() are
+       answer-card controls, so a capture answered in the thread has nothing to
+       re-attach it to. shotForCurrent() would refuse it anyway — it requires
+       source === 'screen', which a chat turn never sets. */
     lastShotRef.current = { dataUrl: shot.dataUrl, question: shown, wire, at: Date.now() }
 
     // await generate(prompt, 'screen', [{ type: 'text', text: prompt }, …])
@@ -1251,7 +1355,8 @@ export function useInterviewSession() {
     useSessionStore.getState().appendChat(text)
   }, [])
 
-  const sendChat = useCallback(async (text) => {
+  // const sendChat = useCallback(async (text) => {
+  const sendChat = useCallback(async (text, shot = null) => {
     const message = text?.trim()
     if (!message) return
 
@@ -1262,7 +1367,10 @@ export function useInterviewSession() {
     const controller = new AbortController()
     chatAbortRef.current = controller
     const store = useSessionStore.getState()
-    store.startChatTurn(message)
+    // SCREENSHOT-IN-CHAT 2026-09-06: `shot` rides on the user turn — see the note
+    // on startChatTurn, and on the history build below for when it travels.
+    // store.startChatTurn(message)
+    store.startChatTurn(message, shot)
     chatBufRef.current = ''
     let failure = null
     // PIPELINE 2026-08-31: an abort is neither a success nor a failure, and the
@@ -1281,12 +1389,16 @@ export function useInterviewSession() {
     // about someone saying hello. Tagging only the last message would not do: on
     // the second turn the model sees an untagged history and drifts straight
     // back to treating it as transcript.
-    const history = useSessionStore.getState().chatMessages
-      .slice(0, -1)
-      .map(({ role, content }) => ({
-        role,
-        content: role === 'user' ? tagContent(content, 'chat') : content,
-      }))
+    // const history = useSessionStore.getState().chatMessages
+    //   .slice(0, -1)
+    //   .map(({ role, content }) => ({
+    //     role,
+    //     content: role === 'user' ? tagContent(content, 'chat') : content,
+    //   }))
+    // SCREENSHOT-IN-CHAT 2026-09-06: see buildChatHistory at module scope, which
+    // is where the reasoning and the tests for this live.
+    const { messages: history, shotAt: liveShotAt } = buildChatHistory(
+      useSessionStore.getState().chatMessages.slice(0, -1))
 
     try {
       await askAIStream(
@@ -1302,6 +1414,17 @@ export function useInterviewSession() {
         // PIPELINE 2026-08-31: the signal parameter askAIStream has always had
         // on the voice path, finally passed here too.
         controller.signal,
+        /* SCREENSHOT-IN-CHAT 2026-09-06: chat has never sent an intent at all, so
+           every chat turn landed on 'general' and was answered by the FAST model.
+           That was defensible while chat was typing-only. It is not once a turn
+           can carry a screen: modelForIntent() escalates 'screen' to the smart
+           model and maxTokensForIntent() gives it the bigger ceiling, and a coding
+           problem read off an image needs both.
+
+           Only when an image is actually on the wire. A plain typed "hi" must not
+           quietly start billing at the smart rate — that is why this reads
+           liveShotAt rather than simply passing 'screen' whenever chatMode is on. */
+        liveShotAt >= 0 ? 'screen' : undefined,
       )
     } catch (e) {
       // PIPELINE 2026-08-31: an abort is a supersede, not a failure — the same
@@ -1340,6 +1463,10 @@ export function useInterviewSession() {
       }
     }
   }, [flushChat])
+
+  // SCREENSHOT-IN-CHAT 2026-09-06: published for askAboutScreen, which is defined
+  // above this. Same pattern as askAboutScreenRef.
+  sendChatRef.current = sendChat
 
   // Unmounting (sign-out, licence revoked) must not leave a stream writing.
   // useEffect(() => () => { genRef.current++ }, [])

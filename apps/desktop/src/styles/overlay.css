@@ -1056,6 +1056,27 @@
   color: rgba(255, 255, 255, 0.88);
 }
 
+/* SCREENSHOT-IN-CHAT 2026-09-06 ─ proof that the image actually went ───────────
+   The reported symptom was "I didn't think you sent it to AI": a screenshot
+   answered in the thread is otherwise indistinguishable from a typed message,
+   so there was no way to tell a capture that travelled from one that silently
+   did not. The thumbnail is the receipt. It also answers the question the
+   candidate actually has when an answer looks wrong — WHICH screen did it read?
+   — which no wording in the bubble can. */
+.ia-msg--shot {
+  display: flex; flex-direction: column; gap: 7px;
+}
+.ia-msg--shot img {
+  display: block;
+  width: 100%;
+  max-height: 132px;
+  object-fit: cover;
+  object-position: top center;   /* a question is at the TOP of a chat or a problem */
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+}
+
 .ia-composer {
   flex-shrink: 0;
   display: flex; align-items: center; gap: 8px;

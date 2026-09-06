@@ -585,13 +585,39 @@ export const useSessionStore = create((set, get) => ({
   setChatMode: (v) => set({ chatMode: !!v }),
 
   /** Appends the user's message plus the empty assistant turn it streams into. */
-  startChatTurn: (text) =>
+  /* SCREENSHOT-IN-CHAT 2026-09-06 ─ `shot`, a capture riding on a chat turn ─────
+     A screenshot pressed from the chat view is answered IN the thread now, so a
+     user turn can carry an image. It is kept BESIDE `content` rather than turned
+     into the multimodal array the wire wants, for two reasons:
+
+       - ChatPanel renders a user turn as `{m.content}`, deliberately plain so
+         that asterisks in a typed question stay asterisks. An array content would
+         render as [object Object].
+       - sendChat has to decide per request which images still travel and which
+         have aged out. That is a decision about the WIRE, and it is much easier
+         to make when the image is a field it can look at than when it is buried
+         in a content array it would have to take apart and rebuild.
+
+     `content` therefore stays the human-readable line for the bubble, and `shot`
+     is `{ url, wire } | null` — the capture, plus the text that goes up WITH it.
+
+     Two strings, not one, and this is the same split the answer path learned the
+     hard way: a chat bubble reading "Answer the question that is on this screen.
+     Read it, work out what it is asking, and give the answer itself — not a
+     description of what is on the screen." is not a message anybody would type.
+     But shortening the WIRE to whatever reads nicely in a bubble is how
+     askAboutScreen ended up sending "What is being asked on screen?" and getting
+     a description back. So the bubble gets the short line and the model gets the
+     directive, and neither is allowed to stand in for the other. */
+  // startChatTurn: (text) =>
+  startChatTurn: (text, shot = null) =>
     set((s) => ({
       chatStreaming: true,
       chatError: null,          // BUGFIX 2026-08-30: a retry clears the last failure
       chatMessages: [
         ...s.chatMessages,
-        { id: `u${s.chatMessages.length}`, role: 'user', content: text },
+        // { id: `u${s.chatMessages.length}`, role: 'user', content: text },
+        { id: `u${s.chatMessages.length}`, role: 'user', content: text, shot },
         { id: `a${s.chatMessages.length}`, role: 'assistant', content: '' },
       ],
     })),

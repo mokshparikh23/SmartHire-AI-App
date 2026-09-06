@@ -62,7 +62,22 @@ export default function ChatPanel({ onSend }) {
           </div>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className={`ia-msg ia-msg--${m.role}`}>
+            <div
+              key={m.id}
+              className={`ia-msg ia-msg--${m.role}${m.shot ? ' ia-msg--shot' : ''}`}
+            >
+              {/* SCREENSHOT-IN-CHAT 2026-09-06: the capture this turn carried.
+                  Reported as "I didn't think you sent it to AI" — a screenshot
+                  answered in the thread looked exactly like a typed message, so
+                  nothing on screen said an image had gone at all. It is also the
+                  fastest way to see WHICH screen was read when an answer looks
+                  wrong, which the bubble text cannot say.
+
+                  The data URL is already in memory and already went up the wire;
+                  rendering it costs no network and no extra copy. */}
+              {m.shot?.url && (
+                <img src={m.shot.url} alt="The screen this was asked about" />
+              )}
               {/* EMPHASIS 2026-09-01: the assistant's turns go through the same
                   renderer as the answer card. This was the last surface still
                   printing the model's markdown literally — a chat reply with a
