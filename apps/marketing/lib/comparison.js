@@ -24,7 +24,11 @@
  *   Real-time responses    useInterviewSession.js streams the reply as it lands
  *   Answers the question   systemPrompt.js answerPrompt(), answerMode 'answer'
  *   Also suggests asks     the same file's followups branch, switched in the ⋮ menu
- *   Never in your voice    the first-person rules are commented out at that file's head
+ *   No invented experience systemPrompt.js: every claim comes from [resume]/[JD]
+ *                          (SELF-INTRO 2026-09-06: this line read "Never in your
+ *                          voice — the first-person rules are commented out at
+ *                          that file's head". They were uncommented, on purpose,
+ *                          for introductions. The row below changed with it.)
  *   Screen capture         askAboutScreen() → captureScreen() → image_url part
  *   Live transcription     useVoice.js acquire('system' | mic) → Whisper
  *   Resume context         /api/resume/parse, gated in buildSystemPrompt()
@@ -225,13 +229,29 @@ export const FEATURE_GROUPS = [
           styleBlock() closes by refusing to hide what it is. The other four are
           'unknown' deliberately — see the note above this array. We are not
           characterising anyone else's product from their marketing.
+
+          SELF-INTRO 2026-09-06 ─ THIS ROW WAS FALSE THE MOMENT THE PROMPT CHANGED.
+          It read:
+
+            label: 'Writes the line in your voice, to read out',
+            values: { [US]: 'no', … },
+            notes:  { [US]: 'It answers; putting it in your words is yours' },
+
+          Our cell is 'yes' now for an introduction, which makes it a poor row for
+          a comparison table: a 'yes' nobody else is measured against says
+          nothing. So the row is replaced by the claim underneath it — the one
+          that is still a refusal, is still checkable in systemPrompt.js, and is
+          the reason first person is safe to ship at all.
+
+          The polarity is unchanged: 'no' is still our answer and still the good
+          one, so the table reads the same way down the column.
         */
-        label: 'Writes the line in your voice, to read out',
+        label: 'Invents experience your CV does not have',
         values: {
           [US]: 'no',
           parakeet: 'unknown', finalround: 'unknown', lockedin: 'unknown', warmup: 'unknown',
         },
-        notes: { [US]: 'It answers; putting it in your words is yours' },
+        notes: { [US]: 'Every claim comes from your CV or the job description' },
       },
       {
         label: 'Says it is an AI if asked outright',

@@ -104,9 +104,23 @@ export const metadata = {
   the first thing a reader meets in that card: a script to read out verbatim is
   something this app will not produce, so anybody who wants that should buy
   another one. Do not soften it into a feature we are "working on".
+
+  SELF-INTRO 2026-09-06 ─ THAT PARAGRAPH IS NOW HISTORY, AND ITS FIRST LINE WITH
+  IT. The owner re-enabled first-person answers for introduction and behavioural
+  questions, so "a script to read out verbatim" is a thing this app DOES produce
+  and the entry sending that reader to a competitor was simply false. It was:
+
+    'You want a line written in your voice that you can read out word for word.'
+
+  The instruction not to soften still applies to what REPLACED it, which is the
+  limit that actually survived: the answer comes out of your CV, and a gap on
+  your CV stays a gap. That is a real refusal, it is enforced in
+  systemPrompt.js rather than merely stated here, and somebody shopping for a
+  tool that fills gaps in should buy a different one. Do not soften THAT into a
+  feature we are "working on".
 */
 const THEIRS = [
-  'You want a line written in your voice that you can read out word for word.',
+  'You want answers that go further than what your CV and the job description say.',
   'You are rehearsing on your own, and want feedback afterwards on how it went.',
   'You want the extras around the interview — question banks, mock rounds, a coach.',
   'A monthly subscription suits you better than buying hours as you need them.',
@@ -258,15 +272,27 @@ export default async function ComparePage() {
                       change with the concept — it hands you the answer and does
                       not pretend to be the one giving it. Every line below is
                       checkable in apps/desktop/src/services/systemPrompt.js. */}
+                  {/* SELF-INTRO 2026-09-06: was "Gives you the answer. Never
+                      claims to be you." Its second half was written when the
+                      prompt refused first person outright; now that an intro
+                      comes back in your own words, "never claims to be you" is a
+                      sentence a reader has to squint at. What is unambiguously
+                      still true — and is the harder promise of the two — is that
+                      it will not invent the experience. Every line below is
+                      still checkable in apps/desktop/src/services/systemPrompt.js. */}
+                  {/* <p …>Gives you the answer. Never claims to be you.</p> */}
                   <p className="hl mt-8 text-[clamp(1.5rem,2.6vw,2rem)] text-paper">
-                    Gives you the answer. Never claims to be you.
+                    Gives you the answer. Never invents the experience.
                   </p>
 
                   <ul className="mt-8 space-y-3.5">
                     {[
                       'The answer on the first line, one sentence behind it — readable mid-question',
                       'Tagged [resume] or [JD], so you can see which part is a fact about you',
-                      'No first person, no script to read out, and it says it is an AI if asked',
+                      // SELF-INTRO 2026-09-06: was 'No first person, no script to
+                      // read out, and it says it is an AI if asked'. The first two
+                      // clauses stopped being true; the third never changed.
+                      'Nothing in it that is not on your CV, and it says it is an AI if asked',
                     ].map(text => (
                       <li key={text} className="flex gap-3 text-[14px] leading-relaxed text-paper/70">
                         <Icon name="check" size={15} className="mt-0.5 shrink-0 text-paper" />
@@ -436,13 +462,31 @@ export default async function ComparePage() {
                   apps/desktop, and the first-person instructions are commented
                   out at the head of systemPrompt.js with a note saying they do
                   not come back.
+
+                  SELF-INTRO 2026-09-06: one of those two limits was lifted by the
+                  owner, and the paragraph below asserted the opposite for as long
+                  as it took to notice — on the page whose whole job is to be the
+                  honest one. Its previous text:
+
+                    The first two are the ones to take seriously. Nothing here
+                    writes in your voice or hands you a line to read out as your
+                    own — the prompt refuses it, and it will still say it is an AI
+                    if the room asks it directly. And there is no practice mode…
+
+                  The disclosure still belongs HERE rather than in the method note
+                  at the bottom, and it still discloses the first two entries in
+                  THEIRS. Only the first entry changed. The practice-mode half is
+                  untouched and still true: nothing in apps/desktop runs outside a
+                  live session.
                 */}
                 <p className="mt-8 border-t border-line-soft pt-6 text-[13.5px] leading-relaxed text-muted">
-                  The first two are the ones to take seriously. Nothing here writes in your
-                  voice or hands you a line to read out as your own — the prompt refuses it,
-                  and it will still say it is an AI if the room asks it directly. And there is
-                  no practice mode: it runs during a live interview or not at all. If either
-                  of those is what you came for, one of the other four is the better buy.
+                  The first two are the ones to take seriously. It writes the answer in your
+                  own words — but only ever out of what your CV and the job description
+                  actually say, and it will not invent an employer, a number or a project to
+                  round a sentence out. It still says it is an AI if the room asks it
+                  directly. And there is no practice mode: it runs during a live interview or
+                  not at all. If either of those is what you came for, one of the other four
+                  is the better buy.
                 </p>
               </div>
 

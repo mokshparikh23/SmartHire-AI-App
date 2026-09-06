@@ -23,6 +23,30 @@ import './globals.css'
        the question; styleBlock() closes with "never hide or deny what you are.
        Asked directly, say plainly that you are an AI assistant."
 
+       SELF-INTRO 2026-09-06 ─ RULE 1 IS NARROWER NOW. THE PARAGRAPH ABOVE IS THE
+       OLD TEXT AND IS KEPT AS THE RECORD, NOT AS THE RULE.
+
+       The owner re-enabled first-person answers for introduction and behavioural
+       questions. So this site MAY now say that it drafts the answer in your own
+       words, out of your own CV — that is what the shipped prompt does, and a
+       page still denying it would be false in the other direction, which is the
+       same failure this banner exists to prevent.
+
+       WHAT RULE 1 STILL FORBIDS, and this half did not move an inch:
+
+         · Any suggestion that it supplies experience you do not have. Every
+           employer, title, project, number and span of time in an answer comes
+           from your own résumé or the job description — enforced in
+           systemPrompt.js under INTRODUCTION AND BEHAVIOURAL QUESTIONS and again
+           under ACCURACY. No page may imply otherwise, or hint that a gap on
+           your CV is something the app can fill.
+         · Any claim that it hides what it is. Both prompts still close by
+           telling the model to say plainly that it is an AI assistant, and the
+           site may go on saying so.
+
+       Read the prompt before writing either claim. This banner has now described
+       software that did not exist twice, and in both directions.
+
     2. CONCEALMENT. This site says nothing about whether the panel appears in a
        screen share, in a recording, or to anyone else in the call. The window
        flags in electron/main.cjs are what they are; a marketing promise about

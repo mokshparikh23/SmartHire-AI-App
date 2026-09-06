@@ -80,7 +80,12 @@ const PROOF = [
   // ['check',  'You still choose what to ask'],
   // ['shield', 'The consent gate is unchanged'],
   ['check',  'You still say it in your own words'],
-  ['shield', 'It never writes in your voice'],
+  // SELF-INTRO 2026-09-06: was 'It never writes in your voice'. It does now, for
+  // an introduction — see the note in app/layout.js. The claim underneath it,
+  // and the one this panel is actually about, is that plainer wording never
+  // becomes a licence to add a fact.
+  // ['shield', 'It never writes in your voice'],
+  ['shield', 'It never adds what your CV does not say'],
 ]
 
 export default function DesiMode() {

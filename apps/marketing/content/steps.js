@@ -49,7 +49,13 @@ export const STAGES = [
   ['They ask',        'The interviewer is mid-sentence. Nothing has been asked of you yet.'],
   ['It becomes text', 'Whisper transcribes the question as it is spoken.'],
   ['The answer lands', 'Streamed as it is written, the answer on the first line.'],
-  ['You say it',      'In your own words. It never speaks, and it never claims to be you.'],
+  /* SELF-INTRO 2026-09-06: was 'In your own words. It never speaks, and it never
+     claims to be you.' — written when the prompt refused first person. It writes
+     the answer out now, so "in your own words" described something the app was
+     leaving to you and no longer does. The half that survived is that it does
+     not speak: nothing is ever played into the call, and saying it is still
+     yours to do. */
+  ['You say it',      'Out loud, in the room. It writes the answer; it never speaks it, and never puts anything in it that your CV does not say.'],
 ]
 
 /*

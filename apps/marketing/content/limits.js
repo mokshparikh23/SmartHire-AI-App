@@ -33,9 +33,21 @@
   ['It does not join the call', 'It listens through your microphone, so the candidate needs to be audible in your room …'],
   ['It does not replace the interviewer', 'It is wrong sometimes, and it says so …'],
 */
+/*
+  SELF-INTRO 2026-09-06: the first entry was
+
+    ['It does not speak for you',
+     'No voice, no first person, no script. It answers the question and hands
+      you the substance; saying it is yours to do, in your own words.'],
+
+  and it stopped being true when the owner re-enabled first-person answers for
+  introduction and behavioural questions. Replaced with the limit that DID
+  survive, which is the harder one to keep and the one enforced in the prompt
+  rather than merely asserted here. See the SELF-INTRO note in app/layout.js.
+*/
 export const LIMITS = [
-  ['It does not speak for you',
-   'No voice, no first person, no script. It answers the question and hands you the substance; saying it is yours to do, in your own words.'],
+  ['It does not invent experience you do not have',
+   'Every employer, title, project, number and date in an answer comes from your CV or the job description. Where your CV is silent it answers around the gap and marks the detail that has to be yours — it does not fill one in.'],
   ['It does not know anything you did not give it',
    'No web access, no company research, no memory of your last interview. Your CV, the job description, and what was just said in the room — that is the whole of it.'],
   ['It does not join the call',

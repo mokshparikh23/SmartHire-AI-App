@@ -71,7 +71,12 @@ export const HOME_FAQ_QUESTIONS = [
 
 /** Questions about what the thing is and does. Rendered on /how-it-works. */
 export const FAQ_PRODUCT = [
-  ['Does it answer as me?', 'No, and it will not be talked into it. The prompt answers the question — it does not write in the first person, it does not produce a line for you to read out as your own, and asked directly whether it is an AI it says that it is. What you get is the substance: the answer first, then a sentence supporting it, tagged where it came from your CV. Putting it into your own words is your half of the job, and it is the half that has to sound like you.'],
+  /* SELF-INTRO 2026-09-06: the previous answer was a flat "No, and it will not be
+     talked into it", and it is the single most quotable false sentence this site
+     had once first person was re-enabled. The new one answers the question that
+     was actually asked — yes for an introduction, no for the thing people are
+     really worried about — rather than trading one over-claim for another. */
+  ['Does it answer as me?', 'For an introduction or a “tell me about a time when…”, yes — it writes those out in the first person, because a set of bullet points is no use to someone who has to start talking now. For an ordinary technical question it just answers the question. What it never does is invent the experience: every employer, title, project, number and date comes from your CV or the job description, and where your CV is silent it answers around the gap and marks the detail that has to be yours rather than making one up. Asked outright whether it is an AI, it says that it is.'],
   // ['Where does the transcript go?', '… which is what makes the suggestions possible. … wrong for your organisation …'],
   ['Where does the transcript go?', 'To our server and on to OpenAI, which is what makes the answers possible. Uploaded PDFs are read on your machine and the file itself is never sent, but the text in it is. We keep a record that a request happened — the account, the kind of request, and when — not the words. If that trade is wrong for you, this is not the right tool.'],
   ['Which platforms are supported?', 'macOS on Apple Silicon, and 64-bit Windows. One licence key activates either, and your balance lives on the account rather than the machine. Builds are not signed yet, so the first launch needs the usual override.'],

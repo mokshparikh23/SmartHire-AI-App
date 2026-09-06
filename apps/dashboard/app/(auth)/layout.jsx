@@ -68,8 +68,16 @@ export default function AuthLayout({ children }) {
             // CONCEPT 2026-08-30: the interviewer-side pair it replaces —
             // ['shield', 'Resume used only once the candidate agrees'],
             // ['file',   'Follow-ups grounded in the resume and the job description'],
+            // SELF-INTRO 2026-09-06: the second was 'It never writes in your
+            // voice'. First person was re-enabled for introductions and
+            // behavioural answers, so that line became false — and it sits on the
+            // sign-in page, which is the first copy a new account ever reads. The
+            // claim that survived is the one about invention; see the COPY RULES
+            // banner in apps/marketing/app/layout.js, which these three lines
+            // answer to even though they live in a different app.
+            // ['shield', 'It never writes in your voice'],
             ['file',   'Answers grounded in your own resume'],
-            ['shield', 'It never writes in your voice'],
+            ['shield', 'Never an employer or a number your CV does not have'],
             ['lock',   'No API key to set up or pay for'],
           ].map(([icon, text]) => (
             <li key={text} className="flex items-center gap-3 text-[14px] text-paper/70">

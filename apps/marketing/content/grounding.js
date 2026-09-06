@@ -52,9 +52,22 @@ export const GROUNDING = [
   ['lock',
    'And it will not invent a CV you did not give it',
    'Attach one and every session for that interview draws on it. Attach nothing and it does not guess at your background or fill in a plausible one — it works from what is actually said in the room. Removing a CV deletes the file with it.'],
+  /* SELF-INTRO 2026-09-06: this entry was
+
+       ['check',
+        'And it never pretends to be you',
+        'No first person, no line to read out as your own, and no denying what
+         it is if asked. It hands you the substance; the words that come out of
+         your mouth are yours.'],
+
+     Its first two clauses went when the owner re-enabled first-person answers
+     for introduction and behavioural questions; the third did not move and is
+     kept below word for word. This list is the GROUNDING section, so the entry
+     is rewritten around the thing that is actually being grounded — a claim
+     comes out of a document or it does not get made. */
   ['check',
-   'And it never pretends to be you',
-   'No first person, no line to read out as your own, and no denying what it is if asked. It hands you the substance; the words that come out of your mouth are yours.'],
+   'And it never fills in what your CV leaves out',
+   'It writes the answer in your own words, out of your CV and the job description — and it will not invent an employer, a number or a project to round a sentence out. Asked outright whether it is an AI, it says that it is.'],
 ]
 
 /** The two paragraphs that sit beside the list. */
