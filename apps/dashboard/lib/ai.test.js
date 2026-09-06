@@ -7,7 +7,7 @@
   Neither had a test.
 */
 import { describe, it, expect } from 'vitest'
-import { modelForIntent, stripImageDetail } from './ai'
+import { modelForIntent, stripImageDetail, maxTokensForIntent, MAX_TOKENS, MAX_TOKENS_SMART } from './ai'
 
 /* A provider literal rather than the real PROVIDERS export, so these assert the
    ROUTING rule and do not fail every time a model id is retuned. resolveModel
@@ -42,6 +42,27 @@ describe('modelForIntent', () => {
 
   it('falls back to the allowlist when the pick is not on it', () => {
     expect(modelForIntent('general', 'gpt-9-turbo-max', provider)).toBe('fast-1')
+  })
+})
+
+describe('maxTokensForIntent', () => {
+  it('escalates exactly the intents modelForIntent escalates', () => {
+    // The two rules must not drift: a request sent to the smart model under the
+    // spoken-question budget is the "generating……" that never resolves.
+    for (const intent of ['coding', 'aptitude', 'screen']) {
+      expect(maxTokensForIntent(intent)).toBe(MAX_TOKENS_SMART)
+      expect(modelForIntent(intent, 'fast-1', provider)).toBe('smart-1')
+    }
+  })
+
+  it('leaves an ordinary question on the live-interview budget', () => {
+    expect(maxTokensForIntent('general')).toBe(MAX_TOKENS)
+    expect(maxTokensForIntent(undefined)).toBe(MAX_TOKENS)
+    expect(maxTokensForIntent('nonsense')).toBe(MAX_TOKENS)
+  })
+
+  it('raises a ceiling rather than lowering one', () => {
+    expect(MAX_TOKENS_SMART).toBeGreaterThan(MAX_TOKENS)
   })
 })
 

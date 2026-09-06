@@ -67,7 +67,39 @@ export const PROVIDERS = {
     // defaultModel: 'gpt-4o',
     defaultModel: 'gpt-4o-mini',
     fastModel:    'gpt-4o-mini',
-    smartModel:   'gpt-4o',
+    /* SCREEN-ANSWERS 2026-09-06: smartModel gpt-4o -> gpt-4.1.
+
+       The reported bug is an INSTRUCTION-FOLLOWING failure, not a knowledge one:
+       the [SCREENSHOT] section already said "do not describe the screen" and the
+       model described it anyway — and that prompt just grew ~1370 tokens of
+       routing it has to hold. 4.1 is the model built for long-prompt adherence,
+       is a large step up on code, and is better at reading dense rendered text,
+       which is what a screenshot in an interview actually contains. It also costs
+       LESS than 4o ($2/$8 per M against $2.50/$10).
+
+       MEASURED, the way the Gemini table below was, with scripts/probe-model-
+       latency.mjs — 3 runs each, the real system prompt (3686 tokens), a coding
+       question, time to first CONTENT delta:
+
+         gpt-4o    ttft median 1.83s  (1.48-2.10)   total median 3.00s
+         gpt-4.1   ttft median 1.83s  (1.75-2.15)   total median 2.41s
+
+       Identical at the median, 4.1 with the tighter spread and the faster
+       completion. Both sit an order of magnitude clear of STALL_TIMEOUT_MS
+       (12000) in the desktop's aiBackend.js, which is the constant that matters:
+       a model that occasionally exceeds it does not arrive slowly, it arrives as
+       an aborted answer. That is why smartModel on gemini below is 3.6 and not
+       3.7, and it is the check this switch had to pass.
+
+       fastModel is deliberately NOT touched. gpt-4.1-mini may well be an upgrade
+       over gpt-4o-mini, but that is a different question on the latency-critical
+       path and belongs in its own change with its own measurement.
+
+       Server-only: reverting is this line and a redeploy, with no desktop
+       release. Already in `models` below, so resolveModel accepts it and the
+       INVARIANT above holds. */
+    // smartModel:   'gpt-4o',
+    smartModel:   'gpt-4.1',
     models: [
       { id: 'gpt-4o',       label: 'GPT-4o',       desc: 'Best quality', badge: 'Recommended' },
       { id: 'gpt-4o-mini',  label: 'GPT-4o mini',  desc: 'Fastest',      badge: 'Fast' },
@@ -245,6 +277,41 @@ export const TRANSCRIBE_PROMPT =
    That is the "generating……" that never finishes. */
 // export const MAX_TOKENS = 1024
 export const MAX_TOKENS = 4096
+
+/* SCREEN-ANSWERS 2026-09-06 ─ a coding answer is not a spoken one ──────────────
+   MAX_TOKENS is the live-interview budget and the note above explains what it is
+   guarding against on Gemini 3, where it is shared with thinking tokens and the
+   documented failure at exhaustion is an EMPTY string rather than a truncated
+   one. A screenshot of a coding problem is the request most likely to hit both
+   ends of that: a long think, and then a whole function plus a complexity line
+   plus a dry run still owed. It is also the request the candidate has already
+   stopped and pressed a key for, so a longer answer is what they asked for.
+
+   Free on both providers — output tokens are billed as they are GENERATED, not as
+   they are budgeted — so this raises a ceiling and nothing else. It does not make
+   ordinary answers longer: the prompt's ~60-word ladder still governs those, and
+   the intents below are the ones the prompt already exempts.
+
+   Latency is unaffected in the way that matters: STALL_TIMEOUT_MS in the
+   desktop's aiBackend.js measures the gap BETWEEN deltas, not the total, so a
+   longer answer cannot trip it. TOTAL_TIMEOUT_MS against the route's
+   maxDuration = 60 is the real cap and is unchanged. */
+export const MAX_TOKENS_SMART = 6144
+
+/**
+ * The same intent that picks the model picks the ceiling. Kept beside
+ * modelForIntent's rule deliberately — they must not drift apart, or a request
+ * escalated to the smart model would still answer under the spoken-question
+ * budget.
+ *
+ * @param {'general'|'coding'|'aptitude'|'screen'|undefined} intent - untrusted
+ * @returns {number}
+ */
+export function maxTokensForIntent(intent) {
+  return (intent === 'coding' || intent === 'aptitude' || intent === 'screen')
+    ? MAX_TOKENS_SMART
+    : MAX_TOKENS
+}
 
 /* Thinking costs latency the interviewer pays for in the room. Measured
    time-to-first-token on gemini-3.7-flash: ~14s at the model default, ~4s at

@@ -1,5 +1,5 @@
 import {
-  CORS, MAX_TOKENS, GEMINI_REASONING_EFFORT, modelForIntent, requireProvider,
+  CORS, maxTokensForIntent, GEMINI_REASONING_EFFORT, modelForIntent, requireProvider,
   requireSession, recordUsage, jsonError, upstreamError, fetchWithRetry,
   friendlyUpstreamMessage,
   // SCREEN-ANSWERS 2026-09-06: see its note in lib/ai.js. It lives there rather
@@ -73,7 +73,10 @@ export async function POST(request) {
       body: JSON.stringify({
         // model: resolveModel(model, provider),
         model: modelForIntent(intent, model, provider),
-        max_tokens: MAX_TOKENS,
+        // max_tokens: MAX_TOKENS,
+        // SCREEN-ANSWERS 2026-09-06: the same intent that picks the model picks
+        // the ceiling — see maxTokensForIntent in lib/ai.js.
+        max_tokens: maxTokensForIntent(intent),
         stream: true,
         // THINKING 2026-08-30: Gemini only. OpenAI rejects reasoning_effort on
         // non-reasoning models like gpt-4o, so this must not be sent blindly.
