@@ -435,9 +435,33 @@ export function briefResume(rec) {
 
   /* `other` is where the parser puts skills, certifications and everything else
      it could not classify. Titles only — the descriptions are what makes the
-     full text long, and this is meant to be scannable. */
-  const skills = (rec.other || []).map((e) => clean(e.title)).filter(Boolean)
-  if (skills.length) out.push(`Skills: ${skills.slice(0, BRIEF_SKILLS).join(', ')}`)
+     full text long, and this is meant to be scannable.
+
+     SELF-INTRO 2026-09-06 ─ THE LABEL WAS A CLAIM, AND IT WAS OFTEN FALSE.
+     This line read:
+
+       if (skills.length) out.push(`Skills: ${skills.slice(...).join(', ')}`)
+
+     But `other[].title` is a SECTION HEADING, not a skill — the parse schema
+     says so in as many words ("Section heading, e.g. \"Skills\",
+     \"Certifications\", \"Projects\""). So a CV with a Projects section reached
+     the model as `Skills: Projects`, and one with both arrived as
+     `Skills: Skills, Projects`.
+
+     That is not cosmetic. This brief sits above the full text under AT A GLANCE
+     precisely so a short follow-up resolves without scanning four kilobytes, and
+     the follow-up that brought this in was "tell me more about that project" —
+     which is exactly the question the mislabel sends looking in the wrong place.
+     A heading is a fact about where to look; asserting it is a skill is a fact
+     about the candidate, and it was one nobody checked.
+
+     Neutral label, same titles, same cap. The full text is untouched:
+     flattenResume() has always emitted these under OTHER with their descriptions
+     intact, which is why the detail was reachable at all. */
+  // const skills = (rec.other || []).map((e) => clean(e.title)).filter(Boolean)
+  // if (skills.length) out.push(`Skills: ${skills.slice(0, BRIEF_SKILLS).join(', ')}`)
+  const sections = (rec.other || []).map((e) => clean(e.title)).filter(Boolean)
+  if (sections.length) out.push(`Also on the CV: ${sections.slice(0, BRIEF_SKILLS).join(', ')}`)
 
   const text = out.join('\n')
   return text.length > BRIEF_MAX_CHARS ? `${text.slice(0, BRIEF_MAX_CHARS).trimEnd()}…` : text
