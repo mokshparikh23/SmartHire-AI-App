@@ -1,4 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+// TAB-NAVIGATION 2026-09-06: useState left with the draft — see below.
+// import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import Icon from '../ui/Icon'
 import Markdown from './Markdown'
@@ -23,7 +25,17 @@ export default function ChatPanel({ onSend }) {
   const chatError     = useSessionStore((s) => s.chatError)
   const blockedReason = useSessionStore((s) => s.blockedReason)
 
-  const [draft, setDraft] = useState('')
+  /* TAB-NAVIGATION 2026-09-06 ─ a draft that outlives its panel ────────────────
+     Local state was fine while the only way out of chat was the user pressing
+     Chat themselves. It stopped being fine the moment an incoming voice question
+     started switching the view for them: this component unmounts mid-sentence and
+     took whatever was typed with it.
+
+     Same two names, so every use site below is unchanged — only where the value
+     lives has moved. See chatDraft in sessionStore.js. */
+  // const [draft, setDraft] = useState('')
+  const draft    = useSessionStore((s) => s.chatDraft)
+  const setDraft = useSessionStore((s) => s.setChatDraft)
   const logRef   = useRef(null)
   const pinnedRef = useRef(true)
 

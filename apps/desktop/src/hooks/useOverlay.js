@@ -113,7 +113,18 @@ export function usePanelHotkeys({
         return
       }
 
-      if (key === 'enter')          { e.preventDefault(); onAnswer?.() }
+      /* TAB-NAVIGATION 2026-09-06 ─ the guard its four siblings already had ─────
+         Every other binding in this branch is wrapped in `if (!typing)` — ⌘⌫,
+         ⌘↓, ⌘← and ⌘→ below. ⌘↵ was not, and `typing` is computed from the event
+         target, so it covers the chat composer. The result: typing a chat message
+         and pressing ⌘↵ fired onAnswer, which regenerated the last question — a
+         billed request, from a text field, with the answer landing in a view the
+         user was not even looking at.
+
+         Enter is a text-editing key in a composer in a way that ⌘. is not, which
+         is why that one stays unguarded and this one does not. */
+      // if (key === 'enter')          { e.preventDefault(); onAnswer?.() }
+      if (key === 'enter')          { if (!typing) { e.preventDefault(); onAnswer?.() } }
       // PIPELINE 2026-08-31: ⌘. — the macOS convention for "stop what you are
       // doing", and unbound here. Safe while typing: it is not a text-editing
       // key, and stopping a runaway answer is exactly as useful mid-typing.

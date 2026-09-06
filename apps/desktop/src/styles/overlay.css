@@ -300,10 +300,44 @@
 .ia-pill:disabled { opacity: 0.35; cursor: default; }
 
 /* Chat is a toggle, and the reference marks its active state with a dashed rule. */
+/* TAB-NAVIGATION 2026-09-06: Answer carries this now too. It is unchanged — the
+   base rule already reserves a 1px TRANSPARENT border, so the outline appears
+   with zero layout shift, which is what lets it read as a selected tab rather
+   than a pressed button. */
 .ia-pill[data-active='true'] {
   border: 1px dashed rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.10);
   color: #fff;
+}
+
+/* TAB-NAVIGATION 2026-09-06 ─ telling a verb apart from two nouns ──────────────
+   Answer and Chat are views; Screenshot is an action that has no view of its own.
+   Three identical chips in a row said otherwise, and that is most of why the row
+   was read as a tab strip. A hairline and a glyph are the whole fix — cheaper
+   than reordering a toolbar people have muscle memory on, and they survive the
+   660px breakpoint where the pills start clipping.
+
+   flex-shrink:0 so the rule is never the thing that collapses; the pills beside
+   it are the ones with room to give. */
+.ia-pill-sep {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0 1px;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-app-region: no-drag;
+}
+
+/* The glyph sits tighter to its label than the pill's default 7px, which is
+   spaced for the ⌘ chip on the other side. */
+.ia-pill--action { gap: 6px; padding-left: 9px; }
+.ia-pill--action svg { opacity: 0.75; }
+.ia-pill--action:hover:not(:disabled) svg { opacity: 1; }
+
+/* Below this the labels clip anyway (see the 660px rule), so the rules are only
+   taking width from the words. */
+@container (max-width: 660px) {
+  .ia-toolbar .ia-pill-sep { display: none; }
 }
 
 .ia-pill--danger {
@@ -1361,6 +1395,23 @@
 }
 .ia-pill--stop:hover:not(:disabled) {
   background: rgba(251, 191, 36, 0.26);
+  color: #fbbf24;
+}
+
+/* TAB-NAVIGATION 2026-09-06 ─ Stop keeps the tab marker, and keeps its amber ────
+   Stop swaps into the Answer slot, and that slot is now a TAB — so it carries
+   data-active like the pill it replaces, or the row loses its selected marker
+   exactly when the panel is busiest.
+
+   This override is not optional. `.ia-pill[data-active='true']` sets a white
+   background and #fff text, and with the same specificity as this rule (one
+   class + one attribute each) it would win on source order and repaint the amber
+   away — turning "interrupt what is running" back into something that looks like
+   a second affirmative button sitting where the first one was. It MUST stay below
+   that rule in this file. */
+.ia-pill--stop[data-active='true'] {
+  border: 1px dashed rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.16);
   color: #fbbf24;
 }
 .ia-pill--stop .ia-kbd {

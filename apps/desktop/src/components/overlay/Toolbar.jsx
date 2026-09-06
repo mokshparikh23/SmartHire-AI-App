@@ -39,6 +39,9 @@ export default function Toolbar({
   const setCaptureSource = useSessionStore((s) => s.setCaptureSource)
   const setScreenEnabled = useSessionStore((s) => s.setScreenEnabled)
   const toggleChat       = useSessionStore((s) => s.toggleChat)
+  // TAB-NAVIGATION 2026-09-06: the Answer pill navigates rather than toggling —
+  // pressed on the answer view it must stay put, not bounce into chat.
+  const setChatMode      = useSessionStore((s) => s.setChatMode)
   // ANSWER-STYLE 2026-08-30: the pill says what comes back, not what is sent.
   const followups        = useSettingsStore((s) => s.answerMode === 'followups')
 
@@ -110,44 +113,110 @@ export default function Toolbar({
       {/* STOP-ROUTING 2026-09-06: `isThinking` alone meant a streaming chat reply
           got no Stop at all, and the chatMode branch below sent Stop to the side
           the VIEW was showing rather than the side that was running. */}
-      {/* {isThinking ? ( */}
-      {(isThinking || chatStreaming) ? (
+      {/* TAB-NAVIGATION 2026-09-06 ─ Stop belongs to the tab you are ON ──────────
+          Watching both streams meant that an answer running BEHIND the chat view
+          replaced this slot with Stop — so the one control that could bring the
+          answer back was not on screen while the answer existed. Reading only the
+          active view's stream frees the slot to be a tab in exactly that case,
+          and loses nothing: stopStreaming still stops whichever side is live, and
+          a chat reply still gets its Stop while chat is what you are looking at. */}
+      {/* {(isThinking || chatStreaming) ? ( */}
+      {(chatMode ? chatStreaming : isThinking) ? (
         <button
           className="ia-pill ia-pill--stop"
+          // TAB-NAVIGATION 2026-09-06: Stop borrows the Answer slot, so it has to
+          // carry the row's selected marker too — otherwise the tab pair loses
+          // its marker at the exact moment the panel is busiest. The amber is
+          // preserved by .ia-pill--stop[data-active] in overlay.css; without that
+          // override the generic rule would repaint it white and turn "interrupt"
+          // back into something that looks like a second affirmative button.
+          data-active={!chatMode}
           // onClick={() => (chatMode ? session.stopChat?.() : session.stopGenerating?.())}
+          // The click stays blunt on purpose: this pill wears ⌘. on its face and
+          // that chord is stopStreaming. Visibility does the disambiguating.
           onClick={() => session.stopStreaming?.()}
           title={`Stop generating (${comboLabel('mod .')})`}
         >
           Stop <Kbd combo="mod ." />
         </button>
       ) : (
+        /* TAB-NAVIGATION 2026-09-06 ─ this row LOOKS like tabs, so it must be ────
+           Three identical chips sit side by side and exactly one of them — Chat —
+           carried a selected state and actually swapped the view. Everything here
+           taught the user it was a tab strip, and then only one third of it
+           navigated. Reported as "chat me jaane ke baad Answer ya Screenshot par
+           wapas ja hi nahi sakte".
+
+           So from chat this pill NAVIGATES, and does nothing else. Regenerating
+           on the way back would bill a request for someone who only wanted to
+           look at the answer they already have — the press means "show me", not
+           "do it again". On the answer view it regenerates exactly as before, so
+           the second press still means what it always did.
+
+           `disabled` had to move with it: gated on `!hasQuestion`, the pill was
+           dead in chat before the first question — the one state where being
+           unable to leave is most confusing. Leaving a view can never depend on
+           whether that view has content yet. */
         <button
           className="ia-pill"
-          onClick={session.regenerate}
-          disabled={!hasQuestion}
+          // TAB-NAVIGATION 2026-09-06: reuses Chat's existing dashed-outline
+          // treatment, so the pair reads as one group with no new CSS.
+          data-active={!chatMode}
+          // onClick={session.regenerate}
+          onClick={() => {
+            if (chatMode) { setChatMode(false); return }
+            session.regenerate()
+          }}
+          // disabled={!hasQuestion}
+          disabled={!chatMode && !hasQuestion}
           // title={hasQuestion ? `Answer again (${comboLabel('mod enter')})` : 'No question yet'}
-          title={hasQuestion
-            ? `${followups ? 'Suggest' : 'Answer'} again (${comboLabel('mod enter')})`
-            : 'No question yet'}
+          title={chatMode
+            ? `Back to the ${followups ? 'suggestion' : 'answer'} (${comboLabel('mod enter')})`
+            : hasQuestion
+              ? `${followups ? 'Suggest' : 'Answer'} again (${comboLabel('mod enter')})`
+              : 'No question yet'}
         >
           {/* Answer <Kbd combo="mod enter" /> */}
           {followups ? 'Suggest' : 'Answer'} <Kbd combo="mod enter" />
         </button>
       )}
 
+      {/* TAB-NAVIGATION 2026-09-06 ─ the one that is NOT a tab ───────────────────
+          Answer and Chat are views and now say so with data-active. Screenshot is
+          a one-shot action: it has no page of its own, and its answer lands in
+          whichever view the user is already in (see SCREENSHOT-IN-CHAT in
+          useInterviewSession.js). Giving it a selected state would be a lie, so
+          instead it gets the camera glyph and a divider — enough to read as a
+          verb sitting beside two nouns, without reordering a row people have
+          built muscle memory on. */}
+      <span className="ia-pill-sep" aria-hidden="true" />
+
       <button
-        className="ia-pill"
+        // className="ia-pill"
+        className="ia-pill ia-pill--action"
         onClick={session.askAboutScreen}
         // Gated on the screen toggle, so the capture switch actually switches
         // something off rather than being decoration next to a button that
         // captures anyway.
-        disabled={isThinking || !screenEnabled || screenDenied}
+        /* TAB-NAVIGATION 2026-09-06 ─ the wrong stream was disabling this ────────
+           `isThinking` is the ANSWER stream. In chat mode a screenshot goes to the
+           THREAD (see SCREENSHOT-IN-CHAT), so an answer running on the card had no
+           business greying this out — and it did so exactly when the user was most
+           likely to reach for it, which is half of "Screenshot par ja hi nahi
+           sakte". Same shape as the Stop swap above: read the stream belonging to
+           the view you are looking at. */
+        // disabled={isThinking || !screenEnabled || screenDenied}
+        disabled={(chatMode ? chatStreaming : isThinking) || !screenEnabled || screenDenied}
         title={screenDenied ? 'Screen Recording permission needed'
              : !screenEnabled ? 'Turn on screen capture first'
              : `Capture the screen and ask about it (${comboLabel('mod shift enter')})`}
       >
+        {/* Screenshot <Kbd combo="mod shift enter" /> */}
+        <Icon name="camera" size={13} />
         Screenshot <Kbd combo="mod shift enter" />
       </button>
+
+      <span className="ia-pill-sep" aria-hidden="true" />
 
       {/* TOOLBAR-FIT 2026-09-01: --chat so the narrowest container query can hide
           this one specifically. ⌘⇧J still opens it — see the note in overlay.css. */}

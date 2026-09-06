@@ -214,9 +214,28 @@ export default function SessionPanel({ session }) {
     useSessionStore.getState().clearTranscript()
   }, [session])
 
+  /* TAB-NAVIGATION 2026-09-06 ─ "Jump to the newest answer" now jumps ──────────
+     The card head's live chip says exactly that, and ⌘↓ is listed in the shortcut
+     sheet as "Back to the newest answer". Both called goLive, which only clears
+     pinnedTurnId — so in chat mode the chip rendered, was clickable, and did
+     nothing a user could see.
+
+     Wrapped here rather than folded into the store's goLive on purpose: the Esc
+     precedence chain below also calls goLive, and Esc must keep meaning "un-pin",
+     not "leave the view you are typing in". Keeping the store action single
+     purpose is what lets those two stay different. */
+  const goLiveAnswer = useCallback(() => {
+    useSessionStore.getState().setChatMode(false)
+    goLive()
+  }, [goLive])
+
   const stepTurn = useCallback((delta) => {
     const { turns: list, activeTurnId: active } = useSessionStore.getState()
     if (!list.length) return
+    // TAB-NAVIGATION 2026-09-06: ⌘←/⌘→ page the ANSWER card's history. The pager
+    // itself is not even rendered in chat mode, so without this the chords
+    // silently walked a card nobody could see.
+    useSessionStore.getState().setChatMode(false)
     const index = list.findIndex((t) => t.id === active)
     const from  = index === -1 ? list.length - 1 : index
     const next  = Math.min(list.length - 1, Math.max(0, from + delta))
@@ -236,8 +255,17 @@ export default function SessionPanel({ session }) {
        question — useless during a hold, which is exactly the moment the user is
        staring at unmoving text wondering whether the app has died. If something
        is held, release it; otherwise behave as before. */
+    /* TAB-NAVIGATION 2026-09-06: ⌘↵ is the chord printed ON the Answer pill, so
+       it has to mean what the pill means. Without this the button navigated for
+       free while its own advertised shortcut billed a regeneration — and since
+       this binding has no `typing` guard (see useOverlay.js), that regeneration
+       fired from inside the chat composer. */
     // onAnswer:          session.regenerate,
     onAnswer: () => {
+      if (useSessionStore.getState().chatMode) {
+        useSessionStore.getState().setChatMode(false)
+        return
+      }
       if (session.heldRef?.current) { session.flushHeld?.(); return }
       session.regenerate()
     },
@@ -253,7 +281,9 @@ export default function SessionPanel({ session }) {
     // },
     onStopGenerating: () => session.stopStreaming?.(),
     onFocus: toggleFocus,
-    onGoLive: goLive,
+    // TAB-NAVIGATION 2026-09-06: ⌘↓ — the sheet already promised this.
+    // onGoLive: goLive,
+    onGoLive: goLiveAnswer,
     onHelp: () => setHelpOpen((v) => !v),
     /* PREMIUM-UX 2026-08-31: the Esc precedence chain. Most-recently-opened
        first, and it deliberately ends at "do nothing" — Esc must never be a
@@ -265,6 +295,19 @@ export default function SessionPanel({ session }) {
       if (focused)    { exitFocus(); return }
       if (pinnedTurnId) { goLive(); return }
       if (arming)     { armedRef.current = false; setArming(false); return }
+      /* TAB-NAVIGATION 2026-09-06 ─ chat is deliberately NOT in this chain ──────
+         Esc looks like the obvious way out of chat and it is the wrong one.
+         usePanelHotkeys returns early on Escape whenever a text field has focus,
+         and the composer owns focus exactly as the transcript input does — so a
+         binding here would fire only when the caret happened to be somewhere
+         else. A shortcut that works or does not depending on where focus is
+         teaches nobody anything.
+
+         And this chain closes things that were OPENED — the sheet, the drawer,
+         focus mode, an armed End. Chat is not an overlay; it is one of two views,
+         and leaving a view is not backing out of anything. With the Answer pill
+         now one click and ⌘⇧J still a toggle, there is no dead end left here to
+         rescue. */
       // Nothing to back out of.
     },
     onScreenshot:      session.askAboutScreen,
@@ -403,7 +446,10 @@ export default function SessionPanel({ session }) {
               // PREMIUM-UX 2026-08-31: the way back to the live pair.
               pinned={!!pinnedTurnId}
               liveThinking={isThinking}
-              onGoLive={goLive}
+              // TAB-NAVIGATION 2026-09-06: the chip's own label is "Jump to the
+              // newest answer"; in chat mode it used to jump nowhere.
+              // onGoLive={goLive}
+              onGoLive={goLiveAnswer}
             >
               {!chatMode && (
                 <TurnPager
@@ -415,6 +461,15 @@ export default function SessionPanel({ session }) {
                 />
               )}
               {chatMode && <span className="ia-label">Chat</span>}
+              {/* TAB-NAVIGATION 2026-09-06: the card was titled "Chat" in chat mode
+                  and titled NOTHING otherwise, so it looked like it belonged to
+                  the Chat pill rather than to whichever view was showing — one
+                  more thing teaching the tab reading and then breaking it. It
+                  sits beside the pager, not instead of it: the pager renders
+                  nothing until there is a second turn to page to. */}
+              {!chatMode && (
+                <span className="ia-label">{followups ? 'Suggestion' : 'Answer'}</span>
+              )}
             </AnswerCardHead>
 
             {!chatMode && drawerOpen && turns.length > 0 && (

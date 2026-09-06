@@ -399,6 +399,37 @@ export function useInterviewSession() {
     const q = question?.trim()
     if (!q) return
 
+    /* TAB-NAVIGATION 2026-09-06 ─ an answer must be able to be SEEN ────────────
+       SessionPanel renders `chatMode ? <ChatPanel/> : <AnswerPanel/>`, so every
+       answer produced while chat was open streamed into a component that was not
+       mounted: billed, committed to turns[], and invisible. The only tell was the
+       transcript bar quietly updating.
+
+       An earlier pass fixed this in askAboutScreen alone, which was too narrow —
+       that was one symptom, not the bug. EVERY caller was affected, including the
+       voice path, which fires with no user action at all: the interviewer keeps
+       talking and the app keeps answering into nothing.
+
+       Here rather than at each call site because this is the single funnel —
+       onQuestion, flushHeld, askManual and regenerate all arrive at this line,
+       and a future caller inherits the behaviour instead of having to remember
+       it. AFTER the `!q` guard, so an empty question does not move the view.
+
+       Two callers are deliberately unaffected, and both are correct:
+
+         askAboutScreen, in chat mode, never reaches here at all — it hands the
+           capture to sendChat and returns (see SCREENSHOT-IN-CHAT below).
+           Answering where the user is looking is the better behaviour whenever
+           there IS a second place to put the answer.
+
+         refine() is a no-op: its buttons live inside AnswerPanel, so chatMode is
+           already false by the time one can be pressed.
+
+       A spoken question has no such second home — turns[], the pager and refine
+       all belong to the card — so for the voice path bringing the view forward is
+       the only way the answer can be read at all. */
+    useSessionStore.getState().setChatMode(false)
+
     const gen = ++genRef.current
 
     /* SEGMENTATION 2026-08-30: rescue the outgoing turn, then actually cancel it.
@@ -1206,7 +1237,14 @@ export function useInterviewSession() {
        branch further down moves the ANSWER to the user instead, which is what was
        actually wanted. The bug this line fixed stays fixed — see the
        SCREENSHOT-IN-CHAT note beside that branch. Kept because it records why
-       chatMode is touched on this path at all. */
+       chatMode is touched on this path at all.
+
+       SUPERSEDED AGAIN 2026-09-06: the general form of this now lives at the top
+       of generate() — see TAB-NAVIGATION there. This path is the ONE deliberate
+       exception to it, and it costs nothing to exclude because the branch below
+       returns before generate() is ever reached. Do not revive this line: it
+       would put the screenshot answer back on a card the user is not looking at,
+       which is precisely what that branch exists to stop. */
     // useSessionStore.getState().setChatMode(false)
 
     /* SCREEN-ANSWERS 2026-09-06 ─ the app was asking the model to describe ──────

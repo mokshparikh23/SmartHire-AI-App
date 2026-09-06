@@ -104,6 +104,18 @@ export const useSessionStore = create((set, get) => ({
   // one is rendered by AnswerPanel only, so chat failures were invisible.
   chatError: null,
 
+  /* TAB-NAVIGATION 2026-09-06 ─ the composer text has to outlive the panel ─────
+     ChatPanel kept its draft in local React state, which was fine while the only
+     way out of chat was the user pressing Chat themselves. It stops being fine
+     the moment an incoming voice question switches the view for them: the panel
+     unmounts mid-sentence and whatever was typed is gone with it.
+
+     In the store rather than a ref in SessionPanel because ChatPanel is the only
+     reader and the only writer, and because startSession already resets every
+     other chat field three lines apart — a draft that survived into the next
+     interview would be its own small bug. */
+  chatDraft: '',
+
   /* SELF-VOICE 2026-08-31 ─ what the CANDIDATE said, waiting for its turn ──────
      The app only ever captured the interviewer, so the `assistant` entries in
      the history sent to the model were the AI's own past SUGGESTIONS — not a
@@ -188,6 +200,7 @@ export const useSessionStore = create((set, get) => ({
       chatMessages: [],
       chatStreaming: false,
       chatError: null,
+      chatDraft: '',   // TAB-NAVIGATION 2026-09-06
       // PIPELINE 2026-08-31: a capture failure from the previous session must
       // not be showing over a fresh one.
       captureState: 'idle',
@@ -506,6 +519,17 @@ export const useSessionStore = create((set, get) => ({
   },
 
   /** Back to the live pair. */
+  /* TAB-NAVIGATION 2026-09-06 ─ why the view switch is NOT on this line ────────
+     Every caller of this is answer-card navigation, so folding setChatMode(false)
+     in here looks like the obvious choke point. It is not: SessionPanel's Esc
+     precedence chain also calls goLive() when a turn is pinned, and Esc must
+     never become a way out of chat — the composer is a text input, where Esc is a
+     keystroke and not a command.
+
+     So the two callers that actually mean "show me the newest answer" — ⌘↓ and
+     the card head's New-answer chip — go through goLiveAnswer() in SessionPanel,
+     and Esc keeps calling this one bare. Keeping this action single-purpose is
+     the only thing holding those two apart; do not "simplify" it. */
   goLive: () => set({ pinnedTurnId: null }),
 
   /* REDESIGN 2026-08-29 ─ capture toggles in the new toolbar ───────────────── */
@@ -581,8 +605,20 @@ export const useSessionStore = create((set, get) => ({
 
      toggleChat cannot do that job — called from chat it would be right by
      accident, and called from the answer view it would put the user INTO chat,
-     which is the opposite of what the caller wants. */
+     which is the opposite of what the caller wants.
+
+     TAB-NAVIGATION 2026-09-06: askAboutScreen is no longer the caller — that line
+     is commented out, superseded the same day by the branch that answers a
+     screenshot in the thread instead. The live callers now are generate() (one
+     line, covering every path that produces an answer), the Answer pill acting as
+     a tab, ⌘↵, goLiveAnswer() and stepTurn(). The argument above is unchanged and
+     is exactly why all of them take this rather than toggleChat. */
   setChatMode: (v) => set({ chatMode: !!v }),
+
+  // TAB-NAVIGATION 2026-09-06: see chatDraft's note above. Cleared by
+  // ChatPanel's submit and by startSession, the same two points that clear
+  // every other chat field.
+  setChatDraft: (v) => set({ chatDraft: v }),
 
   /** Appends the user's message plus the empty assistant turn it streams into. */
   /* SCREENSHOT-IN-CHAT 2026-09-06 ─ `shot`, a capture riding on a chat turn ─────
@@ -670,6 +706,10 @@ export const useSessionStore = create((set, get) => ({
     set({ chatStreaming: false })
   },
   // clearChat: () => set({ chatMessages: [], chatStreaming: false }),
+  /* TAB-NAVIGATION 2026-09-06: chatDraft is deliberately NOT cleared here. ⌘⌫ in
+     chat means "clear the thread", and a message still being typed is not part of
+     the thread yet — throwing it away would be the same silent loss the draft was
+     lifted into the store to prevent. startSession clears it; this does not. */
   clearChat:    () => set({ chatMessages: [], chatStreaming: false, chatError: null }),
 
   // Format elapsed as MM:SS
