@@ -1,0 +1,16 @@
+# HARDENED 2026-09-06 — only read by `vercel deploy` from a terminal.
+#
+# Git-based deploys ignore this file entirely: Vercel clones the repo, so it
+# only ever sees what is committed. This exists for the CLI path, which uploads
+# the working directory as it stands — and that directory carries three .next
+# builds, node_modules and any packaged desktop output, which came to 127MB and
+# died on Vercel's 100MB upload limit the first time it was tried.
+#
+# Everything here is either committed-and-rebuilt-on-Vercel or local-only.
+node_modules
+.next
+dist
+out
+release
+release.noindex
+.env*.local

@@ -1,7 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "_comment": "HARDENED 2026-09-06. THIS FILE IS SHARED BY ALL THREE VERCEL PROJECTS (web, site, admin) — every one of them leaves Root Directory empty, so every one of them reads this exact file. Do not put anything project-specific in here; there is no way to say 'only for admin'. Both commands below dispatch on SMARTHIRE_APP, which is the one build setting still living in each project's dashboard. See scripts/vercel-target.mjs and 'Deploying' in the README. Settings in vercel.json OVERRIDE the dashboard's Build Command and Ignored Build Step, which is the point: the 2026-09-06 rename invalidated those six hand-typed strings at once and one of the six failed silently.",
-  "_comment_output": "outputDirectory is deliberately ABSENT. It is the one setting that genuinely differs per project (apps/dashboard/.next, apps/marketing/.next, apps/admin/.next) and so cannot live in a file all three share. It stays in the dashboard, which is survivable because a wrong Output Directory fails the deploy loudly — 'No Output Directory named ... found' — unlike a wrong Ignored Build Step.",
   "buildCommand": "node scripts/vercel-build.mjs",
   "ignoreCommand": "node scripts/vercel-ignore.mjs"
 }

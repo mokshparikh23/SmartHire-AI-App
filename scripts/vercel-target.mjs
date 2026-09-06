@@ -26,6 +26,34 @@
  * value is a key of APPS below. It is the only per-project build setting left,
  * it names a thing rather than a path, and it is not invalidated by moving a
  * directory. Output Directory is the other survivor, and it is in the loud half.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHAT vercel.json WOULD SAY IF IT COULD. The two paragraphs below were written
+ * as `_comment` / `_comment_output` keys inside vercel.json, in the same style as
+ * the `_comment_*` keys this repo uses throughout its package.json files. Vercel
+ * rejects them: its schema is closed, and the first deploy died on
+ *
+ *     Invalid vercel.json - should NOT have additional property `_comment`.
+ *
+ * So vercel.json is now four bare lines and the prose lives here, in the file
+ * both of its commands import. Do not put it back.
+ *
+ *   THIS FILE IS SHARED BY ALL THREE VERCEL PROJECTS (web, site, admin) — every
+ *   one of them leaves Root Directory empty, so every one of them reads this
+ *   exact file. Do not put anything project-specific in it; there is no way to
+ *   say "only for admin". Both commands dispatch on SMARTHIRE_APP, which is the
+ *   one build setting still living in each project's dashboard. Settings in
+ *   vercel.json OVERRIDE the dashboard's Build Command and Ignored Build Step,
+ *   which is the point: the 2026-09-06 rename invalidated those six hand-typed
+ *   strings at once and one of the six failed silently.
+ *
+ *   outputDirectory is deliberately ABSENT from vercel.json. It is the one
+ *   setting that genuinely differs per project (apps/dashboard/.next,
+ *   apps/marketing/.next, apps/admin/.next) and so cannot live in a file all
+ *   three share. It stays in the dashboard, which is survivable because a wrong
+ *   Output Directory fails the deploy loudly — "No Output Directory named ...
+ *   found" — unlike a wrong Ignored Build Step.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 /*
