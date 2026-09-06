@@ -1005,11 +1005,71 @@ export function useInterviewSession() {
        is never going to arrive. */
     useSessionStore.getState().setChatMode(false)
 
-    const { currentQuestion } = useSessionStore.getState()
+    /* SCREEN-ANSWERS 2026-09-06 ─ the app was asking the model to describe ──────
+       The split above was right and it still did not hold, because `asked` is
+       read from a value that OUTLIVES the turn it belongs to. setAnswerDone
+       commits the pair and deliberately leaves currentQuestion standing — the
+       card header, the transcript bar and ⌘↵ all still need it — so one second
+       after a screenshot is answered, currentQuestion IS the display string this
+       function just wrote: 'What is being asked on screen?'.
+
+       Press ⌘⇧↵ a second time and that string comes back in here as `asked`, and
+       `asked` is the wire text. So the app itself asked the model, in those
+       words, what was being asked on the screen — and got back a description of
+       the screen instead of an answer to the coding problem, the aptitude sum or
+       the "tell me about yourself" that was on it. Every press after that did the
+       same thing. The bug fed itself, which is why it looked like the model
+       ignoring the prompt rather than the app arguing with it.
+
+       And the directive half was near-dead code in production. It only ever fired
+       when the transcript was COMPLETELY empty, which in a live interview it
+       never is — voice is running, so currentQuestion is populated. The wire text
+       was almost always a heard question, sometimes minutes old, going up as the
+       instruction for an image it has nothing to do with.
+
+       So the directive is now UNCONDITIONAL. It is what ⌘⇧↵ means, and the image
+       is the only thing on the wire that can carry a question. A genuinely recent
+       spoken or typed question rides ALONGSIDE it as something to reconcile
+       against, never in place of it — the [SCREENSHOT] section already says the
+       image wins when the two disagree.
+
+       Nothing is fixed in the store. Clearing currentQuestion in setAnswerDone
+       would blank the card, kill regenerate() and refine(), and disable the
+       Answer pill after every single answer; the value is correct where it lives,
+       and this was the wrong place to read it as a live instruction. */
+
+    /* How recent a heard or typed question has to be to travel with a screenshot.
+       Long enough for "solve this one" → read the screen → press, which is the
+       flow this exists for; short enough that a question from earlier in the
+       interview cannot attach itself to an unrelated screen. extendQuestion
+       deliberately leaves questionAt on the FIRST fragment, so a question that
+       took forty seconds to say still clears this. */
+    const SCREEN_CONTEXT_MS = 90_000
+
+    const SCREEN_DIRECTIVE = 'Answer the question that is on this screen. '
+      + 'Read it, work out what it is asking, and give the answer itself '
+      + '— not a description of what is on the screen.'
+
+    // const { currentQuestion } = useSessionStore.getState()
+    const { currentQuestion, questionAt, source } = useSessionStore.getState()
     // const prompt = currentQuestion?.trim() || 'What is on screen?'
-    const asked  = currentQuestion?.trim()
-    const shown  = asked || 'What is being asked on screen?'
-    const wire   = asked || 'Answer whatever is being asked on this screen.'
+    // const asked  = currentQuestion?.trim()
+    /* Never a question this function itself wrote — that is the loop above — and
+       never one old enough to belong to a different topic. questionAt is null
+       after ⌘⌫ cleared the card, which counts as stale for the same reason. */
+    const fresh = source !== 'screen'
+      && questionAt != null
+      && Date.now() - questionAt < SCREEN_CONTEXT_MS
+    const asked = fresh ? currentQuestion?.trim() : ''
+
+    // const shown  = asked || 'What is being asked on screen?'
+    // const wire   = asked || 'Answer whatever is being asked on this screen.'
+    const shown = asked || 'The question on my screen'
+    const wire  = asked
+      ? `${SCREEN_DIRECTIVE}\n\nThe last thing asked, a moment before this `
+        + `screenshot, was: "${asked}". If that is what the screen is showing, `
+        + 'answer it. If it is not, ignore it and answer the screen.'
+      : SCREEN_DIRECTIVE
 
     // await generate(prompt, 'screen', [{ type: 'text', text: prompt }, …])
     await generate(shown, 'screen', [
