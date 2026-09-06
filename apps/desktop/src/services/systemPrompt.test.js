@@ -112,29 +112,76 @@ describe('buildSystemPrompt', () => {
       expect(p).toContain('"It depends" is not an answer to a\nmultiple-choice question')
     })
 
-    it('gives an introduction as POINTS and forbids a script', () => {
+    /* SELF-INTRO 2026-09-06: this assertion is inverted, and the test it
+       replaces is kept here because the pair of them is the record of what
+       changed and when:
+
+         it('gives an introduction as POINTS and forbids a script', () => {
+           expect(p).toContain('YOU DO NOT WRITE THE ANSWER')
+           expect(p).toContain('Never write a first-person script')
+           expect(p).toContain('never write a line beginning "I " for someone to read out')
+         })
+
+       The owner lifted the first-person limit for this one section. What the
+       test asserts INSTEAD is the pair that has to travel with it — the voice
+       changed, the sourcing rule did not — because an intro written in first
+       person over invented facts is the failure this whole change is one
+       inch away from. */
+    it('writes the introduction, in first person, from documents only', () => {
       const p = buildSystemPrompt()
       expect(p).toContain('INTRODUCTION AND BEHAVIOURAL QUESTIONS')
-      expect(p).toContain('YOU DO NOT WRITE THE ANSWER')
-      expect(p).toContain('Never write a first-person script')
-      expect(p).toContain('never write a line beginning "I " for someone to read out')
-      expect(p).toContain('Situation, Task,\n  Action, Result')
+      expect(p).toContain("WRITE THE ANSWER, in the candidate's own voice, first person")
+      expect(p).toContain('Situation, Task, Action, Result')
+
+      // The limit that did NOT move, and the reason the one above is safe.
+      expect(p).toContain('That licence is about VOICE and about nothing else')
+      expect(p).toContain('comes from [resume] or [JD] and is cited inline')
+      expect(p).toContain('If a document does not carry a detail, write the answer without it')
     })
 
-    it('keeps the length ceiling honest — no fourth exception', () => {
+    /* SELF-INTRO 2026-09-06: was 'keeps the length ceiling honest — no fourth
+       exception', asserting 'One exception, and it is the only one' and 'An
+       introduction or a behavioural question is NOT a second exception'. It is
+       a second exception now: an introduction is said out loud, and a minute of
+       speech does not fit a rule written for three seconds of reading. */
+    it('gives an introduction room to be spoken, and nothing else', () => {
       const p = buildSystemPrompt()
-      expect(p).toContain('One exception, and it is the only one')
-      expect(p).toContain('An introduction or a behavioural question is NOT a second exception')
+      expect(p).toContain('Two exceptions, and there are only two')
+      expect(p).toContain('roughly 90\nto 120 words')
+      // The ordinary ceiling is untouched — this is the guard against the
+      // exception quietly becoming the rule.
+      expect(p).toContain('Under about 60 words')
+      expect(p).toContain('Never pad a short question up to a length')
     })
   })
 
   describe('the limits that do not move', () => {
-    it('never lets the assistant speak as the candidate', () => {
+    /* SELF-INTRO 2026-09-06: was 'never lets the assistant speak as the
+       candidate', asserting 'You are not the candidate and you never speak as
+       them'. That limit was lifted by the owner; this one was not, and it is
+       the one this describe() block is now actually about.
+
+       Both styles, because styleBlock() is appended last and last is the
+       strongest position in a prompt — a register block that quietly dropped
+       the disclosure would be the easiest way to lose it. */
+    it('never conceals what it is, in either style', () => {
       for (const style of ['plain', 'desi']) {
         seed({ answerStyle: style })
         const p = buildSystemPrompt()
-        expect(p).toContain('You are not the candidate and you never speak as them')
-        expect(p).toContain('say plainly that\nyou are an AI assistant')
+        expect(p).toContain('say plainly that you are an AI assistant')
+        expect(p).toContain('Never deny it')
+      }
+    })
+
+    /* The other half of what survived. First person over the user's own résumé
+       is the change; first person over invented experience is not, and the only
+       thing separating them is this rule. */
+    it('still refuses to supply a fact no document carries', () => {
+      for (const style of ['plain', 'desi']) {
+        seed({ answerStyle: style })
+        const p = buildSystemPrompt()
+        expect(p).toContain('Never invent a fact, a number, a date')
+        expect(p).toContain('invent an employer, a date, a number or an achievement')
       }
     })
 
@@ -164,6 +211,24 @@ describe('buildSystemPrompt', () => {
       const p = buildSystemPrompt()   // seeded with resume: ''
       expect(p).toContain('No resume is available for this conversation')
       expect(p).toContain('With no resume, do not invent a background')
+    })
+
+    /* SELF-INTRO 2026-09-06 ─ the second half of the reported bug.
+       Asked for a project detail the CV does not spell out, the model answered
+       ABOUT THE CV — "your résumé doesn't mention that" — which is a true
+       sentence and a useless one: the candidate is mid-interview and cannot say
+       it out loud. The fix is a way to answer around the gap, so that "never
+       invent" does not leave the dropped turn as the only legal move. */
+    it('forbids answering about the document instead of the question', () => {
+      seed({ interviewContext: { resume: 'Worked on payments at Foo Ltd.' } })
+      const p = buildSystemPrompt()
+      expect(p).toContain('NEVER MAKE THE DOCUMENT THE SUBJECT')
+      expect(p).toContain('Do not write "your résumé does not mention that"')
+      expect(p).toContain('ANSWER THE SUBSTANCE')
+      // The escape hatch has to be nameable, or the model invents its own.
+      expect(p).toContain('⟨your bit: which cache you used⟩')
+      // And it must not become a licence to fill the gap instead.
+      expect(p).toContain('Do not fill the gap with an invented employer')
     })
   })
 })

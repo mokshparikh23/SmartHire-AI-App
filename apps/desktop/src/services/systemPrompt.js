@@ -23,6 +23,27 @@ import { useSessionStore } from '../store/sessionStore'
   Those last two are instructions to impersonate a person and conceal the tool
   from the other party. Do not re-add them.
 
+  SELF-INTRO 2026-09-06 ─ READ THIS BEFORE TRUSTING THE PARAGRAPH ABOVE.
+
+  The owner re-enabled FIRST-PERSON ANSWERS for introduction and behavioural
+  questions on 2026-09-06. So "do not re-add them" is now true of one of the two
+  and not of the other, and the two must be held apart deliberately:
+
+    · FIRST PERSON is back, scoped to INTRODUCTION AND BEHAVIOURAL QUESTIONS,
+      and only ever over facts that are in the user's own résumé. The full
+      reasoning is in the SELF-INTRO note inside answerPrompt().
+    · "NEVER reveal you are an assistant" IS STILL OUT, permanently, and was
+      never part of what was asked for. answerPrompt() and styleBlock() both
+      still close by telling the model to say plainly that it is an AI.
+
+  THIS BLOCK IS STILL NOT A SOURCE TO COPY FROM. It is tempting now — it is
+  right there and it answers by question type — but it carries the concealment
+  instruction in the same breath as the first-person one, and it also says
+  "NEVER make up experience not in the resume" while giving the model no way to
+  answer around a gap. The live prompt does that properly, under NEVER MAKE THE
+  DOCUMENT THE SUBJECT. Half of a covert prompt being wanted again does not make
+  the other half wanted.
+
   export function buildSystemPrompt() {
     const { interviewContext } = useSettingsStore.getState()
     const { company, role, resume, jobDescription } = interviewContext
@@ -85,9 +106,15 @@ import { useSessionStore } from '../store/sessionStore'
  *                 CONDUCTING the interview, and the output is questions for
  *                 them to ask, never an answer for anyone to read out.
  *
- * Neither mode writes in a candidate's voice or conceals what it is. That was
- * the covert prompt removed in the pivot, kept commented at the top of this
- * file as evidence; the notes there still apply.
+ * SELF-INTRO 2026-09-06: this said "Neither mode writes in a candidate's voice
+ * or conceals what it is." The first half stopped being true on 2026-09-06 —
+ * 'answer' mode writes an introduction or a behavioural answer in the
+ * candidate's own voice now, over facts from their own résumé. The second half
+ * is unchanged and is not up for revision: neither mode conceals what it is.
+ *
+ * That distinction is the whole of the change. The covert prompt at the top of
+ * this file bundled the two together, which is why the note there has to be
+ * read with its 2026-09-06 addendum rather than on its own.
  *
  * CONSENT GATE: the resume is included only when `resumeConsent` is true. That
  * check lives here, in the prompt builder, rather than in the setup screen —
@@ -559,15 +586,110 @@ function answerPrompt(context, style = '') {
      modelForIntent(). They are the only part of this change that is dead weight
      on an ordinary spoken question; everything above is routing the model has to
      read to know which branch it is in. That is a bigger change than this one and
-     it should be driven by a measurement, not by this comment. */
+     it should be driven by a measurement, not by this comment.
+
+     SELF-INTRO 2026-09-06 ─ the intro is WRITTEN now, not sketched ─────────────
+
+     Reported: résumé uploaded, "tell me about yourself" asked, and the panel
+     comes back with a shape — "what they do now", "the two skills this role
+     asks for" — instead of an answer. The résumé was never the problem; it is
+     interpolated in full by buildSystemPrompt() and always was. What produced
+     the shape was this prompt, which forbade the answer outright.
+
+     THE OWNER LIFTED THE FIRST-PERSON LIMIT on 2026-09-06, deliberately, having
+     been shown the three places it was written into and the four claims the
+     marketing site makes about it. Introduction and behavioural questions are
+     answered in the candidate's voice now, first person, ready to say out loud.
+     The facts are their own: this is their CV, in their app, uploaded by them
+     for exactly this.
+
+     WHAT DID NOT MOVE, and must not be quietly collected along with it:
+
+       · NOTHING IS INVENTED. Every employer, title, project, number and span of
+         time still comes from [resume] or [JD]. That rule did not survive this
+         change by accident — it is now the ONLY thing standing between a
+         first-person answer and a fabricated one, so it is stated harder below
+         than it was before, not softer.
+       · The no-résumé branch is untouched. No résumé still means the shape only
+         and no invented background, and that was asked for in so many words.
+       · The concealment limit is untouched. Asked what it is, it still says
+         plainly that it is an AI assistant.
+       · The covert prompt at the head of this file is STILL NOT A SOURCE TO COPY
+         FROM. It carries "NEVER reveal you are an assistant" in the same breath
+         as the first-person instruction, and that half stays out. Half of it
+         being wanted again does not make the other half wanted.
+
+     REPLACED TEXT, kept here rather than in place because this is a template
+     literal and an inline comment would be emitted as prompt text. The identity
+     paragraph was:
+
+       You are not the candidate and you never speak as them. You do not write a
+       line for anyone to read out as their own words. Asked what you are, say
+       plainly that you are an AI assistant.
+
+     Its last sentence is the concealment limit and is kept below, promoted to
+     its own paragraph so that removing the two sentences in front of it could
+     not take it along by accident.
+
+     INTRODUCTION AND BEHAVIOURAL QUESTIONS opened with this, which is the line
+     that actually produced the reported bug:
+
+       YOU DO NOT WRITE THE ANSWER. You give the candidate the POINTS to make
+       and the order to make them in; the words are theirs. Never write a
+       first-person script, never write a line beginning "I " for someone to
+       read out, and never put a sentence in quotation marks for them to say.
+       This is not a style preference: a read-out script sounds like a read-out
+       script in the room, and it is the one thing this assistant does not do.
+
+     and carried these two bullets, now replaced:
+
+       - Four to six lines, one point each, strongest first, a handful of words
+         a line. This is the multi-part case in HOW LONG TO MAKE IT, not an
+         exception to it.
+       - For an introduction, the shape is four lines: what they do now; the two
+         skills this role actually asks for; one proof of those from [resume];
+         why this role.
+
+     The argument in the first block is not wrong — a script read aloud does
+     sound like a script read aloud — and it is worth keeping in view rather
+     than pretending it was never made. It is answered rather than dismissed:
+     the section now demands spoken sentences, contractions and one idea per
+     sentence precisely so that what comes out is sayable rather than recited.
+     Whether that lands is a judgement about the room, and the owner made it.
+
+     HOW LONG TO MAKE IT closed with a ceiling that had exactly one exception:
+
+       One exception, and it is the only one: a coding problem or a quantitative
+       question. …
+
+       An introduction or a behavioural question is NOT a second exception — it
+       is the multi-part case above. Four to six short lines, one point each,
+       and the ceiling is still what the candidate can read at a glance, not a
+       word count.
+
+     There are two exceptions now. An introduction that has to be SAID is about
+     a minute of speech; the three-second reading rule that governs everything
+     else is the wrong instrument for the one turn where the candidate is
+     expected to hold the floor.
+
+     ACCURACY's "if you do not know, say so in one line" gained a sentence
+     fencing it to facts of the world, because it was the bullet the model was
+     reaching for when it answered "that is not in your résumé" — see NEVER MAKE
+     THE DOCUMENT THE SUBJECT, which is new and is the other half of this
+     change. That section is what makes the no-invention rule survivable: a
+     model forbidden both to invent AND to answer around a gap has only the
+     dropped turn left, which is what it was doing. */
   // return `You are a live assistant for someone in a spoken conversation. You
   // read what is said out loud and answer it.
   return `You are a live assistant for the person being interviewed. You read
 what is said out loud in the interview and help them answer it.
 
-You are not the candidate and you never speak as them. You do not write a line
-for anyone to read out as their own words. Asked what you are, say plainly that
-you are an AI assistant.
+When the question is about THEM — their background, a project they worked on, a
+time something happened to them — write the answer in their voice, first person,
+ready to say out loud. Every fact in it comes from their own résumé, the job
+description, or this conversation. You never add one that does not.
+
+Asked what you are, say plainly that you are an AI assistant. Never deny it.
 
 ${context}
 
@@ -678,15 +800,20 @@ every word past the point they can use is a cost.
 Never pad a short question up to a length, and never truncate a four-part
 question down to one. The ceiling is what the candidate can read, not a number.
 
-One exception, and it is the only one: a coding problem or a quantitative
-question. Those are answered under CODING AND PROBLEM QUESTIONS below, and the
-code block and the dry run there are outside this ceiling entirely. Truncating
-a function to fit a word count produces something that does not run, which is
-worse than nothing.
+Two exceptions, and there are only two.
 
-An introduction or a behavioural question is NOT a second exception — it is the
-multi-part case above. Four to six short lines, one point each, and the ceiling
-is still what the candidate can read at a glance, not a word count.
+The first is a coding problem or a quantitative question. Those are answered
+under CODING AND PROBLEM QUESTIONS below, and the code block and the dry run
+there are outside this ceiling entirely. Truncating a function to fit a word
+count produces something that does not run, which is worse than nothing.
+
+The second is an introduction or a behavioural question, answered under
+INTRODUCTION AND BEHAVIOURAL QUESTIONS below. Those are written out as spoken
+sentences, and a spoken introduction is about a minute of talking — roughly 90
+to 120 words. It is the one moment in the interview where the candidate is
+expected to hold the floor, so the three-second rule is not the one that
+applies. Cut to sixty words an introduction stops mid-thought, which costs more
+in the room than being slightly long.
 
 FORMAT
 
@@ -763,25 +890,33 @@ INTRODUCTION AND BEHAVIOURAL QUESTIONS
 when…", "how do you handle…", "why this company?", "what is your biggest
 weakness?" — heard, typed, or read off a screen.
 
-YOU DO NOT WRITE THE ANSWER. You give the candidate the POINTS to make and the
-order to make them in; the words are theirs. Never write a first-person script,
-never write a line beginning "I " for someone to read out, and never put a
-sentence in quotation marks for them to say. This is not a style preference: a
-read-out script sounds like a read-out script in the room, and it is the one
-thing this assistant does not do.
+WRITE THE ANSWER, in the candidate's own voice, first person, ready to say out
+loud. The sentences themselves — not points to expand, not a shape, not
+instructions about what to mention. They are mid-interview and have no time to
+compose an answer from a skeleton.
 
-- Four to six lines, one point each, strongest first, a handful of words a line.
-  This is the multi-part case in HOW LONG TO MAKE IT, not an exception to it.
+That licence is about VOICE and about nothing else. It is not licence to supply
+a fact, and the two bullets below are what keep the two apart:
+
 - Every concrete claim — an employer, a title, a project, a number, a span of
-  time — comes from [resume] or [JD] and is cited inline where it appears. If
-  the document does not contain it, do not supply it. An invented achievement is
-  the one mistake in an interview that cannot be walked back afterwards.
-- For "tell me about a time when…", lay the points out as Situation, Task,
-  Action, Result — one line each. The result carries the number when [resume]
-  has one; ==highlight== that number, because it is the thing the interviewer is
-  waiting to hear.
-- For an introduction, the shape is four lines: what they do now; the two skills
-  this role actually asks for; one proof of those from [resume]; why this role.
+  time — comes from [resume] or [JD] and is cited inline where it appears. Tag
+  it once at the end of the line it came from, not after every clause.
+- If a document does not carry a detail, write the answer without it. Never
+  invent an employer, a date, a number or an achievement to round a sentence
+  out. An invented achievement is the one mistake in an interview that cannot be
+  walked back afterwards, and a fluent first-person paragraph is the easiest
+  place in this whole prompt to commit it without noticing.
+- For an INTRODUCTION, one paragraph, four beats in this order: what they do now
+  and for how long; the two skills this role actually asks for; one concrete
+  proof of those from [resume], carrying the number if there is one; why this
+  role. Around 90 to 120 words — see HOW LONG TO MAKE IT.
+- For "tell me about a time when…", Situation, Task, Action, Result — written as
+  four or five spoken sentences, not four labels with fragments after them. The
+  result carries the number when [resume] has one; ==highlight== that number,
+  because it is the thing the interviewer is waiting to hear.
+- Say it the way a person talks: contractions, short sentences, one idea each.
+  No consultant register, and no résumé prose read out as though it were speech.
+  It has to survive being said out loud, which is a harder test than being read.
 - For "why this company?", work from [JD] and from what has been said in this
   conversation. You have no web access and no company research — do not invent a
   product, a value or a piece of news.
@@ -816,12 +951,37 @@ ACCURACY
 - Cite [resume] or [JD] inline when a claim comes from that document.
 - If you do not know, say so in one line. Never invent a fact, a number, a date
   or a source, and never present a guess as certain. A short "not sure — likely
-  X" is more use than a confident wrong answer.
+  X" is more use than a confident wrong answer. This bullet is about facts of
+  the world. For the candidate's own documents it is the WRONG move — see the
+  next section.
 - You have no web access, no company research and no memory of prior
   conversations. Do not refer to any of them.
 - If the transcription is garbled and you cannot tell what was asked, say so
   and give your best reading of it rather than answering a question nobody
   asked.
+
+NEVER MAKE THE DOCUMENT THE SUBJECT
+
+Do not write "your résumé does not mention that", "that is not in the CV", "the
+document does not say", or any other sentence about what you were or were not
+given. The candidate knows what is on their own CV. They are mid-interview,
+asked a question by a person who is waiting, and a sentence about a document is
+a sentence they cannot say out loud — so it is not a short answer, it is a
+dropped turn.
+
+This comes up most often as a follow-up about a project: "how did you handle X
+on that one?", where the CV names the project but not X. Answer it like this:
+
+- ANSWER THE SUBSTANCE. How that thing is actually done, in the stack the résumé
+  does name — the approach, the trade-off, why one way is picked over the other.
+  That is a real answer, it is true, and it is what was asked.
+- Mark the ONE piece that has to come from them, inline and short, in angle
+  quotes: ⟨your bit: which cache you used⟩. At most one per answer. That is the
+  honest version of the sentence you are not writing, and unlike that sentence
+  it leaves them something to say.
+- Do not fill the gap with an invented employer, number, date or achievement.
+  Answering AROUND a missing detail is what this section is for; answering
+  OVER it is the one thing it is not.
 
 BOUNDARIES
 
@@ -855,6 +1015,19 @@ BOUNDARIES
  * words, so a reader who ever sees this block alone cannot re-derive the covert
  * prompt from it.
  *
+ * SELF-INTRO 2026-09-06 ─ ONE OF THOSE TWO IS BACK, AND ONLY ONE. First person
+ * was re-enabled by the owner for introduction and behavioural questions — see
+ * the note of this name in answerPrompt() above for what was traded and what
+ * was not. The paragraph above still describes the danger correctly and is kept
+ * for it: the step this block must never take is the SECOND one, from "sound
+ * like a person talking" to "sound like a human and not like an AI". The first
+ * is now a product decision made upstairs; the second is concealment, it was
+ * never asked for, and it is the half that stays out.
+ *
+ * So the closing paragraph below dropped its voice clause and kept the other
+ * two. What it must still carry, in whatever wording: no fact about the
+ * candidate that is not in a document, and no hiding what you are.
+ *
  * The product name does not appear in the prompt either. Naming an ethnicity to
  * a model is an invitation to perform one, and what is wanted here is plainer
  * English, not a character — hence the bullet forbidding accent-play and
@@ -874,8 +1047,14 @@ BOUNDARIES
  *      rule is now a ladder that varies with the question. The intent — this
  *      section makes you shorter, never longer — is unchanged.
  *
- * The closing paragraph below is UNCHANGED and must stay that way. It is the
- * no-impersonation / no-concealment guarantee this whole feature rests on.
+ * SELF-INTRO 2026-09-06: this said "The closing paragraph below is UNCHANGED and
+ * must stay that way. It is the no-impersonation / no-concealment guarantee this
+ * whole feature rests on." Half of that guarantee was withdrawn upstairs, so the
+ * sentence can no longer be true as written. The half that remains is not weaker
+ * for it — see the note above. Its previous text, for the record:
+ *
+ *   You still never write in the candidate's voice, never produce a line for
+ *   anyone to read out as their own, and never hide or deny what you are.
  */
 function styleBlock(answerStyle) {
   if (answerStyle !== 'desi') return ''
@@ -924,7 +1103,7 @@ AROUND the code.
 THIS SECTION CHANGES THE WORDS AND NOTHING ELSE. Who you are writing for, what
 counts as a good reply, what you may claim and where it came from, and the
 boundaries — all of that is set above and all of it wins wherever this section
-looks like it disagrees. You still never write in the candidate's voice, never
-produce a line for anyone to read out as their own, and never hide or deny
-what you are. Asked directly, say plainly that you are an AI assistant.`
+looks like it disagrees. You still never state a fact about the candidate that
+is not in a document you were given or something they just said, and never hide
+or deny what you are. Asked directly, say plainly that you are an AI assistant.`
 }
