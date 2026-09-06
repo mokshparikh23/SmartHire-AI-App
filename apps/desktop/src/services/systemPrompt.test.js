@@ -136,7 +136,16 @@ describe('buildSystemPrompt', () => {
       // The limit that did NOT move, and the reason the one above is safe.
       expect(p).toContain('That licence is about VOICE and about nothing else')
       expect(p).toContain('comes from [resume] or [JD] and is cited inline')
-      expect(p).toContain('If a document does not carry a detail, write the answer without it')
+      expect(p).toContain('LEAVE THE DETAIL OUT')
+
+      /* Both found by putting the rendered prompt in front of the real model
+         rather than by reading it. gpt-4o dropped the résumé's own figure for
+         "improved latency significantly" — which is the one beat of an
+         introduction an interviewer remembers — and, on a session with no job
+         description at all, cited [JD]. A citation is a claim that the named
+         document said this, so inventing the tag invents a source. */
+      expect(p).toContain('WHEN THE RÉSUMÉ HAS A NUMBER, SAY THE NUMBER')
+      expect(p).toContain('A TAG IS ITSELF A CLAIM')
     })
 
     /* SELF-INTRO 2026-09-06: was 'keeps the length ceiling honest — no fourth
@@ -181,7 +190,7 @@ describe('buildSystemPrompt', () => {
         seed({ answerStyle: style })
         const p = buildSystemPrompt()
         expect(p).toContain('Never invent a fact, a number, a date')
-        expect(p).toContain('invent an employer, a date, a number or an achievement')
+        expect(p).toContain('Never invent an employer, a date, a number or an')
       }
     })
 
@@ -229,6 +238,18 @@ describe('buildSystemPrompt', () => {
       expect(p).toContain('⟨your bit: which cache you used⟩')
       // And it must not become a licence to fill the gap instead.
       expect(p).toContain('Do not fill the gap with an invented employer')
+
+      /* WHERE the mark goes, which is not a detail. Put in front of the real
+         model, the first version of this section produced "I used Supabase to
+         handle authentication for SmartHire" with a spare detail marked at the
+         end — from a CV that lists Supabase in that project and says nothing
+         about auth. The substance was right and the mark was in the wrong
+         place, which is worse than no mark: it reads as diligence while the
+         unsupported claim goes past. The worked example is what fixed it, so
+         the worked example is what is asserted. */
+      expect(p).toContain('CHECK EVERY SENTENCE BEFORE YOU SEND IT')
+      expect(p).toContain('It does NOT say they built the authentication on it')
+      expect(p).toContain('The substance survives in full')
     })
   })
 })
