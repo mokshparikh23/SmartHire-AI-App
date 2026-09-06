@@ -32,11 +32,19 @@ export async function POST(request) {
   }
 
   /* INTENT-ROUTING 2026-09-01: `intent` added — 'general' | 'coding' | 'screen'.
+     SELF-INTRO 2026-09-06: the list above was already short of 'aptitude' when it
+     was written, and 'intro' is new today. It is now
+     'general' | 'coding' | 'aptitude' | 'screen' | 'intro', and rather than fix
+     this line again next time: modelForIntent() in lib/ai.js is the list, this
+     comment is a copy of it, and the copy is the one that goes stale.
+
      The desktop says what KIND of question this is and modelForIntent() picks the
      model; see the note there for why the client cannot pick it itself. Absent on
      an older desktop build, which lands on 'general' and behaves exactly as
      before — that backwards compatibility is why this is a new field rather than
-     a changed meaning for `model`. */
+     a changed meaning for `model`. An unrecognised value is matched, never
+     interpolated, so a desktop newer than this server degrades to 'general'
+     too. */
   // const { licenseKey, sessionId, messages, model } = body || {}
   const { licenseKey, sessionId, messages, model, intent } = body || {}
 

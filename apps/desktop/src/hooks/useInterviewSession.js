@@ -1423,8 +1423,25 @@ export function useInterviewSession() {
 
            Only when an image is actually on the wire. A plain typed "hi" must not
            quietly start billing at the smart rate — that is why this reads
-           liveShotAt rather than simply passing 'screen' whenever chatMode is on. */
-        liveShotAt >= 0 ? 'screen' : undefined,
+           liveShotAt rather than simply passing 'screen' whenever chatMode is on.
+
+           SELF-INTRO 2026-09-06: 'intro' joins it, and NOTHING ELSE DOES. Typing
+           "tell me about yourself" into chat is how this gets tried first — it is
+           the one interview question you can rehearse sitting still — and it was
+           landing on the fast model while the identical question spoken aloud
+           escalated. Two different answers to one question, decided by which box
+           it was typed into.
+
+           The narrow form is deliberate. `classifyQuestion(message)` here would
+           read better and would also escalate typed coding and aptitude
+           questions, which is arguably the consistent thing — but that is a
+           billing change nobody asked for, and the paragraph above is this
+           file's own precedent for adding one escalation at a time with a reason
+           attached. If chat should escalate everything the voice path does, that
+           is a one-word edit and it should be made on purpose. */
+        // liveShotAt >= 0 ? 'screen' : undefined,
+        liveShotAt >= 0 ? 'screen'
+          : (classifyQuestion(message) === 'intro' ? 'intro' : undefined),
       )
     } catch (e) {
       // PIPELINE 2026-08-31: an abort is a supersede, not a failure — the same

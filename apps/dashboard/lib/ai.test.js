@@ -22,7 +22,8 @@ const provider = {
 
 describe('modelForIntent', () => {
   it('escalates the intents that are worth the smart model', () => {
-    for (const intent of ['coding', 'aptitude', 'screen']) {
+    // SELF-INTRO 2026-09-06: 'intro' joined the list — see modelForIntent.
+    for (const intent of ['coding', 'aptitude', 'screen', 'intro']) {
       expect(modelForIntent(intent, 'fast-1', provider)).toBe('smart-1')
     }
   })
@@ -49,7 +50,8 @@ describe('maxTokensForIntent', () => {
   it('escalates exactly the intents modelForIntent escalates', () => {
     // The two rules must not drift: a request sent to the smart model under the
     // spoken-question budget is the "generating……" that never resolves.
-    for (const intent of ['coding', 'aptitude', 'screen']) {
+    // SELF-INTRO 2026-09-06: 'intro' joined the list — see modelForIntent.
+    for (const intent of ['coding', 'aptitude', 'screen', 'intro']) {
       expect(maxTokensForIntent(intent)).toBe(MAX_TOKENS_SMART)
       expect(modelForIntent(intent, 'fast-1', provider)).toBe('smart-1')
     }

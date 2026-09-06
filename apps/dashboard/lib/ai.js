@@ -304,11 +304,19 @@ export const MAX_TOKENS_SMART = 6144
  * escalated to the smart model would still answer under the spoken-question
  * budget.
  *
- * @param {'general'|'coding'|'aptitude'|'screen'|undefined} intent - untrusted
+ * SELF-INTRO 2026-09-06: 'intro' is in the list because the docblock above says
+ * the two functions must not drift, and that rule is worth more than the one
+ * exception. It changes nothing in practice — an introduction is 90 to 120 words
+ * by the prompt's own rule, nowhere near either ceiling — and it costs nothing,
+ * because output tokens are billed as generated, not as budgeted (see the
+ * SCREEN-ANSWERS note on MAX_TOKENS_SMART). It is here so that the next person
+ * to read these two functions finds the same list in both.
+ *
+ * @param {'general'|'coding'|'aptitude'|'screen'|'intro'|undefined} intent - untrusted
  * @returns {number}
  */
 export function maxTokensForIntent(intent) {
-  return (intent === 'coding' || intent === 'aptitude' || intent === 'screen')
+  return (intent === 'coding' || intent === 'aptitude' || intent === 'screen' || intent === 'intro')
     ? MAX_TOKENS_SMART
     : MAX_TOKENS
 }
@@ -387,13 +395,32 @@ export function resolveModel(model, provider = activeProvider()) {
  * `intent` is untrusted input from a licence-key holder, so it is matched, never
  * interpolated: anything unrecognised is an ordinary question.
  *
- * @param {'general'|'coding'|'aptitude'|'screen'|undefined} intent
+ * SELF-INTRO 2026-09-06 ─ 'intro' escalates, and this is the one that matters.
+ *
+ * "Tell me about yourself" used to classify as 'general', so it was answered by
+ * whatever the ⋮ menu was set to — which defaults to the FAST model. The one
+ * question that has to read a whole résumé and build a minute of speech from it
+ * got the cheapest tier available, and did so while the prompt only asked for
+ * four bullet points, which mostly hid it.
+ *
+ * It does not hide any more. The prompt writes the answer out now, and a weak
+ * model's failure here is not slowness, it is a generic paragraph that would fit
+ * any candidate — which reads, from the other side of the screen, exactly like
+ * the bug this change was made to fix.
+ *
+ * THE COST IS REAL AND SMALL: these move from fastModel to smartModel, and an
+ * interview holds one to three of them. The candidate has also usually just been
+ * asked the opening question and is not reading in three seconds, so this is the
+ * same trade 'screen' makes — they have stopped, and a better answer is worth
+ * more than a faster one.
+ *
+ * @param {'general'|'coding'|'aptitude'|'screen'|'intro'|undefined} intent
  * @param {string} model - the user's pick from the ⋮ menu; honoured for 'general'
  */
 export function modelForIntent(intent, model, provider = activeProvider()) {
   if (!provider) return DEFAULT_MODEL
 
-  if (intent === 'coding' || intent === 'aptitude' || intent === 'screen') {
+  if (intent === 'coding' || intent === 'aptitude' || intent === 'screen' || intent === 'intro') {
     // Through resolveModel, not raw: it keeps the allowlist honest, which is what
     // stops an extracted licence key billing us for an arbitrary model name. If
     // smartModel is ever mistyped this degrades to defaultModel rather than
