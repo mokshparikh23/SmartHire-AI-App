@@ -1092,10 +1092,43 @@ ipcMain.handle('capture:permission', () => {
 // REDESIGN 2026-08-29: the out-of-credits state in the answer card links to the
 // web dashboard's billing page. openExternal, not a new window — the panel is
 // always-on-top and a BrowserWindow for Stripe would sit over the interview.
+/* OPEN-EXTERNAL-ORIGIN 2026-09-06 ─ a prefix is not an origin ─────────────────
+   The check below was `url.startsWith(WEB_URL)`, which is exactly the mistake the
+   comment says it exists to prevent. WEB_URL has no trailing slash, so every one
+   of these passes:
+
+     https://web-moksh-8946s-projects.vercel.app.evil.com/   — a different domain
+     https://web-moksh-8946s-projects.vercel.app@evil.com/   — userinfo, ignored
+     https://web-moksh-8946s-projects.vercel.app.evil.com/pay?…
+
+   A compromised or XSS'd renderer could therefore hand this any attacker page and
+   have the OS open it in the user's real browser, outside the app's CSP and
+   carrying whatever cookies that browser holds — which is precisely the "general
+   open anything primitive" this was written to deny.
+
+   Compare parsed ORIGINS instead: scheme + host + port, with userinfo and path
+   discarded by the parser rather than by us. new URL() throws on anything that is
+   not a URL, so the try/catch is the malformed-input branch and it denies.
+
+   Every real caller keeps working — they all build `${webUrl}${path}` from
+   getWebUrl(), so they share our origin by construction. */
+// if (typeof url !== 'string' || !url.startsWith(WEB_URL)) return false
+const WEB_ORIGIN = (() => {
+  try { return new URL(WEB_URL).origin } catch { return null }
+})()
+
 ipcMain.handle('shell:openExternal', (_, url) => {
   // Only our own backend, so a compromised renderer cannot use this as a
   // general "open anything" primitive.
-  if (typeof url !== 'string' || !url.startsWith(WEB_URL)) return false
+  if (typeof url !== 'string' || !WEB_ORIGIN) return false
+
+  let parsed
+  try { parsed = new URL(url) } catch { return false }
+  // http(s) only: the parser is happy with file:, and openExternal on a file:
+  // URL hands the OS a local path to launch.
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+  if (parsed.origin !== WEB_ORIGIN) return false
+
   shell.openExternal(url)
   return true
 })
