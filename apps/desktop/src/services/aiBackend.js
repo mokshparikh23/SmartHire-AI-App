@@ -115,6 +115,23 @@ function messagesFor(transcript) {
    legitimately about to deliver. Past 30s nobody mid-interview reads it anyway. */
 const FIRST_TOKEN_TIMEOUT_MS = 30000
 
+/* SCREEN-ANSWERS 2026-09-06 ─ a screenshot spends part of this budget UPLOADING ─
+   The 30s above is a budget for the SERVER to produce a first token, and it was
+   sized against the server's own worst case. A screenshot adds up to ~935 KB of
+   base64 to the body (SHOT_MAX_BYTES in electron/main.cjs), which on a slow uplink
+   is seven or eight seconds spent before the server has been asked anything —
+   time the constant above does not know about. With the capture quality raised,
+   that is enough to kill an answer that was on its way, and the user is told "The
+   AI did not respond in time" about a request the AI never received.
+
+   Per request, from the body about to be sent, rather than by raising the ordinary
+   budget: a spoken question that stalls for 30s is already dead, and waiting 45s
+   for one is worse than failing. Still under TOTAL_TIMEOUT_MS. */
+const FIRST_TOKEN_TIMEOUT_IMAGE_MS = 45000
+
+const carriesImage = (messages) => messages.some(
+  (m) => Array.isArray(m?.content) && m.content.some((p) => p?.type === 'image_url'))
+
 /* Once tokens are flowing, deltas arrive microtasks apart. Deliberately equal to
    the server's own per-attempt timeout, so client and server agree on what
    "too long" means rather than each having a private opinion. */
@@ -240,10 +257,16 @@ export async function askAIStream(transcript, onChunk, onDone, model, sessionId,
   const startedAt = Date.now()
   const clock = { lastChunkAt: 0 }
 
+  // SCREEN-ANSWERS 2026-09-06: see FIRST_TOKEN_TIMEOUT_IMAGE_MS.
+  const firstTokenBudget = carriesImage(transcript)
+    ? FIRST_TOKEN_TIMEOUT_IMAGE_MS
+    : FIRST_TOKEN_TIMEOUT_MS
+
   const watchdog = setInterval(() => {
     const at = Date.now()
     if (!clock.lastChunkAt) {
-      if (at - startedAt >= FIRST_TOKEN_TIMEOUT_MS) timedOut = 'first_token'
+      // if (at - startedAt >= FIRST_TOKEN_TIMEOUT_MS) timedOut = 'first_token'
+      if (at - startedAt >= firstTokenBudget) timedOut = 'first_token'
     } else if (at - clock.lastChunkAt >= STALL_TIMEOUT_MS) {
       timedOut = 'stall'
     }

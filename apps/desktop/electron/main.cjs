@@ -953,21 +953,94 @@ function createDeviceId() {
    full-resolution frame afterwards, which keeps the base64 payload small enough
    to post inline. */
 
-const SHOT_MAX = { width: 1280, height: 800 }
+/* SCREEN-ANSWERS 2026-09-06 ─ the model could not READ the screenshot ──────────
+   Part of "it describes the screen instead of answering it" happens HERE, before
+   any prompt gets a say. A model that cannot read the question falls back to the
+   one thing it can always do, which is describe the picture.
+
+   THE ARITHMETIC. A 14" MacBook Pro panel is 3024x1964 native. thumbnailSize is a
+   box to FIT INSIDE, not a crop, so 1280x800 gave 1232x800 — 0.41x. A 13pt editor
+   font is 26 device pixels; at 0.41x it is about 11, with an x-height near five.
+   JPEG 70 then quantises in 8x8 blocks that each hold roughly one glyph, and
+   4:2:0 chroma subsampling smears the edges of syntax-highlighted text
+   specifically. That is what illegible looks like at these numbers.
+
+   WHY THE NEW BOX IS 2560x1600 AND NOT LARGER. OpenAI's high-detail path scales
+   an image to fit 2048x2048 and then AGAIN so the shortest side is 768, so a 16:10
+   screen is analysed at about 1229x768 whatever we send. Sending 4K buys nothing
+   there and costs seconds of upload. What sending more DOES buy is where the lossy
+   step lands: at 2560x1600 a glyph is still ~21 pixels when it is compressed, and
+   the provider's own resampler makes the final reduction — instead of us
+   discarding four fifths of the detail and then compressing what little is left.
+
+   AND IT NEVER UPSCALES. The old constant was already larger than a 1440x900
+   external display, so asking for 2560x1600 there would have quadrupled the bytes
+   for zero extra information. The box is derived from the target display's own
+   native pixel count and only ever shrinks it. */
+// const SHOT_MAX = { width: 1280, height: 800 }
+const SHOT_MAX = { width: 2560, height: 1600 }
+
+/* The quality ladder. Quality first, bytes as the backstop — not the reverse.
+
+   700 KB of JPEG is ~935 KB of base64 in the body. Vercel caps a serverless
+   request body at 4.5 MB, so that is not the binding constraint; the desktop's own
+   FIRST_TOKEN_TIMEOUT_MS is. The upload is spent inside that budget, and on a
+   1 Mbps hotel uplink 935 KB is seven and a half seconds before the server has
+   been asked anything at all. See the matching note in services/aiBackend.js.
+
+   The last rung SHRINKS rather than compressing harder, because a screenshot that
+   blows the budget is almost always a dense IDE — the exact case where legibility
+   is the whole point, and where more quantisation is the wrong thing to spend. */
+const SHOT_QUALITY   = 90
+const SHOT_FALLBACKS = [78, 66]
+const SHOT_MAX_BYTES = 700 * 1024
+const SHOT_MIN_WIDTH = 1600
 
 ipcMain.handle('capture:screenshot', async () => {
   try {
+    /* The display the panel is currently on, so a multi-monitor setup captures the
+       screen the user is actually looking at rather than always screen 0.
+
+       SCREEN-ANSWERS 2026-09-06: moved ABOVE getSources — the box is now derived
+       from this display, so it has to be resolved first. */
+    const bounds = mainWindow ? mainWindow.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
+    const display = screen.getDisplayMatching(bounds)
+    const displayId = String(display.id)
+
+    /* `size` is DIP points and `scaleFactor` converts it to the pixels the
+       capturer actually has. Math.min with 1 is the never-upscale rule. */
+    const native = {
+      width:  Math.round(display.size.width  * display.scaleFactor),
+      height: Math.round(display.size.height * display.scaleFactor),
+    }
+    const fit = Math.min(1, SHOT_MAX.width / native.width, SHOT_MAX.height / native.height)
+    const thumbnailSize = {
+      width:  Math.max(1, Math.round(native.width  * fit)),
+      height: Math.max(1, Math.round(native.height * fit)),
+    }
+
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: SHOT_MAX,
+      // thumbnailSize: SHOT_MAX,
+      thumbnailSize,
     })
     if (!sources.length) return { ok: false, reason: 'No screen available to capture.' }
 
-    // The display the panel is currently on, so a multi-monitor setup captures
-    // the screen the user is actually looking at rather than always screen 0.
-    const bounds = mainWindow ? mainWindow.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
-    const displayId = String(screen.getDisplayMatching(bounds).id)
+    // const bounds = … ; const displayId = String(screen.getDisplayMatching(bounds).id)
     const source = sources.find((s) => s.display_id === displayId) || sources[0]
+
+    /* SCREEN-ANSWERS 2026-09-06 ─ dev-only, and it is answering a real question.
+       Electron documents display_id as "an empty string if not available". If it
+       is empty or format-mismatched on some build, every find() above fails and
+       the fallback silently captures the PRIMARY display — so on a multi-monitor
+       desk the model would be answering a screen the candidate is not looking at,
+       and the reported symptom would look exactly like the prompt being ignored.
+       Cheap to check, and impossible to check without printing it. */
+    if (isDev && !sources.some((s) => s.display_id === displayId)) {
+      console.warn('[main] screenshot: no source matched display_id '
+        + `${JSON.stringify(displayId)} — have ${JSON.stringify(sources.map((s) => s.display_id))}`
+        + ' — falling back to the primary display')
+    }
 
     if (source.thumbnail.isEmpty()) {
       // On macOS a missing TCC grant yields a blank image rather than an error.
@@ -980,8 +1053,26 @@ ipcMain.handle('capture:screenshot', async () => {
     // UI, not line art, so JPEG at 70 costs nothing legible and is roughly an
     // order of magnitude smaller.
     // return { ok: true, dataUrl: source.thumbnail.toDataURL() }
-    const jpeg = source.thumbnail.toJPEG(70)
-    if (isDev) console.log(`[main] screenshot: ${(jpeg.length / 1024).toFixed(0)} KB jpeg`)
+    // const jpeg = source.thumbnail.toJPEG(70)
+    /* SCREEN-ANSWERS 2026-09-06: getSize() is read back rather than assumed.
+       Electron documents outright that "there is no guarantee that the size of the
+       thumbnail is the same as the thumbnailSize specified", so the numbers in the
+       dev log below have to come from the image, not from our request. */
+    let image = source.thumbnail
+    let jpeg  = image.toJPEG(SHOT_QUALITY)
+    for (const q of SHOT_FALLBACKS) {
+      if (jpeg.length <= SHOT_MAX_BYTES) break
+      jpeg = image.toJPEG(q)
+    }
+    if (jpeg.length > SHOT_MAX_BYTES && image.getSize().width > SHOT_MIN_WIDTH) {
+      image = image.resize({ width: SHOT_MIN_WIDTH, quality: 'best' })
+      jpeg  = image.toJPEG(SHOT_FALLBACKS[0])
+    }
+
+    if (isDev) {
+      const s = image.getSize()
+      console.log(`[main] screenshot: ${s.width}x${s.height} ${(jpeg.length / 1024).toFixed(0)} KB jpeg`)
+    }
     return { ok: true, dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}` }
   } catch (e) {
     return { ok: false, reason: e.message }
