@@ -139,7 +139,14 @@ export function worthAnswering(text) {
 
    Kept in step with lib/resume.js's copy BY HAND — there is no shared package
    between the two workspaces. Change one, change both. */
-const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+/* SCREEN-ANSWERS 2026-09-06: [EARLIER SCREENSHOT] joins the list — same argument
+   as [SAID] above, it is a tag the model is told to trust, so text must never be
+   able to supply its own. Listed BEFORE SCREENSHOT only so the next reader can
+   see at a glance that it is matched: the \[ anchor already makes the order
+   irrelevant, since SCREENSHOT cannot match inside [EARLIER SCREENSHOT].
+   Kept in step with lib/resume.js BY HAND. */
+// const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|EARLIER SCREENSHOT|SCREENSHOT)\]/gi
 
 export function stripControlTags(text) {
   return typeof text === 'string' ? text.replace(CONTROL_TAGS, '').trim() : text

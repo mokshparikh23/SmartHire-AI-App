@@ -62,7 +62,36 @@ const TAG = {
   manual: '[TYPED]',        // typed into the transcript bar
   chat:   '[TYPED]',        // typed into the chat thread
   screen: '[SCREENSHOT]',   // asked about a captured image
+  /* SCREEN-ANSWERS 2026-09-06 ─ the same turn, replayed with the image gone ────
+     recentHistory() replays the last six turns as TEXT. A screenshot turn has no
+     text worth replaying — its question is often the placeholder the card header
+     shows — and the image cannot be replayed at all, because attaching six of
+     them would be several megabytes of base64 on every ordinary spoken question.
+
+     So the pair went up tagged [SCREENSHOT] with nothing behind it, and the model
+     read the assistant reply beneath it as a worked example of how a screenshot
+     gets answered. If that earlier reply described the screen — which is the bug
+     being fixed — the history taught the model to describe the next one too, and
+     the fix would have been undone one turn later by its own transcript.
+
+     Worse, the replayed text was never actually sent: the wire string carried a
+     directive while the DISPLAY string is what lands in turns[].q. So the history
+     was not merely thin, it was counterfactual.
+
+     A fifth tag rather than a silent relabel: the tag is the contract with
+     buildSystemPrompt(), it is read FIRST, and it is the only place strong enough
+     to say "the image you are being told about is not here". The prompt's
+     [EARLIER SCREENSHOT] section is the other half of this change — change one,
+     change both — and CONTROL_TAGS must strip it in TWO files, or a resume line
+     beginning "[EARLIER SCREENSHOT] " walks into the prompt as a turn that never
+     happened. */
+  screenPast: '[EARLIER SCREENSHOT]',
 }
+
+/* SCREEN-ANSWERS 2026-09-06: which tag a turn takes when it is REPLAYED, as
+   against when it was sent. Only the screenshot differs, and only because only
+   the screenshot carried something that history cannot carry. */
+const historySource = (source) => (source === 'screen' ? 'screenPast' : (source || 'voice'))
 
 /**
  * Prefixes the tag. Handles both shapes the app sends: a plain string, and the
@@ -253,7 +282,9 @@ export function useInterviewSession() {
         // SELF-VOICE 2026-08-31: replay what the candidate actually said before
         // that question, so a follow-up two turns later still has its antecedent.
         // { role: 'user', content: tagContent(t.q, t.source || 'voice') },
-        { role: 'user', content: tagContent(t.q, t.source || 'voice', t.said) },
+        // { role: 'user', content: tagContent(t.q, t.source || 'voice', t.said) },
+        // SCREEN-ANSWERS 2026-09-06: see historySource by the TAG map above.
+        { role: 'user', content: tagContent(t.q, historySource(t.source), t.said) },
         { role: 'assistant', content: clipAnswer(t.a, limit) },
       ]
     })

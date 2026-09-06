@@ -331,7 +331,12 @@ export function summarise(rec) {
    this interview. That is the strongest claim any tag can make. */
 // const CONTROL_TAGS = /\[(?:HEARD|INTERVIEWER|SCREENSHOT)\]/gi
 // const CONTROL_TAGS = /\[(?:HEARD|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
-const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+/* SCREEN-ANSWERS 2026-09-06: [EARLIER SCREENSHOT] joins the list. A screenshot
+   turn is replayed under that tag once its image is gone, so a resume line
+   beginning with it would otherwise be interpolated into the system prompt as a
+   turn that never happened. Kept in step with utils/utterance.js BY HAND. */
+// const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|SCREENSHOT)\]/gi
+const CONTROL_TAGS = /\[(?:HEARD|SAID|TYPED|INTERVIEWER|EARLIER SCREENSHOT|SCREENSHOT)\]/gi
 
 const clean = (v) => (v || '').replace(CONTROL_TAGS, '').trim()
 
