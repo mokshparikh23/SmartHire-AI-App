@@ -32,6 +32,11 @@ import { execFileSync } from 'node:child_process'
   apps that cannot declare it.
 */
 import { isSecretKey } from '../packages/data/src/public-key.js'
+/*
+  The deploy table, imported rather than restated. It is the thing being checked
+  below, and a copy of it here would be one more place for a rename to miss.
+*/
+import { APPS, SHARED_PATHS } from './vercel-target.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (p) => readFileSync(join(root, p), 'utf8')
@@ -231,6 +236,53 @@ check(
         }
       }
     }
+    return problems.length ? problems.join('; ') : null
+  },
+)
+
+check(
+  'every Vercel build target points at a real app',
+  'This is the check that the 2026-09-06 rename needed and did not have. The Ignored Build Step named apps/web and apps/site, which had just stopped existing — and a pathspec matching nothing diffs clean, so `git diff --quiet` exits 0, Vercel reads 0 as *skip*, and both projects quietly stopped deploying while still reporting success. Nothing fails when this breaks; that is exactly why it needs asserting.',
+  () => {
+    const problems = []
+    const scripts = json('package.json').scripts ?? {}
+
+    for (const [app, { dir, script }] of Object.entries(APPS)) {
+      if (!existsSync(join(root, dir))) {
+        problems.push(`APPS.${app} points at ${dir}, which does not exist`)
+      }
+      if (!(script in scripts)) {
+        problems.push(`APPS.${app} runs \`npm run ${script}\`, which the root package.json does not define`)
+      }
+    }
+
+    // A shared path that stops existing is the same bug wearing the same
+    // clothes: it silently narrows what counts as "changed" for all three
+    // projects at once.
+    for (const path of SHARED_PATHS) {
+      if (!existsSync(join(root, path))) {
+        problems.push(`SHARED_PATHS names ${path}, which does not exist`)
+      }
+    }
+
+    /*
+      And the file the two commands are wired in from. vercel.json is what makes
+      any of this reachable — without it, all three projects fall back to the
+      hand-typed dashboard settings this work exists to retire, and they do so
+      without a word.
+    */
+    if (!existsSync(join(root, 'vercel.json'))) {
+      problems.push('vercel.json is missing — the build and ignore commands are not wired in')
+    } else {
+      const vercel = json('vercel.json')
+      if (vercel.buildCommand !== 'node scripts/vercel-build.mjs') {
+        problems.push(`vercel.json buildCommand is "${vercel.buildCommand}", not node scripts/vercel-build.mjs`)
+      }
+      if (vercel.ignoreCommand !== 'node scripts/vercel-ignore.mjs') {
+        problems.push(`vercel.json ignoreCommand is "${vercel.ignoreCommand}", not node scripts/vercel-ignore.mjs`)
+      }
+    }
+
     return problems.length ? problems.join('; ') : null
   },
 )
