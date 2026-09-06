@@ -337,6 +337,46 @@ export function modelForIntent(intent, model, provider = activeProvider()) {
   return resolveModel(model, provider)
 }
 
+/* SCREEN-ANSWERS 2026-09-06 ─ `detail` is an OpenAI field, and only OpenAI's ────
+   The desktop sends detail:'high' on a screenshot's image part so the model reads
+   it at full tile resolution rather than letting the default pick the 512x512 low
+   path — which is where an unreadable screenshot becomes a description of the
+   screen. See askAboutScreen in the desktop's useInterviewSession.js.
+
+   Gemini is reached through its OpenAI-compatibility surface. The note on
+   PROVIDERS above says that surface takes image_url parts, and it does — but it
+   says nothing about `detail`, and nobody here has verified it. An unverified
+   field on a body that must not 400 is not a gamble worth taking when the failure
+   mode is EVERY screenshot on a Gemini deploy, so it is stripped. The server is
+   the only place that knows which provider is live, for exactly the reason
+   modelForIntent() gives for living on this side.
+
+   If someone later confirms Gemini accepts it, or ignores it, comment this out
+   rather than deleting it — the reasoning is the part worth keeping.
+
+   Structural, not a deep clone. Only messages that actually carry a `detail` are
+   rebuilt, and the base64 string is carried BY REFERENCE: a screenshot is close to
+   a megabyte and copying it would be a real cost on the one request already
+   carrying the most bytes.
+
+   @param {Array} list - the messages array, forwarded verbatim otherwise
+   @returns {Array} the same messages with image_url.detail removed */
+export function stripImageDetail(list) {
+  if (!Array.isArray(list)) return list
+  return list.map((m) => {
+    if (!Array.isArray(m?.content)) return m
+    if (!m.content.some((p) => p?.type === 'image_url' && p?.image_url?.detail)) return m
+    return {
+      ...m,
+      content: m.content.map((p) => {
+        if (p?.type !== 'image_url' || !p?.image_url?.detail) return p
+        const { detail, ...image_url } = p.image_url
+        return { ...p, image_url }
+      }),
+    }
+  })
+}
+
 /**
  * Server-side only. This key must never be sent to the desktop app: anything
  * shipped to a client is extractable, which is the whole reason these routes

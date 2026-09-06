@@ -2,6 +2,10 @@ import {
   CORS, MAX_TOKENS, GEMINI_REASONING_EFFORT, modelForIntent, requireProvider,
   requireSession, recordUsage, jsonError, upstreamError, fetchWithRetry,
   friendlyUpstreamMessage,
+  // SCREEN-ANSWERS 2026-09-06: see its note in lib/ai.js. It lives there rather
+  // than here because a route file may only export HTTP methods and the route
+  // config, so a helper defined here could not be exported to be tested.
+  stripImageDetail,
 } from '@/lib/ai'
 
 export const runtime     = 'nodejs'
@@ -11,6 +15,7 @@ export const maxDuration = 60
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS })
 }
+
 
 /**
  * Streaming chat completion on behalf of a licensed desktop client.
@@ -73,7 +78,9 @@ export async function POST(request) {
         // THINKING 2026-08-30: Gemini only. OpenAI rejects reasoning_effort on
         // non-reasoning models like gpt-4o, so this must not be sent blindly.
         ...(provider.id === 'gemini' ? { reasoning_effort: GEMINI_REASONING_EFFORT } : {}),
-        messages,
+        // SCREEN-ANSWERS 2026-09-06: see stripImageDetail above.
+        // messages,
+        messages: provider.id === 'gemini' ? stripImageDetail(messages) : messages,
       }),
     })
   } catch (e) {

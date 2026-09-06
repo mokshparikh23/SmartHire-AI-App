@@ -182,6 +182,24 @@ export function useInterviewSession() {
      reason levelRef and partialRef are — it changes on every wheel tick. */
   const readerPinnedRef = useRef(true)
 
+  /* SCREEN-ANSWERS 2026-09-06 ─ Deeper on a screenshot answered blind ──────────
+     refine() and regenerate() re-ask currentQuestion and attach NOTHING. On a
+     screenshot turn that meant asking the model to go deeper on a question it
+     could no longer see — and because `source` stays 'screen', generate() still
+     escalated to the smart model, so the app paid the premium price for the
+     blindest possible answer. Retry is also exactly what a candidate presses when
+     the screenshot answer was wrong, and requireSession advances the meter before
+     the upstream call, so each blind retry is a charged minute.
+
+     "Shorter" survived it, because the previous answer travels in the message.
+     "Deeper" and "Example" invented detail.
+
+     ONE shot, in a ref. Not on the turn in sessionStore: a capture is close to a
+     megabyte of base64, turns[] is rendered and iterated by the history drawer,
+     and holding six of them is a memory problem for a feature nobody asked for.
+     A ref rather than state because nothing renders from it. */
+  const lastShotRef = useRef(null)   // { dataUrl, question, wire, at } | null
+
   // Stream deltas arrive one microtask apart, so an uncoalesced stream is one
   // React render per delta. Flushing on a frame caps that at ~60/s.
   const flush = useCallback(() => {
@@ -693,10 +711,56 @@ export function useInterviewSession() {
 
   const askManual = useCallback((text) => generate(text, 'manual'), [generate])
 
+  /* SCREEN-ANSWERS 2026-09-06 ─ the capture belonging to the question ON THE CARD.
+
+     IDENTITY, NOT AGE, is the test. A five-minute-old shot is still the right
+     image for the answer that came from it; a two-second-old one is the wrong
+     image the moment a different question takes the card. Matching on the question
+     string is enough: askAboutScreen stores the same string it hands to
+     setQuestion, and two screenshots sharing a display string also share a
+     capture — the ref holds the later one, which is the one on screen. */
+  const shotForCurrent = useCallback(() => {
+    const { currentQuestion, source } = useSessionStore.getState()
+    if (source !== 'screen') return null
+    const shot = lastShotRef.current
+    return shot && shot.question === currentQuestion ? shot : null
+  }, [])
+
+  // A ref for the same reason onQuestionRef is one: askAboutScreen is a const
+  // declared several hundred lines below, so naming it in regenerate's dependency
+  // array is a TDZ ReferenceError at render, not merely at call time.
+  const askAboutScreenRef = useRef(null)
+
+  // const regenerate = useCallback(() => {
+  //   const { currentQuestion, source } = useSessionStore.getState()
+  //   if (currentQuestion) generate(currentQuestion, source)
+  // }, [generate])
+  /* SCREEN-ANSWERS 2026-09-06: on a screenshot turn, re-attach. With no shot to
+     re-attach — a renderer reload, or a turn from a build before this ref existed
+     — take a NEW one rather than re-asking a vision question with no image. That
+     is safe HERE AND ONLY HERE: askAboutScreen writes its own card header, so the
+     panel says what it actually answered. refine() below must not do the same,
+     because its header is fixed and re-capturing would answer a different screen
+     underneath it. */
   const regenerate = useCallback(() => {
     const { currentQuestion, source } = useSessionStore.getState()
-    if (currentQuestion) generate(currentQuestion, source)
-  }, [generate])
+    if (!currentQuestion) return
+
+    if (source === 'screen') {
+      const shot = shotForCurrent()
+      if (!shot) { askAboutScreenRef.current?.(); return }
+      /* shot.wire, not currentQuestion: the display string is what the card shows
+         and can be the placeholder "The question on my screen" — sending THAT up
+         the wire is the describe-the-screen bug itself. */
+      generate(currentQuestion, 'screen', [
+        { type: 'text', text: shot.wire },
+        { type: 'image_url', image_url: { url: shot.dataUrl, detail: 'high' } },
+      ])
+      return
+    }
+
+    generate(currentQuestion, source)
+  }, [generate, shotForCurrent])
 
   /* PREMIUM-UX 2026-08-31 ─ the three things a candidate actually wants next ───
      The card footer held two thumbs that went nowhere — sessionStore's own
@@ -721,7 +785,8 @@ export function useInterviewSession() {
   const refine = useCallback((kind) => {
     const instruction = REFINE[kind]
     if (!instruction) return
-    const { currentQuestion, currentAnswer } = useSessionStore.getState()
+    // const { currentQuestion, currentAnswer } = useSessionStore.getState()
+    const { currentQuestion, currentAnswer, source } = useSessionStore.getState()
     if (!currentQuestion) return
 
     /* Sent as a TYPED turn, deliberately. It is the candidate asking us
@@ -731,8 +796,33 @@ export function useInterviewSession() {
       ? `${instruction}\n\nThe question was: ${currentQuestion}\n\nYou answered:\n${currentAnswer}`
       : `${instruction}\n\nThe question was: ${currentQuestion}`
 
-    generate(currentQuestion, 'manual', content)
-  }, [generate])
+    /* SCREEN-ANSWERS 2026-09-06 ─ sent as a SCREENSHOT turn when there is a shot.
+       The note above still holds for every other source. But an image attached to
+       a [TYPED] message is a message whose tag says nothing about the image, and
+       the prompt's [TYPED] section has no rule for one. Tagging it for what it is
+       also routes it to the smart model through generate()'s own source check.
+       The prompt's [SCREENSHOT] section already covers this case explicitly: "it
+       may instead be an instruction about a reply you already gave". */
+    const shot = shotForCurrent()
+    if (shot) {
+      generate(currentQuestion, 'screen', [
+        { type: 'text', text: content },
+        { type: 'image_url', image_url: { url: shot.dataUrl, detail: 'high' } },
+      ])
+      return
+    }
+
+    /* SCREEN-ANSWERS 2026-09-06: a screenshot turn whose shot is gone says so, in
+       the message. Deliberately NOT a fresh capture: the card header still reads
+       as the old question, and answering a new screen underneath it is a wrong
+       answer the candidate has no way to spot. Working from the previous answer is
+       an honest degradation; guessing at a screen is not. */
+    // generate(currentQuestion, 'manual', content)
+    generate(currentQuestion, 'manual', source === 'screen'
+      ? `${content}\n\nThe screenshot that question came from is no longer attached. `
+        + 'Work from your own answer above. Do not describe or guess at what was on the screen.'
+      : content)
+  }, [generate, shotForCurrent])
 
   /* PIPELINE 2026-08-31 ─ three controls that could not actually stop anything ─
      abortRef lives here and the store cannot reach it, so every "stop" in the UI
@@ -820,6 +910,12 @@ export function useInterviewSession() {
     // must not be the thing that quietly takes that away.
     liveUnsupportedRef.current = false
     setLiveFailed(false)
+    /* SCREEN-ANSWERS 2026-09-06: a capture must not outlive its interview. Close
+       to a megabyte of somebody's screen held across a session boundary is both a
+       leak and a correctness bug — shotForCurrent() matches on the question
+       string, so a shot from a previous interview could re-attach itself to a
+       question in this one. */
+    lastShotRef.current = null
 
     useSessionStore.getState().startSession(result)
     window.electronAPI?.enterSessionMode?.()
@@ -852,6 +948,9 @@ export function useInterviewSession() {
     abortRef.current = null
     aggRef.current?.reset()
     partialRef.current = ''
+    // SCREEN-ANSWERS 2026-09-06: see the matching line in start(). Dropped on both
+    // boundaries, so neither a clean stop nor a crashed one leaves it behind.
+    lastShotRef.current = null
     useSessionStore.getState().stopSession()
     window.electronAPI?.exitSessionMode?.()
   }, [])
@@ -1102,12 +1201,34 @@ export function useInterviewSession() {
         + 'answer it. If it is not, ignore it and answer the screen.'
       : SCREEN_DIRECTIVE
 
+    /* SCREEN-ANSWERS 2026-09-06: keep the shot for refine() and regenerate(), and
+       keep BOTH strings with it. `question` is what identifies this capture
+       against the card; `wire` is what regenerate must re-send, because the
+       display string is sometimes a placeholder and re-sending that is the
+       original bug. Written immediately adjacent to the generate() call below and
+       must stay that way — shotForCurrent() matches on the exact value passed as
+       generate's first argument. */
+    lastShotRef.current = { dataUrl: shot.dataUrl, question: shown, wire, at: Date.now() }
+
     // await generate(prompt, 'screen', [{ type: 'text', text: prompt }, …])
     await generate(shown, 'screen', [
       { type: 'text', text: wire },
-      { type: 'image_url', image_url: { url: shot.dataUrl } },
+      /* SCREEN-ANSWERS 2026-09-06: detail:'high'. Left at the default, the
+         provider may pick the low path — a single 512x512 tile — which cannot
+         read code and is exactly how an unreadable screenshot becomes a
+         description of the screen. Six tiles plus the base is about 1100 input
+         tokens, a fifth of a cent, for a determinism we were otherwise leaving to
+         chance. Stripped server-side for Gemini, whose OpenAI-compatibility
+         surface has never been verified to accept the field — see
+         apps/dashboard/app/api/ai/chat/route.js. */
+      // { type: 'image_url', image_url: { url: shot.dataUrl } },
+      { type: 'image_url', image_url: { url: shot.dataUrl, detail: 'high' } },
     ])
   }, [generate])
+
+  // SCREEN-ANSWERS 2026-09-06: published for regenerate(), which is defined above
+  // this. Same pattern as onQuestionRef.
+  askAboutScreenRef.current = askAboutScreen
 
   /* REDESIGN 2026-08-29 ─ Chat ────────────────────────────────────────────────
      A separate thread from the Q→A fast path. It reuses the same rAF coalescing
