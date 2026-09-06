@@ -987,6 +987,24 @@ export function useInterviewSession() {
 
        When there IS a transcript question, both stay exactly as before — that
        question is genuinely what the candidate wants answered about the screen. */
+    /* SCREENSHOT-IN-CHAT 2026-09-06 ─ the answer went where nobody could see it ─
+       SessionPanel renders `chatMode ? <ChatPanel/> : <AnswerPanel/>`, and
+       nothing on this path ever left chat mode — chatMode was written in exactly
+       three places, none of them here. So pressing Screenshot from the chat view
+       captured the screen, billed the request and streamed a complete answer
+       into a panel that was not mounted.
+
+       From the user's side the button simply did nothing: it stayed ENABLED, the
+       click registered, and the only tell was the transcript bar quietly
+       changing to "What is being asked on screen?". The answer was found by
+       toggling Chat off and noticing it sitting there. Reported as "chat me jaane
+       ke baad screenshot screen par ja hi nahi paata".
+
+       Placed AFTER the capture guards above, deliberately: a denied or failed
+       capture must not yank a mid-sentence typist out of chat for an answer that
+       is never going to arrive. */
+    useSessionStore.getState().setChatMode(false)
+
     const { currentQuestion } = useSessionStore.getState()
     // const prompt = currentQuestion?.trim() || 'What is on screen?'
     const asked  = currentQuestion?.trim()
@@ -1140,6 +1158,26 @@ export function useInterviewSession() {
     useSessionStore.setState({ chatStreaming: false })
   }, [flushChat])
 
+  /* STOP-ROUTING 2026-09-06 ─ Stop was stopping the wrong stream ──────────────
+     Both callers — the toolbar pill and ⌘. — branched on chatMode, which is the
+     VIEW, not on what was actually streaming. In chat mode Stop therefore called
+     stopChat(), which returns on its first line unless chatStreaming is set and
+     never touches isThinking.
+
+     So an answer running behind the chat view could not be stopped at all: the
+     pill said Stop, the click did nothing, and Screenshot stayed disabled on
+     isThinking until the stream finished by itself. The reverse held too — a
+     chat reply had no stop anywhere, since ChatPanel's composer only disables
+     itself while streaming.
+
+     Asking both is simply correct rather than a shotgun: each guard already
+     no-ops when its own side is idle, so there is no "which one did the user
+     mean" left to get wrong. */
+  const stopStreaming = useCallback(() => {
+    stopChat()
+    stopGenerating()
+  }, [stopChat, stopGenerating])
+
   const clearChat = useCallback(() => {
     stopChat()
     useSessionStore.getState().clearChat()
@@ -1171,6 +1209,10 @@ export function useInterviewSession() {
     levelRef, partialRef, heldRef, readerPinnedRef,
     live: !liveFailed, discardHeld, flushHeld,
     start, stop, askManual, regenerate, refine, askAboutScreen, sendChat,
-    stopGenerating, stopChat, clearAnswer, clearChat,
+    // STOP-ROUTING 2026-09-06: stopStreaming joins them — it is what the two
+    // Stop controls call now. The individual two stay exported; clearChat and
+    // the unmount cleanup still want one side on its own.
+    // stopGenerating, stopChat, clearAnswer, clearChat,
+    stopGenerating, stopChat, stopStreaming, clearAnswer, clearChat,
   }
 }

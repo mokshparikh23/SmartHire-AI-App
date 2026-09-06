@@ -243,10 +243,15 @@ export default function SessionPanel({ session }) {
     },
     // PIPELINE 2026-08-31: ⌘. is the macOS "stop". It stops the ANSWER; ⌘⇧X
     // (two-step, above) is what stops the session.
-    onStopGenerating: () => {
-      const s = useSessionStore.getState()
-      s.chatMode ? session.stopChat?.() : session.stopGenerating?.()
-    },
+    /* STOP-ROUTING 2026-09-06: this branched on chatMode — the VIEW — so ⌘. in
+       chat mode reached stopChat(), which returns immediately unless a chat is
+       streaming and never clears isThinking. An answer running behind the chat
+       view was therefore unstoppable from either control. */
+    // onStopGenerating: () => {
+    //   const s = useSessionStore.getState()
+    //   s.chatMode ? session.stopChat?.() : session.stopGenerating?.()
+    // },
+    onStopGenerating: () => session.stopStreaming?.(),
     onFocus: toggleFocus,
     onGoLive: goLive,
     onHelp: () => setHelpOpen((v) => !v),

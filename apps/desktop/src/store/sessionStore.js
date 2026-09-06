@@ -573,6 +573,17 @@ export const useSessionStore = create((set, get) => ({
 
   toggleChat: () => set((s) => ({ chatMode: !s.chatMode })),
 
+  /* SCREENSHOT-IN-CHAT 2026-09-06 ─ an explicit set, not a flip ───────────────
+     For the paths that must LEAVE chat rather than toggle it. askAboutScreen is
+     the caller: its answer renders in AnswerPanel, which chat mode does not
+     mount at all, so a screenshot taken from the chat view streamed a whole
+     answer into a card nobody could see.
+
+     toggleChat cannot do that job — called from chat it would be right by
+     accident, and called from the answer view it would put the user INTO chat,
+     which is the opposite of what the caller wants. */
+  setChatMode: (v) => set({ chatMode: !!v }),
+
   /** Appends the user's message plus the empty assistant turn it streams into. */
   startChatTurn: (text) =>
     set((s) => ({

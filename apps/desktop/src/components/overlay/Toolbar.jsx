@@ -29,6 +29,11 @@ export default function Toolbar({
   const screenEnabled    = useSessionStore((s) => s.screenEnabled)
   const screenPermission = useSessionStore((s) => s.screenPermission)
   const chatMode         = useSessionStore((s) => s.chatMode)
+  // STOP-ROUTING 2026-09-06: a BOOLEAN that flips once per chat turn, so this
+  // keeps the subscription contract in this file's header. It is what lets the
+  // pill offer Stop for a chat reply — ChatPanel has no stop of its own, it only
+  // disables its composer while streaming.
+  const chatStreaming    = useSessionStore((s) => s.chatStreaming)
   const captureSource    = useSessionStore((s) => s.captureSource)
   const setMicEnabled    = useSessionStore((s) => s.setMicEnabled)
   const setCaptureSource = useSessionStore((s) => s.setCaptureSource)
@@ -102,10 +107,15 @@ export default function Toolbar({
           It swaps in place rather than appearing beside: same slot, same width
           class, no layout shift at the moment the panel is busiest. */}
       {/* <button className="ia-pill" onClick={session.regenerate} disabled={isThinking || !hasQuestion}> */}
-      {isThinking ? (
+      {/* STOP-ROUTING 2026-09-06: `isThinking` alone meant a streaming chat reply
+          got no Stop at all, and the chatMode branch below sent Stop to the side
+          the VIEW was showing rather than the side that was running. */}
+      {/* {isThinking ? ( */}
+      {(isThinking || chatStreaming) ? (
         <button
           className="ia-pill ia-pill--stop"
-          onClick={() => (chatMode ? session.stopChat?.() : session.stopGenerating?.())}
+          // onClick={() => (chatMode ? session.stopChat?.() : session.stopGenerating?.())}
+          onClick={() => session.stopStreaming?.()}
           title={`Stop generating (${comboLabel('mod .')})`}
         >
           Stop <Kbd combo="mod ." />
